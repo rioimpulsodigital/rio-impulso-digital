@@ -140,13 +140,10 @@ a { text-decoration: none; color: inherit; }
   margin-bottom: 1.5rem;
   opacity: 0; animation: upIn .7s var(--ease) forwards .32s;
 }
-.hero-h1 .l1 { display: block; }
-.hero-h1 .l2 { display: block; color: var(--coral); }
-.hero-h1 .l3 {
-  display: block;
-  -webkit-text-stroke: 1px rgba(255,255,255,.3);
-  color: transparent;
-}
+.hero-h1 .l1   { display: block; }
+.hero-h1 .l-row { display: block; }
+.hero-h1 .l2   { color: var(--coral); }
+.hero-h1 .l3   { -webkit-text-stroke: 1px rgba(255,255,255,.3); color: transparent; }
 .hero-sub {
   max-width: 500px; font-size: 1.05rem; font-weight: 300;
   color: rgba(255,255,255,.58); line-height: 1.75;
