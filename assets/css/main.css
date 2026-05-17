@@ -51,7 +51,7 @@ a { text-decoration: none; color: inherit; }
 .nav-logo {
   display: flex; align-items: center; gap: 10px;
 }
-.nav-logo img { height: 34px; width: auto; }
+.nav-logo img { height: 120px; width: auto; transform: translateY(8px); }
 .nav-logo-text {
   font-family: var(--ff-head);
   font-size: 1.05rem; font-weight: 700;
@@ -71,8 +71,9 @@ a { text-decoration: none; color: inherit; }
 .nav-cta {
   font-family: var(--ff-head); font-size: .78rem; font-weight: 700;
   color: var(--white); background: var(--p);
-  padding: .48rem 1.3rem; border-radius: var(--r);
-  letter-spacing: .03em;
+  padding: 0 1.3rem; height: 36px;
+  display: inline-flex; align-items: center;
+  border-radius: var(--r); letter-spacing: .03em;
   transition: background .2s, transform .2s;
 }
 .nav-cta:hover { background: var(--coral); transform: translateY(-1px); }
