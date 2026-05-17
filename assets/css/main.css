@@ -486,7 +486,7 @@ footer {
 .footer-col { flex: 1; }
 .footer-col--center { display: flex; justify-content: center; }
 .footer-col--right { justify-content: flex-end; }
-.footer-logo { height: 32px; width: auto; opacity: .7; filter: brightness(0) invert(1); transition: opacity .2s; }
+.footer-logo { height: 48px; width: auto; opacity: .85; transition: opacity .2s; }
 .footer-logo:hover { opacity: 1; }
 .footer-brand {
   font-family: var(--ff-head); font-weight: 700; font-size: .92rem;
