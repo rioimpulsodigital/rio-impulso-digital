@@ -184,7 +184,7 @@ En el repositorio de GitHub:
 - Branch: `main` / `/ (root)`
 - Guardar
 
-La URL pública será: `https://[usuario].github.io/rio-impulso-digital/`
+La URL pública será: `https://brendario.github.io/rio-impulso-digital/`
 
 ---
 
