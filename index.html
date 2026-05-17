@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="RiO Impulso Digital — Consultoría tecnológica B2B. Integración ERP/API, desarrollo eCommerce, SEO técnico y transformación digital para empresas en Chile y Argentina.">
+  <meta name="author" content="Brenda Rivera Obando">
+  <meta property="og:title" content="RiO Impulso Digital — Consultoría Tecnológica B2B">
+  <meta property="og:description" content="Integración ERP/API, eCommerce, SEO técnico y transformación digital. Tecnología aplicada al negocio.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="./assets/branding/rio-logo-primary.png">
+  <link rel="icon" type="image/png" href="./assets/branding/rio-favicon.png">
+  <title>RiO Impulso Digital — Consultoría Tecnológica B2B</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/main.css">
+</head>
+<body>
+
+<!-- ── NAV ──────────────────────────────────────── -->
+<nav class="nav" id="mainNav">
+  <a href="#inicio" class="nav-logo" aria-label="RiO Impulso Digital">
+    <img
+      src="./assets/branding/rio-logo-horizontal.png"
+      alt="RiO Impulso Digital"
+      onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+    >
+    <span class="nav-logo-text">RiO <em>Impulso</em> Digital</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#servicios">Servicios</a></li>
+    <li><a href="#portfolio">Portfolio</a></li>
+    <li><a href="#nosotros">Sobre mí</a></li>
+  </ul>
+  <a href="#contacto" class="nav-cta">Conversemos →</a>
+  <button class="nav-hamburger" aria-label="Abrir menú" onclick="openDrawer()">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<!-- Mobile drawer -->
+<div class="nav-drawer" id="navDrawer">
+  <button class="nav-drawer-close" onclick="closeDrawer()" aria-label="Cerrar">✕</button>
+  <a href="#servicios" onclick="closeDrawer()">Servicios</a>
+  <a href="#portfolio" onclick="closeDrawer()">Portfolio</a>
+  <a href="#nosotros" onclick="closeDrawer()">Sobre mí</a>
+  <a href="#contacto" onclick="closeDrawer()" style="color:var(--coral)">Conversemos →</a>
+</div>
+
+<!-- ── HERO ─────────────────────────────────────── -->
+<section class="hero" id="inicio">
+  <div class="hero-grid"></div>
+  <div class="hero-orb-1"></div>
+  <div class="hero-orb-2"></div>
+  <div class="hero-content">
+    <p class="hero-eyebrow">Consultoría Tecnológica B2B · Chile · Argentina</p>
+    <h1 class="hero-h1">
+      <span class="l1">Tecnología que</span>
+      <span class="l2">impulsa</span>
+      <span class="l3">negocios.</span>
+    </h1>
+    <p class="hero-sub">
+      Integración ERP/API, desarrollo eCommerce y SEO técnico para empresas que necesitan soluciones reales — no propuestas genéricas.
+    </p>
+    <div class="hero-actions">
+      <a href="#portfolio" class="btn-p">Ver proyectos</a>
+      <a href="#contacto" class="btn-ghost">Hablemos de tu desafío</a>
+    </div>
+    <div class="hero-stats">
+      <div>
+        <span class="stat-n">3<em>+</em></span>
+        <span class="stat-l">Proyectos activos 2026</span>
+      </div>
+      <div>
+        <span class="stat-n">–60<em>%</em></span>
+        <span class="stat-l">Reducción LCP mobile</span>
+      </div>
+      <div>
+        <span class="stat-n">2<em>x</em></span>
+        <span class="stat-l">Países · CH + AR</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SERVICES ──────────────────────────────────── -->
+<section class="section services" id="servicios">
+  <div class="container">
+    <p class="sec-label reveal">Servicios</p>
+    <h2 class="sec-title reveal">Soluciones técnicas <span class="hl">orientadas al negocio.</span></h2>
+    <p class="sec-desc reveal">Criterio estratégico con ejecución técnica real. Sin intermediarios, sin equipos genéricos — trabajo directo y resultados medibles.</p>
+
+    <div class="services-grid reveal">
+
+      <div class="svc">
+        <div class="svc-icon">⚙️</div>
+        <span class="svc-arrow">↗</span>
+        <h3 class="svc-title">Integración ERP / API</h3>
+        <p class="svc-desc">Conexiones entre sistemas de gestión, eCommerce y plataformas de facturación. Flujos automatizados que eliminan trabajo manual y riesgo operacional.</p>
+        <div class="svc-tags">
+          <span>Laudus</span><span>WooCommerce</span><span>REST API</span><span>Multi-RUT</span>
+        </div>
+      </div>
+
+      <div class="svc">
+        <div class="svc-icon">🛒</div>
+        <span class="svc-arrow">↗</span>
+        <h3 class="svc-title">Desarrollo eCommerce</h3>
+        <p class="svc-desc">Tiendas en Shopify o desarrollo custom en PHP. Integradas a pasarelas de pago chilenas y sistemas de gestión desde el primer día.</p>
+        <div class="svc-tags">
+          <span>Shopify</span><span>PHP custom</span><span>Webpay</span><span>MercadoPago</span>
+        </div>
+      </div>
+
+      <div class="svc">
+        <div class="svc-icon">🔍</div>
+        <span class="svc-arrow">↗</span>
+        <h3 class="svc-title">SEO Técnico y Performance</h3>
+        <p class="svc-desc">Optimización de Core Web Vitals, arquitectura on-page, datos estructurados y posicionamiento en buscadores e IA generativa (GEO).</p>
+        <div class="svc-tags">
+          <span>Core Web Vitals</span><span>Schema.org</span><span>GEO</span><span>GSC</span>
+        </div>
+      </div>
+
+      <div class="svc">
+        <div class="svc-icon">💻</div>
+        <span class="svc-arrow">↗</span>
+        <h3 class="svc-title">Sitios Web Profesionales</h3>
+        <p class="svc-desc">WordPress con Bricks Builder o código propio. Diseño orientado a conversión, autoadministrable, con entrega de manual post-proyecto.</p>
+        <div class="svc-tags">
+          <span>WordPress</span><span>Bricks Builder</span><span>Figma</span><span>HTML/CSS</span>
+        </div>
+      </div>
+
+      <div class="svc">
+        <div class="svc-icon">📊</div>
+        <span class="svc-arrow">↗</span>
+        <h3 class="svc-title">Analítica y Tracking</h3>
+        <p class="svc-desc">GA4, Meta Pixel y GTM con eventos de conversión reales. Datos que permiten tomar decisiones de negocio con fundamento, no intuición.</p>
+        <div class="svc-tags">
+          <span>GA4</span><span>Meta Pixel</span><span>GTM</span><span>Eventos</span>
+        </div>
+      </div>
+
+      <div class="svc">
+        <div class="svc-icon">🧭</div>
+        <span class="svc-arrow">↗</span>
+        <h3 class="svc-title">Consultoría Digital B2B</h3>
+        <p class="svc-desc">Diagnóstico técnico, hoja de ruta y acompañamiento estratégico para empresas en transformación digital o con sistemas que necesitan evolucionar.</p>
+        <div class="svc-tags">
+          <span>Diagnóstico</span><span>Estrategia</span><span>Transformación</span><span>B2B</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── PORTFOLIO ─────────────────────────────────── -->
+<section class="section portfolio" id="portfolio">
+  <div class="container">
+    <p class="sec-label reveal">Portfolio</p>
+    <h2 class="sec-title reveal">Proyectos reales, <span class="hl">resultados medibles.</span></h2>
+    <p class="sec-desc reveal">Cada proyecto parte de un problema de negocio concreto. Documentado, medido y publicado como case study técnico.</p>
+
+    <div class="portfolio-grid">
+
+      <!-- NutraBody -->
+      <div class="pcard reveal reveal-d1">
+        <div class="pcard-head bg-a">
+          <div class="pcard-glow glow-p"></div>
+          <span class="pcard-type">ERP Integration · PHP · Laudus API · MySQL</span>
+        </div>
+        <div class="pcard-body">
+          <div class="pcard-meta">
+            <span class="tag tag-p">En curso · 2026</span>
+            <span class="tag tag-c">ERP</span>
+          </div>
+          <h3 class="pcard-title">Sistema de Facturación Multi-RUT</h3>
+          <p class="pcard-desc">Reingeniería del núcleo de facturación de una operación eCommerce para emitir automáticamente documentos tributarios diferenciados desde dos entidades legales en un único pedido. Incluye tolerancia a fallos y hardening de seguridad.</p>
+          <div class="pcard-metrics">
+            <div>
+              <span class="metric-n">4 fases</span>
+              <span class="metric-l">de implementación</span>
+            </div>
+            <div>
+              <span class="metric-n">0 manual</span>
+              <span class="metric-l">intervención / pedido</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TGFClean -->
+      <div class="pcard reveal reveal-d2">
+        <div class="pcard-head bg-b">
+          <div class="pcard-glow glow-c"></div>
+          <span class="pcard-type">SEO Técnico · GEO · Core Web Vitals · GA4</span>
+        </div>
+        <div class="pcard-body">
+          <div class="pcard-meta">
+            <span class="tag tag-p">En curso · 2026</span>
+            <span class="tag tag-c">SEO</span>
+          </div>
+          <h3 class="pcard-title">Posicionamiento Comercial Digital — Limpieza Industrial</h3>
+          <p class="pcard-desc">Construcción de presencia comercial B2B desde cero para empresa con marca empleadora consolidada pero sin visibilidad digital en el segmento de ventas. Optimización técnica, GEO y tracking diferenciado de leads comerciales.</p>
+          <div class="pcard-metrics">
+            <div>
+              <span class="metric-n">+56</span>
+              <span class="metric-l">pts PageSpeed mobile</span>
+            </div>
+            <div>
+              <span class="metric-n">–60%</span>
+              <span class="metric-l">LCP · 9.5s → 3.8s</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Plenit -->
+      <div class="pcard reveal reveal-d3">
+        <div class="pcard-head bg-c">
+          <div class="pcard-glow glow-s"></div>
+          <span class="pcard-type">eCommerce · Laudus · Webpay · Branding</span>
+        </div>
+        <div class="pcard-body">
+          <div class="pcard-meta">
+            <span class="tag tag-p">En desarrollo · 2026</span>
+            <span class="tag tag-c">eCommerce</span>
+          </div>
+          <h3 class="pcard-title">Canal de Ventas Propio — Marca Personal</h3>
+          <p class="pcard-desc">Desarrollo de canal de ventas eCommerce con identidad visual propia, integrado en tiempo real al ERP de la operación principal. Stock, pedidos y facturación sincronizados automáticamente, con analytics y atribución independientes.</p>
+          <div class="pcard-metrics">
+            <div>
+              <span class="metric-n">2</span>
+              <span class="metric-l">sistemas integrados</span>
+            </div>
+            <div>
+              <span class="metric-n">Jul 26</span>
+              <span class="metric-l">lanzamiento objetivo</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── APPROACH ──────────────────────────────────── -->
+<section class="section approach">
+  <div class="container">
+    <p class="sec-label reveal">Metodología</p>
+    <h2 class="sec-title reveal">Cómo trabajo.</h2>
+    <p class="sec-desc reveal">Sin magia negra. Sin promesas vacías. Proceso claro, entregables verificables y precios fijos desde el inicio.</p>
+
+    <div class="approach-grid reveal">
+      <div class="ap-item">
+        <span class="ap-num">01</span>
+        <h3 class="ap-title">Diagnóstico real</h3>
+        <p class="ap-desc">Reviso el sistema actual antes de proponer. Identifico brechas reales y priorizo por impacto de negocio, no por preferencias técnicas.</p>
+      </div>
+      <div class="ap-item">
+        <span class="ap-num">02</span>
+        <h3 class="ap-title">Alcance fijo, precio fijo</h3>
+        <p class="ap-desc">Precio cerrado, alcance definido, entregables verificables por fase. Nada fuera del alcance se ejecuta sin cotización aprobada.</p>
+      </div>
+      <div class="ap-item">
+        <span class="ap-num">03</span>
+        <h3 class="ap-title">Ejecución directa</h3>
+        <p class="ap-desc">Trabajo personal. Sin intermediarios, sin equipos externos desconocidos. Comunicación directa y respuesta real en el tiempo acordado.</p>
+      </div>
+      <div class="ap-item">
+        <span class="ap-num">04</span>
+        <h3 class="ap-title">Entrega con autonomía</h3>
+        <p class="ap-desc">Todo proyecto cierra con documentación y capacitación. El cliente opera sin depender de soporte externo para el día a día.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── ABOUT ─────────────────────────────────────── -->
+<section class="section about" id="nosotros">
+  <div class="container">
+    <div class="about-inner">
+      <div class="about-visual reveal">
+        <div class="av-glow"></div>
+        <div class="av-inner">
+          <!--
+            Reemplazar bloque de texto por foto cuando esté lista:
+            <img src="./assets/images/brenda-profile.jpg" alt="Brenda Rivera Obando"
+                 style="width:200px;height:200px;border-radius:50%;object-fit:cover;position:relative;z-index:1;">
+          -->
+          <div class="av-initials">BR</div>
+          <div class="av-name">Brenda Rivera Obando</div>
+          <div class="av-role">Consultora Tecnológica · RiO Impulso Digital</div>
+        </div>
+      </div>
+      <div class="about-content reveal">
+        <p class="sec-label">Sobre mí</p>
+        <h2 class="sec-title">Negocio <span class="hl">+ tecnología.</span></h2>
+        <p class="about-bio">
+          Soy consultora con perfil híbrido: entiendo el problema de negocio y ejecuto la solución técnica. Trabajo con empresas en Chile y Argentina que necesitan integrar sistemas, mejorar su presencia digital o resolver problemas operacionales que les están costando tiempo y dinero.
+        </p>
+        <p class="about-bio">
+          No vendo paquetes predeterminados. Cada proyecto parte de un diagnóstico real y termina con resultados documentados que el cliente puede auditar, mantener y escalar de forma autónoma.
+        </p>
+        <div class="skills">
+          <span class="skill">PHP / MySQL</span>
+          <span class="skill">ERP Laudus</span>
+          <span class="skill">WordPress / Bricks</span>
+          <span class="skill">Shopify</span>
+          <span class="skill">GA4 / GTM</span>
+          <span class="skill">SEO Técnico</span>
+          <span class="skill">Cloudflare / CDN</span>
+          <span class="skill">REST API</span>
+          <span class="skill">Core Web Vitals</span>
+          <span class="skill">GEO</span>
+          <span class="skill">Webpay / Transbank</span>
+          <span class="skill">Meta Pixel</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ───────────────────────────────────────── -->
+<div class="cta-wrap" id="contacto">
+  <div class="cta-box reveal">
+    <div class="cta-glow"></div>
+    <div class="cta-glow-2"></div>
+    <div class="cta-content">
+      <span class="cta-sub-label">¿Tienes un proyecto?</span>
+      <h2 class="cta-title">Hablemos de<br>tu desafío.</h2>
+      <p class="cta-p">
+        Cuéntame qué necesitas. Si puedo ayudarte, lo digo con claridad. Si no es lo mío, también.
+      </p>
+      <div class="cta-actions">
+        <a href="mailto:brenda@rioimpulsodigital.com" class="btn-coral">Escribir un correo</a>
+        <a href="https://wa.me/56985921512" class="btn-ghost" target="_blank" rel="noopener">WhatsApp directo →</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── FOOTER ────────────────────────────────────── -->
+<footer>
+  <div class="footer-row">
+    <div>
+      <div class="footer-brand">RiO <em>Impulso</em> Digital</div>
+      <div class="footer-tag">Consultoría tecnológica B2B · Chile · Argentina</div>
+    </div>
+    <ul class="footer-links">
+      <li><a href="#servicios">Servicios</a></li>
+      <li><a href="#portfolio">Portfolio</a></li>
+      <li><a href="#nosotros">Sobre mí</a></li>
+      <li><a href="https://github.com/rioimpulsodigital" target="_blank" rel="noopener">GitHub ↗</a></li>
+    </ul>
+  </div>
+  <div class="footer-copy">
+    © 2026 RiO Impulso Digital · Brenda Rivera Obando · Todos los derechos reservados
+  </div>
+</footer>
+
+<!-- ── SCRIPTS ───────────────────────────────────── -->
+<script src="./assets/js/main.js" defer></script>
+
+</body>
+</html>
