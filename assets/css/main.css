@@ -51,7 +51,7 @@ a { text-decoration: none; color: inherit; }
 .nav-logo {
   display: flex; align-items: center; gap: 10px;
 }
-.nav-logo img { height: 120px; width: auto; transform: translateY(8px); }
+.nav-logo img { height: 60px; width: auto; transform: translateY(4px); }
 .nav-logo-text {
   font-family: var(--ff-head);
   font-size: 1.05rem; font-weight: 700;
