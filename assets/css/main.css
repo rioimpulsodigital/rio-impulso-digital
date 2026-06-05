@@ -492,13 +492,13 @@ footer {
 .footer-brand em { font-style: normal; color: var(--coral); }
 .footer-tag {
   font-family: var(--ff-mono); font-size: .62rem;
-  color: rgba(255,255,255,.3); letter-spacing: .06em; margin-top: 3px;
+  color: rgba(255,255,255,.55); letter-spacing: .06em; margin-top: 3px;
 }
 .footer-links {
   display: flex; gap: 1.75rem; list-style: none;
 }
 .footer-links a {
-  font-size: .78rem; color: rgba(255,255,255,.4);
+  font-size: .78rem; color: rgba(255,255,255,.65);
   transition: color .2s;
 }
 .footer-links a:hover { color: var(--coral); }
@@ -506,7 +506,7 @@ footer {
   max-width: 1160px; margin: 1.5rem auto 0;
   padding-top: 1.25rem;
   border-top: 1px solid rgba(255,255,255,.05);
-  font-size: .7rem; color: rgba(255,255,255,.2);
+  font-size: .7rem; color: rgba(255,255,255,.4);
   text-align: center;
 }
 
