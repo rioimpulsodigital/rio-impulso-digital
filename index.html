@@ -27,7 +27,50 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./assets/css/main.css?v=20260611">
+  <link rel="stylesheet" href="./assets/css/main.css?v=20260627">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "¿Cómo sé qué solución necesita mi empresa?",
+        "acceptedAnswer": { "@type": "Answer", "text": "No necesitas llegar con la solución definida. Comenzamos entendiendo cómo funciona tu negocio, cuáles son los procesos que hoy generan más fricción y qué objetivos quieres alcanzar. A partir de ese diagnóstico definimos la mejor alternativa." }
+      },
+      {
+        "@type": "Question",
+        "name": "¿Trabajas solo con empresas de Chile?",
+        "acceptedAnswer": { "@type": "Answer", "text": "No. RiO trabaja de forma remota con empresas de distintos países. Actualmente el foco comercial está en Chile y Argentina, pero las soluciones pueden implementarse para empresas de cualquier lugar." }
+      },
+      {
+        "@type": "Question",
+        "name": "¿Cuánto demora un proyecto?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Depende del alcance. Algunas soluciones pueden implementarse en pocos días, mientras que un desarrollo a medida puede requerir varias semanas. Antes de comenzar siempre recibirás un cronograma claro con los tiempos estimados." }
+      },
+      {
+        "@type": "Question",
+        "name": "¿Qué pasa si no sé exactamente lo que necesito?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Es una situación muy común. Parte del trabajo consiste precisamente en ayudarte a identificar el problema y definir la solución más adecuada antes de desarrollar cualquier proyecto." }
+      },
+      {
+        "@type": "Question",
+        "name": "¿También puedo solicitar una solución completamente a medida?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Sí. Además de soluciones estandarizadas, RiO desarrolla plataformas, integraciones, automatizaciones y aplicaciones diseñadas específicamente para la operación de cada empresa." }
+      },
+      {
+        "@type": "Question",
+        "name": "¿Quién desarrollará mi proyecto?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Todo el trabajo es realizado directamente por Brenda Rivera, fundadora de RiO Impulso Digital. No existen intermediarios ni tercerización del desarrollo, lo que permite mantener una comunicación directa durante todo el proyecto." }
+      },
+      {
+        "@type": "Question",
+        "name": "¿Qué ocurre después de entregar el proyecto?",
+        "acceptedAnswer": { "@type": "Answer", "text": "Dependiendo del tipo de solución, puedes continuar con un servicio de acompañamiento, soporte y evolución continua para mantener la plataforma actualizada y acompañar el crecimiento de tu empresa." }
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
 
@@ -47,11 +90,11 @@
     <span class="nav-logo-text">RiO <em>Impulso</em> Digital</span>
   </a>
   <ul class="nav-links">
-    <li><a href="#servicios">Servicios</a></li>
-    <li><a href="#portfolio">Portfolio</a></li>
+    <li><a href="#servicios">Soluciones</a></li>
+    <li><a href="#portfolio">Proyectos</a></li>
     <li><a href="#nosotros">Sobre mí</a></li>
   </ul>
-  <a href="#contacto" class="nav-cta">Conversemos →</a>
+  <a href="#contacto" class="nav-cta">Hablemos →</a>
   <button class="nav-hamburger" aria-label="Abrir menú" onclick="openDrawer()">
     <span></span><span></span><span></span>
   </button>
@@ -60,114 +103,165 @@
 <!-- Mobile drawer -->
 <div class="nav-drawer" id="navDrawer">
   <button class="nav-drawer-close" onclick="closeDrawer()" aria-label="Cerrar">✕</button>
-  <a href="#servicios" onclick="closeDrawer()">Servicios</a>
-  <a href="#portfolio" onclick="closeDrawer()">Portfolio</a>
+  <a href="#servicios" onclick="closeDrawer()">Soluciones</a>
+  <a href="#portfolio" onclick="closeDrawer()">Proyectos</a>
   <a href="#nosotros" onclick="closeDrawer()">Sobre mí</a>
-  <a href="#contacto" onclick="closeDrawer()" style="color:var(--coral)">Conversemos →</a>
+  <a href="#contacto" onclick="closeDrawer()" style="color:var(--coral)">Hablemos →</a>
 </div>
 
 <!-- ── HERO ─────────────────────────────────────── -->
 <section class="hero" id="inicio">
+  <svg class="hero-network" viewBox="0 0 1440 1080" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <!-- líneas de conexión -->
+    <line x1="120" y1="180" x2="340" y2="280" class="node-line" opacity=".12"/>
+    <line x1="340" y1="280" x2="580" y2="150" class="node-line" opacity=".08"/>
+    <line x1="580" y1="150" x2="820" y2="240" class="node-line" opacity=".14"/>
+    <line x1="820" y1="240" x2="980" y2="420" class="node-line" opacity=".1"/>
+    <line x1="200" y1="520" x2="420" y2="480" class="node-line" opacity=".11"/>
+    <line x1="420" y1="480" x2="680" y2="560" class="node-line" opacity=".09"/>
+    <line x1="680" y1="560" x2="950" y2="620" class="node-line" opacity=".13"/>
+    <line x1="950" y1="620" x2="1180" y2="540" class="node-line" opacity=".1"/>
+    <line x1="120" y1="800" x2="380" y2="750" class="node-line" opacity=".12"/>
+    <line x1="380" y1="750" x2="640" y2="880" class="node-line" opacity=".08"/>
+    <line x1="640" y1="880" x2="900" y2="820" class="node-line" opacity=".11"/>
+    <line x1="900" y1="820" x2="1200" y2="900" class="node-line" opacity=".09"/>
+    <!-- conexiones verticales -->
+    <line x1="340" y1="280" x2="280" y2="480" class="node-line" opacity=".07"/>
+    <line x1="580" y1="150" x2="680" y2="560" class="node-line" opacity=".1"/>
+    <line x1="820" y1="240" x2="950" y2="620" class="node-line" opacity=".08"/>
+    <line x1="980" y1="420" x2="1180" y2="540" class="node-line" opacity=".1"/>
+    <line x1="200" y1="520" x2="120" y2="800" class="node-line" opacity=".09"/>
+    <line x1="420" y1="480" x2="380" y2="750" class="node-line" opacity=".07"/>
+    <!-- nodos principales -->
+    <circle cx="120" cy="180" r="3" class="node node--lg" opacity=".18"/>
+    <circle cx="340" cy="280" r="2.4" class="node node--md" opacity=".15"/>
+    <circle cx="580" cy="150" r="2.8" class="node node--lg" opacity=".17"/>
+    <circle cx="820" cy="240" r="2.2" class="node node--sm" opacity=".12"/>
+    <circle cx="980" cy="420" r="2.6" class="node node--md" opacity=".16"/>
+    <circle cx="200" cy="520" r="2.5" class="node node--md" opacity=".14"/>
+    <circle cx="420" cy="480" r="2.1" class="node node--sm" opacity=".11"/>
+    <circle cx="680" cy="560" r="3" class="node node--lg" opacity=".19"/>
+    <circle cx="950" cy="620" r="2.3" class="node node--sm" opacity=".13"/>
+    <circle cx="1180" cy="540" r="2.7" class="node node--md" opacity=".17"/>
+    <circle cx="120" cy="800" r="2.4" class="node node--md" opacity=".15"/>
+    <circle cx="380" cy="750" r="2.6" class="node node--md" opacity=".16"/>
+    <circle cx="640" cy="880" r="2.2" class="node node--sm" opacity=".12"/>
+    <circle cx="900" cy="820" r="2.8" class="node node--lg" opacity=".18"/>
+    <circle cx="1200" cy="900" r="2.5" class="node node--md" opacity=".14"/>
+    <!-- nodos secundarios / conexiones menores -->
+    <circle cx="280" cy="480" r="1.8" class="node node--xs" opacity=".08"/>
+    <circle cx="750" cy="350" r="1.6" class="node node--xs" opacity=".07"/>
+    <circle cx="520" cy="720" r="1.9" class="node node--xs" opacity=".09"/>
+    <circle cx="1080" cy="720" r="1.7" class="node node--xs" opacity=".08"/>
+  </svg>
   <div class="hero-grid"></div>
+  <div class="hero-grid-2"></div>
   <div class="hero-orb-1"></div>
   <div class="hero-orb-2"></div>
+  <div class="hero-ring hero-ring--lg"></div>
+  <div class="hero-ring hero-ring--md"></div>
+  <div class="hero-corner hero-corner--tl"></div>
+  <div class="hero-corner hero-corner--br"></div>
   <div class="hero-content">
     <p class="hero-eyebrow">Consultoría Tecnológica B2B · Chile · Argentina</p>
     <h1 class="hero-h1">
-      <span class="l1">Tecnología que</span>
-      <span class="l-row"><span class="l2">impulsa</span> <span class="l3">negocios.</span></span>
+      <span class="l1">Que la tecnología</span>
+      <span class="l-row"><span class="l2">no frene tu</span></span>
+      <span class="l-row"><span class="l3">crecimiento.</span></span>
     </h1>
     <p class="hero-sub">
-      Integración ERP/API, desarrollo eCommerce y SEO técnico para empresas que necesitan soluciones reales — no propuestas genéricas.
+      Diseñamos e implementamos soluciones digitales para empresas que necesitan optimizar procesos, automatizar tareas y construir una base tecnológica preparada para crecer.
     </p>
     <div class="hero-actions">
-      <a href="#portfolio" class="btn-p">Ver proyectos</a>
-      <a href="#contacto" class="btn-ghost">Hablemos de tu desafío</a>
+      <a href="#contacto" class="btn-p">Cuéntame tu desafío</a>
+      <a href="#portfolio" class="btn-ghost">Ver proyectos</a>
     </div>
-    <div class="hero-stats">
-      <div>
-        <span class="stat-n">3<em>+</em></span>
-        <span class="stat-l">Proyectos activos 2026</span>
+    <div class="hero-badges">
+      <span class="hero-badge">Precio fijo</span>
+      <span class="hero-badge">Ejecución directa</span>
+      <span class="hero-badge">Sin dependencia tecnológica</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── APPROACH ──────────────────────────────────── -->
+<section class="section approach">
+  <div class="container">
+    <p class="sec-label reveal">Metodología</p>
+    <h2 class="sec-title reveal">Cómo trabajo.</h2>
+    <p class="sec-desc reveal">Tecnología con estructura, claridad y propósito. Soluciones reales, procesos transparentes y resultados construidos sin improvisación.</p>
+
+    <div class="approach-grid reveal">
+      <div class="ap-item">
+        <span class="ap-num">01</span>
+        <h3 class="ap-title">Diagnóstico real</h3>
+        <p class="ap-desc">Reviso el sistema actual antes de proponer. Identifico brechas reales y priorizo por impacto de negocio, no por preferencias técnicas.</p>
       </div>
-      <div>
-        <span class="stat-n">–60<em>%</em></span>
-        <span class="stat-l">Reducción LCP mobile</span>
+      <div class="ap-item">
+        <span class="ap-num">02</span>
+        <h3 class="ap-title">Alcance fijo, precio fijo</h3>
+        <p class="ap-desc">Precio cerrado, alcance definido, entregables verificables por fase. Nada fuera del alcance se ejecuta sin cotización aprobada.</p>
       </div>
-      <div>
-        <span class="stat-n">2<em>x</em></span>
-        <span class="stat-l">Países · CH + AR</span>
+      <div class="ap-item">
+        <span class="ap-num">03</span>
+        <h3 class="ap-title">Ejecución directa</h3>
+        <p class="ap-desc">Trabajo personal. Sin intermediarios, sin equipos externos desconocidos. Comunicación directa y respuesta real en el tiempo acordado.</p>
+      </div>
+      <div class="ap-item">
+        <span class="ap-num">04</span>
+        <h3 class="ap-title">Entrega con autonomía</h3>
+        <p class="ap-desc">Todo proyecto cierra con documentación y capacitación. El cliente opera sin depender de soporte externo para el día a día.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ── SERVICES ──────────────────────────────────── -->
-<section class="section services" id="servicios">
+<!-- ── LÍNEAS DE NEGOCIO ──────────────────────── -->
+<section class="section lines" id="servicios">
   <div class="container">
-    <p class="sec-label reveal">Servicios</p>
-    <h2 class="sec-title reveal">Soluciones técnicas <span class="hl">orientadas al negocio.</span></h2>
-    <p class="sec-desc reveal">Criterio estratégico con ejecución técnica real. Sin intermediarios, sin equipos genéricos — trabajo directo y resultados medibles.</p>
+    <p class="sec-label reveal">Líneas de negocio</p>
+    <h2 class="sec-title reveal">Tres formas de <span class="hl">trabajar juntos.</span></h2>
+    <p class="sec-desc reveal">Según el momento y las necesidades de tu empresa, RiO puede involucrarse de tres formas distintas. Elegí la que mejor describe lo que necesitás.</p>
 
-    <div class="services-grid reveal">
+    <div class="lines-grid">
 
-      <div class="svc">
-        <div class="svc-icon">⚙️</div>
-        <span class="svc-arrow">↗</span>
-        <h3 class="svc-title">Integración ERP / API</h3>
-        <p class="svc-desc">Conexiones entre sistemas de gestión, eCommerce y plataformas de facturación. Flujos automatizados que eliminan trabajo manual y riesgo operacional.</p>
-        <div class="svc-tags">
-          <span>Laudus</span><span>WooCommerce</span><span>REST API</span><span>Multi-RUT</span>
-        </div>
+      <div class="line-card reveal reveal-d1">
+        <span class="line-num">01</span>
+        <h3 class="line-title">Soluciones Estandarizadas</h3>
+        <p class="line-tag">Para empresas que quieren dejar de perder tiempo en tareas que pueden automatizarse.</p>
+        <p class="line-desc">Implementamos soluciones listas para usar que eliminan trabajo manual, organizan la operación y permiten que tu equipo se enfoque en hacer crecer el negocio.</p>
+        <ul class="line-features">
+          <li>Sitios web diseñados para convertir visitantes en oportunidades.</li>
+          <li>Automatización de procesos repetitivos y tareas administrativas.</li>
+          <li>Herramientas de IA que trabajan junto a tu equipo.</li>
+        </ul>
+        <a href="#contacto" class="btn-ghost line-cta">Quiero automatizar mi empresa</a>
       </div>
 
-      <div class="svc">
-        <div class="svc-icon">🛒</div>
-        <span class="svc-arrow">↗</span>
-        <h3 class="svc-title">Desarrollo eCommerce</h3>
-        <p class="svc-desc">Tiendas en Shopify o desarrollo custom en PHP. Integradas a pasarelas de pago chilenas y sistemas de gestión desde el primer día.</p>
-        <div class="svc-tags">
-          <span>Shopify</span><span>PHP custom</span><span>Webpay</span><span>MercadoPago</span>
-        </div>
+      <div class="line-card line-card--featured reveal reveal-d2">
+        <span class="line-num">02</span>
+        <h3 class="line-title">Proyectos Tecnológicos a Medida</h3>
+        <p class="line-tag">Para empresas que necesitan una solución que no existe en el mercado.</p>
+        <p class="line-desc">Diseñamos y desarrollamos plataformas, integraciones y aplicaciones adaptadas a la operación de tu empresa, para resolver desafíos específicos y acompañar su crecimiento a largo plazo.</p>
+        <ul class="line-features">
+          <li>Desarrollo de software y plataformas empresariales.</li>
+          <li>Integraciones ERP, API y automatizaciones personalizadas.</li>
+          <li>eCommerce, aplicaciones web y soluciones con Inteligencia Artificial.</li>
+        </ul>
+        <a href="#contacto" class="btn-ghost line-cta">Quiero desarrollar una solución a medida</a>
       </div>
 
-      <div class="svc">
-        <div class="svc-icon">🔍</div>
-        <span class="svc-arrow">↗</span>
-        <h3 class="svc-title">SEO Técnico y Performance</h3>
-        <p class="svc-desc">Optimización de Core Web Vitals, arquitectura on-page, datos estructurados y posicionamiento en buscadores e IA generativa (GEO).</p>
-        <div class="svc-tags">
-          <span>Core Web Vitals</span><span>Schema.org</span><span>GEO</span><span>GSC</span>
-        </div>
-      </div>
-
-      <div class="svc">
-        <div class="svc-icon">💻</div>
-        <span class="svc-arrow">↗</span>
-        <h3 class="svc-title">Sitios Web Profesionales</h3>
-        <p class="svc-desc">WordPress con Bricks Builder o código propio. Diseño orientado a conversión, autoadministrable, con entrega de manual post-proyecto.</p>
-        <div class="svc-tags">
-          <span>WordPress</span><span>Bricks Builder</span><span>Figma</span><span>HTML/CSS</span>
-        </div>
-      </div>
-
-      <div class="svc">
-        <div class="svc-icon">📊</div>
-        <span class="svc-arrow">↗</span>
-        <h3 class="svc-title">Analítica y Tracking</h3>
-        <p class="svc-desc">GA4, Meta Pixel y GTM con eventos de conversión reales. Datos que permiten tomar decisiones de negocio con fundamento, no intuición.</p>
-        <div class="svc-tags">
-          <span>GA4</span><span>Meta Pixel</span><span>GTM</span><span>Eventos</span>
-        </div>
-      </div>
-
-      <div class="svc">
-        <div class="svc-icon">🧭</div>
-        <span class="svc-arrow">↗</span>
-        <h3 class="svc-title">Consultoría Digital B2B</h3>
-        <p class="svc-desc">Diagnóstico técnico, hoja de ruta y acompañamiento estratégico para empresas en transformación digital o con sistemas que necesitan evolucionar.</p>
-        <div class="svc-tags">
-          <span>Diagnóstico</span><span>Estrategia</span><span>Transformación</span><span>B2B</span>
-        </div>
+      <div class="line-card reveal reveal-d3">
+        <span class="line-num">03</span>
+        <h3 class="line-title">Consultoría Tecnológica</h3>
+        <p class="line-tag">Para empresas que necesitan claridad antes de invertir en tecnología.</p>
+        <p class="line-desc">Analizamos tu operación, identificamos oportunidades de mejora y definimos una estrategia tecnológica alineada con los objetivos de tu negocio, evitando decisiones improvisadas y proyectos sin dirección.</p>
+        <ul class="line-features">
+          <li>Diagnóstico tecnológico y auditorías.</li>
+          <li>Optimización de procesos y arquitectura empresarial.</li>
+          <li>Roadmaps tecnológicos y acompañamiento estratégico.</li>
+        </ul>
+        <a href="#contacto" class="btn-ghost line-cta">Necesito un diagnóstico tecnológico</a>
       </div>
 
     </div>
@@ -177,7 +271,7 @@
 <!-- ── PORTFOLIO ─────────────────────────────────── -->
 <section class="section portfolio" id="portfolio">
   <div class="container">
-    <p class="sec-label reveal">Portfolio</p>
+    <p class="sec-label reveal">Proyectos</p>
     <h2 class="sec-title reveal">Proyectos reales, <span class="hl">resultados medibles.</span></h2>
     <p class="sec-desc reveal">Cada proyecto parte de un problema de negocio concreto. Documentado, medido y publicado como case study técnico.</p>
 
@@ -265,38 +359,6 @@
   </div>
 </section>
 
-<!-- ── APPROACH ──────────────────────────────────── -->
-<section class="section approach">
-  <div class="container">
-    <p class="sec-label reveal">Metodología</p>
-    <h2 class="sec-title reveal">Cómo trabajo.</h2>
-    <p class="sec-desc reveal">Tecnología con estructura, claridad y propósito. Soluciones reales, procesos transparentes y resultados construidos sin improvisación.</p>
-
-    <div class="approach-grid reveal">
-      <div class="ap-item">
-        <span class="ap-num">01</span>
-        <h3 class="ap-title">Diagnóstico real</h3>
-        <p class="ap-desc">Reviso el sistema actual antes de proponer. Identifico brechas reales y priorizo por impacto de negocio, no por preferencias técnicas.</p>
-      </div>
-      <div class="ap-item">
-        <span class="ap-num">02</span>
-        <h3 class="ap-title">Alcance fijo, precio fijo</h3>
-        <p class="ap-desc">Precio cerrado, alcance definido, entregables verificables por fase. Nada fuera del alcance se ejecuta sin cotización aprobada.</p>
-      </div>
-      <div class="ap-item">
-        <span class="ap-num">03</span>
-        <h3 class="ap-title">Ejecución directa</h3>
-        <p class="ap-desc">Trabajo personal. Sin intermediarios, sin equipos externos desconocidos. Comunicación directa y respuesta real en el tiempo acordado.</p>
-      </div>
-      <div class="ap-item">
-        <span class="ap-num">04</span>
-        <h3 class="ap-title">Entrega con autonomía</h3>
-        <p class="ap-desc">Todo proyecto cierra con documentación y capacitación. El cliente opera sin depender de soporte externo para el día a día.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
 <!-- ── ABOUT ─────────────────────────────────────── -->
 <section class="section about" id="nosotros">
   <div class="container">
@@ -315,26 +377,94 @@
         <p class="sec-label">Sobre mí</p>
         <h2 class="sec-title">Negocio <span class="hl">+ tecnología.</span></h2>
         <p class="about-bio">
-          Soy consultora con perfil híbrido: entiendo el problema de negocio y ejecuto la solución técnica. Trabajo con empresas en Chile y Argentina que necesitan integrar sistemas, mejorar su presencia digital o resolver problemas operacionales que les están costando tiempo y dinero.
+          Fundé RiO Impulso Digital porque creo que la tecnología debe ayudar a las empresas a crecer, no convertirse en otro problema que resolver.
         </p>
         <p class="about-bio">
-          No vendo paquetes predeterminados. Cada proyecto parte de un diagnóstico real y termina con resultados documentados que el cliente puede auditar, mantener y escalar de forma autónoma.
+          Cada proyecto lo desarrollo con un compromiso claro: entender primero el negocio, proponer solo lo que aporta valor y construir soluciones que funcionen en el tiempo. Aspiro a que cada cliente termine diciendo lo mismo: "hicieron un buen trabajo y los volvería a elegir".
         </p>
-        <div class="skills">
-          <span class="skill">PHP / MySQL</span>
-          <span class="skill">ERP Laudus</span>
-          <span class="skill">WordPress / Bricks</span>
-          <span class="skill">Shopify</span>
-          <span class="skill">GA4 / GTM</span>
-          <span class="skill">SEO Técnico</span>
-          <span class="skill">Cloudflare / CDN</span>
-          <span class="skill">REST API</span>
-          <span class="skill">Core Web Vitals</span>
-          <span class="skill">GEO</span>
-          <span class="skill">Webpay / Transbank</span>
-          <span class="skill">Meta Pixel</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FAQ ───────────────────────────────────────── -->
+<section class="section faq" id="faq">
+  <div class="container">
+    <p class="sec-label reveal">Preguntas frecuentes</p>
+    <h2 class="sec-title reveal">Preguntas <span class="hl">frecuentes.</span></h2>
+
+    <div class="faq-list reveal">
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          <span>¿Cómo sé qué solución necesita mi empresa?</span>
+          <span class="faq-icon" aria-hidden="true">+</span>
+        </button>
+        <div class="faq-a">
+          <p>No necesitas llegar con la solución definida. Comenzamos entendiendo cómo funciona tu negocio, cuáles son los procesos que hoy generan más fricción y qué objetivos quieres alcanzar. A partir de ese diagnóstico definimos la mejor alternativa.</p>
         </div>
       </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          <span>¿Trabajas solo con empresas de Chile?</span>
+          <span class="faq-icon" aria-hidden="true">+</span>
+        </button>
+        <div class="faq-a">
+          <p>No. RiO trabaja de forma remota con empresas de distintos países. Actualmente el foco comercial está en Chile y Argentina, pero las soluciones pueden implementarse para empresas de cualquier lugar.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          <span>¿Cuánto demora un proyecto?</span>
+          <span class="faq-icon" aria-hidden="true">+</span>
+        </button>
+        <div class="faq-a">
+          <p>Depende del alcance. Algunas soluciones pueden implementarse en pocos días, mientras que un desarrollo a medida puede requerir varias semanas. Antes de comenzar siempre recibirás un cronograma claro con los tiempos estimados.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          <span>¿Qué pasa si no sé exactamente lo que necesito?</span>
+          <span class="faq-icon" aria-hidden="true">+</span>
+        </button>
+        <div class="faq-a">
+          <p>Es una situación muy común. Parte del trabajo consiste precisamente en ayudarte a identificar el problema y definir la solución más adecuada antes de desarrollar cualquier proyecto.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          <span>¿También puedo solicitar una solución completamente a medida?</span>
+          <span class="faq-icon" aria-hidden="true">+</span>
+        </button>
+        <div class="faq-a">
+          <p>Sí. Además de soluciones estandarizadas, RiO desarrolla plataformas, integraciones, automatizaciones y aplicaciones diseñadas específicamente para la operación de cada empresa.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          <span>¿Quién desarrollará mi proyecto?</span>
+          <span class="faq-icon" aria-hidden="true">+</span>
+        </button>
+        <div class="faq-a">
+          <p>Todo el trabajo es realizado directamente por Brenda Rivera, fundadora de RiO Impulso Digital. No existen intermediarios ni tercerización del desarrollo, lo que permite mantener una comunicación directa durante todo el proyecto.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          <span>¿Qué ocurre después de entregar el proyecto?</span>
+          <span class="faq-icon" aria-hidden="true">+</span>
+        </button>
+        <div class="faq-a">
+          <p>Dependiendo del tipo de solución, puedes continuar con un servicio de acompañamiento, soporte y evolución continua para mantener la plataforma actualizada y acompañar el crecimiento de tu empresa.</p>
+        </div>
+      </div>
+
     </div>
   </div>
 </section>
@@ -344,16 +474,73 @@
   <div class="cta-box reveal">
     <div class="cta-glow"></div>
     <div class="cta-glow-2"></div>
-    <div class="cta-content">
-      <span class="cta-sub-label">¿Tienes un proyecto?</span>
-      <h2 class="cta-title">Hablemos de<br>tu desafío.</h2>
-      <p class="cta-p">
-        Cuéntame qué necesitas. Si puedo ayudarte, lo digo con claridad. Si no es lo mío, también.
-      </p>
-      <div class="cta-actions">
-        <a href="mailto:brenda@rioimpulsodigital.com" class="btn-coral">Escribir un correo</a>
-        <a href="https://wa.me/543781410164" class="btn-ghost" target="_blank" rel="noopener">WhatsApp directo →</a>
+    <div class="cta-grid">
+
+      <!-- Columna izquierda: contenido de confianza -->
+      <div class="cta-info">
+        <span class="cta-sub-label">¿Tienes un proyecto?</span>
+        <h2 class="cta-title">
+          <span class="l1">Hablemos</span>
+          <span class="l-row"><span class="l2">de tu</span></span>
+          <span class="l-row"><span class="l3">desafío.</span></span>
+        </h2>
+        <p class="cta-p cta-info-p">
+          La tecnología tiene sentido cuando resuelve problemas reales. Cuéntame qué está pasando en tu empresa.
+        </p>
+        <ul class="cta-checks">
+          <li>Respuesta personal en menos de 24 horas.</li>
+          <li>Sin compromiso.</li>
+          <li>Hablarás directamente conmigo.</li>
+        </ul>
+        <div class="cta-direct">
+          <ul class="cta-direct-links">
+            <li><a href="mailto:hola@rioimpulsodigital.com">📧&nbsp; hola@rioimpulsodigital.com</a></li>
+            <li><a href="https://wa.me/56985921512" target="_blank" rel="noopener"><img src="https://flagcdn.com/20x15/cl.png" alt="Chile" class="cta-flag-img"> +56 9 8592 1512</a></li>
+          </ul>
+        </div>
       </div>
+
+      <!-- Columna derecha: formulario -->
+      <div class="cta-form-col">
+        <form class="contact-form" id="contactForm">
+          <div class="cf-row">
+            <div class="cf-group">
+              <label class="cf-label" for="cf-name">Nombre <span class="cf-req">*</span></label>
+              <input class="cf-input" type="text" id="cf-name" name="nombre" required autocomplete="name" placeholder="Tu nombre">
+            </div>
+            <div class="cf-group">
+              <label class="cf-label" for="cf-email">Email <span class="cf-req">*</span></label>
+              <input class="cf-input" type="email" id="cf-email" name="email" required autocomplete="email" placeholder="tu@empresa.com">
+            </div>
+          </div>
+          <div class="cf-group">
+            <label class="cf-label" for="cf-empresa">Empresa <span class="cf-opt">(opcional)</span></label>
+            <input class="cf-input" type="text" id="cf-empresa" name="empresa" autocomplete="organization" placeholder="Nombre de tu empresa">
+          </div>
+          <div class="cf-group">
+            <label class="cf-label" for="cf-desafio">¿Qué desafío quieres resolver? <span class="cf-req">*</span></label>
+            <textarea class="cf-input cf-textarea" id="cf-desafio" name="desafio" required rows="4" placeholder="Describe el problema, proceso o idea que quieres abordar."></textarea>
+          </div>
+          <div class="cf-group">
+            <p class="cf-label">¿Cómo preferís que te contactemos? <span class="cf-req">*</span></p>
+            <div class="cf-radios">
+              <label class="cf-radio">
+                <input type="radio" name="contacto_via" value="email" required>
+                <span>Email</span>
+              </label>
+              <label class="cf-radio">
+                <input type="radio" name="contacto_via" value="whatsapp" required>
+                <span>WhatsApp</span>
+              </label>
+            </div>
+          </div>
+          <button type="submit" class="btn-coral cf-submit">Enviar mi consulta</button>
+        </form>
+        <div class="cf-confirm" id="cfConfirm" hidden>
+          <p>Gracias por contactarnos. Revisaremos tu consulta y responderemos personalmente en un plazo máximo de 24 horas hábiles.</p>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -364,6 +551,11 @@
     <div class="footer-col">
       <div class="footer-brand">RiO <em>Impulso</em> Digital</div>
       <div class="footer-tag">Consultoría tecnológica B2B · Chile · Argentina</div>
+      <div class="footer-contact">
+        <a href="mailto:hola@rioimpulsodigital.com" class="footer-contact-link">hola@rioimpulsodigital.com</a>
+        <span class="footer-contact-text">Lunes a viernes · 09:00 a 18:00 hrs (Chile)</span>
+        <span class="footer-contact-text">Respuesta personal en menos de 24 horas hábiles.</span>
+      </div>
     </div>
     <div class="footer-col footer-col--center">
       <picture>
@@ -373,10 +565,10 @@
       </picture>
     </div>
     <ul class="footer-links footer-col footer-col--right">
-      <li><a href="#servicios">Servicios</a></li>
-      <li><a href="#portfolio">Portfolio</a></li>
+      <li><a href="#servicios">Soluciones</a></li>
+      <li><a href="#portfolio">Proyectos</a></li>
       <li><a href="#nosotros">Sobre mí</a></li>
-      <li><a href="https://github.com/brendario/rio-impulso-digital" target="_blank" rel="noopener">GitHub ↗</a></li>
+      <li><a href="https://github.com/brendario/rio-impulso-digital" target="_blank" rel="noopener" class="footer-link-muted">GitHub ↗</a></li>
     </ul>
   </div>
   <div class="footer-copy">
@@ -385,7 +577,7 @@
 </footer>
 
 <!-- ── SCRIPTS ───────────────────────────────────── -->
-<script src="./assets/js/main.js?v=20260611" defer></script>
+<script src="./assets/js/main.js?v=20260627" defer></script>
 
 </body>
 </html>
