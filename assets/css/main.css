@@ -663,6 +663,7 @@ a { text-decoration: none; color: inherit; }
   color: var(--coral); font-family: var(--ff-head); font-weight: 700; font-size: .8rem;
 }
 .cta-info, .cta-form-col { min-width: 0; }
+.cta-form-col { display: flex; flex-direction: column; justify-content: center; align-self: stretch; }
 .cta-form-col .contact-form { margin-top: 0; }
 .cta-direct {
   margin-top: 1.75rem; padding-top: 1.75rem;
@@ -719,7 +720,7 @@ a { text-decoration: none; color: inherit; }
 }
 .cf-submit { width: 100%; margin-top: .5rem; }
 .cf-confirm {
-  text-align: left; margin-top: 1.5rem;
+  text-align: left; margin-top: 0;
   background: rgba(147,0,159,.1);
   border: 1px solid rgba(147,0,159,.25);
   border-radius: var(--r); padding: 1.25rem 1.5rem;
@@ -792,6 +793,9 @@ footer {
 .reveal-d3 { transition-delay: .3s; }
 
 /* ── RESPONSIVE ──────────────────────────────── */
+@media (max-width: 1024px) {
+  .cta-grid { grid-template-columns: 1fr; gap: 2.5rem; }
+}
 @media (max-width: 900px) {
   .services-grid  { grid-template-columns: repeat(2, 1fr); }
   .lines-grid     { grid-template-columns: 1fr; }
@@ -799,7 +803,6 @@ footer {
   .approach-grid  { grid-template-columns: repeat(2, 1fr); }
   .ap-item        { border-bottom: 1px solid var(--border); }
   .about-inner    { grid-template-columns: 1fr; gap: 2.5rem; }
-  .cta-grid       { grid-template-columns: 1fr; gap: 2.5rem; }
 }
 @media (max-width: 640px) {
   .nav { padding: 0 1.25rem; }
