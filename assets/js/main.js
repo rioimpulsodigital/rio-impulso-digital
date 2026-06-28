@@ -110,6 +110,11 @@ if (contactForm) {
       contactForm.hidden = true;
       document.getElementById('cfConfirm').hidden = false;
 
+      // GA4 — generate_lead (conversión primaria)
+      if (typeof gtag === 'function') {
+        gtag('event', 'generate_lead', { form_id: 'contacto_rio' });
+      }
+
     } catch (err) {
       console.error('HubSpot form error:', err);
       submitBtn.disabled = false;
@@ -123,3 +128,27 @@ if (contactForm) {
     }
   });
 }
+
+// GA4 — contact_click (conversión secundaria · solo email por ahora)
+const emailLink = document.querySelector('a[href="mailto:hola@rioimpulsodigital.com"]');
+if (emailLink) {
+  emailLink.addEventListener('click', () => {
+    if (typeof gtag === 'function') {
+      gtag('event', 'contact_click', { contact_method: 'email' });
+    }
+  });
+}
+
+// GA4 — cta_click (engagement · tres líneas de negocio)
+document.querySelectorAll('.line-cta').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (typeof gtag === 'function') {
+      const text = btn.textContent.trim();
+      let ctaId = 'unknown';
+      if (text.includes('automatizar'))  ctaId = 'estandarizada';
+      else if (text.includes('medida'))  ctaId = 'medida';
+      else if (text.includes('diagn'))   ctaId = 'consultoria';
+      gtag('event', 'cta_click', { cta_id: ctaId, cta_text: text });
+    }
+  });
+});
