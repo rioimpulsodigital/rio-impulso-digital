@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kit de Venta — Landing Page | RiO Impulso Digital</title>
+<link rel="icon" href="https://raw.githubusercontent.com/rioimpulsodigital/rio-impulso-digital/refs/heads/main/assets/branding/rio-favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --white:#ffffff;
+    --ink:#241b2e;
+    --purple:#93009f;
+    --purple-soft:#f6e9f8;
+    --coral:#ff6b6b;
+    --coral-soft:#fff0ee;
+    --violet:#6b5b95;
+    --violet-soft:#f0eef7;
+    --line:#e7e1ec;
+    --gray:#6d6478;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--white);
+    color:var(--ink);
+    font-family:'DM Sans', sans-serif;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{max-width:860px;margin:0 auto;padding:0 28px 80px;}
+
+  /* HEADER */
+  header.top{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:22px 0 18px;border-bottom:1px solid var(--line);
+    margin-bottom:36px;
+  }
+  header.top img{width:130px;}
+  .badge{
+    font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--violet);font-weight:600;
+    border:1px solid var(--violet);border-radius:100px;
+    padding:6px 12px;
+  }
+
+  .hero{margin-bottom:44px;}
+  .eyebrow{
+    font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--coral);font-weight:700;margin-bottom:10px;
+  }
+  h1{
+    font-family:'DM Serif Display', serif;
+    font-size:38px;font-weight:400;color:var(--purple);
+    margin:0 0 12px;line-height:1.15;
+  }
+  .hero p{font-size:16px;color:var(--gray);max-width:620px;margin:0;}
+
+  .priority-box{
+    background:var(--white);border:2px solid var(--purple);border-radius:16px;
+    padding:26px 28px;margin-bottom:36px;
+  }
+  .priority-head h3{
+    font-family:'DM Serif Display', serif;font-weight:400;font-size:22px;
+    margin:0 0 10px;color:var(--purple);
+  }
+  .priority-lead{font-size:14.5px;color:var(--ink);margin:0 0 16px;}
+  .priority-list{
+    margin:0;padding:0;list-style:none;counter-reset:pri;
+    display:grid;grid-template-columns:1fr 1fr;column-gap:28px;row-gap:10px;
+  }
+  @media(max-width:560px){.priority-list{grid-template-columns:1fr;}}
+  .priority-list li{
+    counter-increment:pri;position:relative;padding-left:34px;
+    font-size:15px;font-weight:600;color:var(--ink);
+  }
+  .priority-list li::before{
+    content:counter(pri);position:absolute;left:0;top:-1px;
+    width:24px;height:24px;border-radius:50%;
+    background:var(--coral);color:#fff;font-size:12px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'DM Sans',sans-serif;
+  }
+
+  .prospect-box{
+    background:var(--violet-soft);border-radius:14px;padding:22px 24px;
+    margin-bottom:40px;display:grid;grid-template-columns:repeat(4, 1fr);gap:16px;
+  }
+  @media(max-width:860px){.prospect-box{grid-template-columns:1fr 1fr;}}
+  @media(max-width:640px){.prospect-box{grid-template-columns:1fr;}}
+  .prospect-box .field{display:flex;flex-direction:column;gap:6px;}
+  .prospect-box label{font-size:12px;font-weight:600;color:var(--violet);text-transform:uppercase;letter-spacing:.05em;}
+  .prospect-box input{
+    border:none;border-bottom:2px solid var(--violet);background:transparent;
+    font-family:'DM Sans',sans-serif;font-size:16px;padding:6px 2px;color:var(--ink);
+  }
+  .prospect-box input:focus{outline:none;border-color:var(--purple);}
+
+  .prep{
+    border-left:3px solid var(--purple);background:var(--purple-soft);
+    border-radius:0 12px 12px 0;padding:18px 22px;margin-bottom:48px;
+  }
+  .prep h3{margin:0 0 8px;font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:var(--purple);}
+  .prep p{margin:0;font-size:14.5px;color:var(--ink);}
+
+  section.block{margin-bottom:56px;}
+  .block-head{display:flex;align-items:baseline;gap:14px;margin-bottom:22px;}
+  .step-num{
+    font-family:'DM Serif Display', serif;font-size:26px;color:var(--coral);
+    flex-shrink:0;
+  }
+  .block-head h2{
+    font-family:'DM Serif Display', serif;font-weight:400;font-size:24px;
+    margin:0;color:var(--ink);
+  }
+  .block-head .sub{font-size:13.5px;color:var(--gray);margin-top:2px;}
+
+  .qcard{
+    border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:14px;
+  }
+  .qcard .qtext{font-size:15.5px;font-weight:600;color:var(--ink);margin-bottom:10px;}
+  .qcard .qtext .n{color:var(--violet);font-weight:700;margin-right:6px;}
+  .qcard textarea{
+    width:100%;border:1px solid var(--line);border-radius:8px;
+    font-family:'DM Sans',sans-serif;font-size:14.5px;color:var(--ink);
+    padding:10px 12px;resize:vertical;min-height:44px;background:#fbfafc;
+  }
+  .qcard textarea:focus{outline:none;border-color:var(--violet);background:var(--white);}
+
+  /* URGENCY CLASSIFIER */
+  .types-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;}
+  @media(max-width:640px){.types-grid{grid-template-columns:1fr;}}
+  .type-card{
+    border:2px solid var(--line);border-radius:12px;padding:16px 18px;cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .type-card:hover{border-color:var(--violet);}
+  .type-card.active{border-color:var(--purple);background:var(--purple-soft);}
+  .type-card .letter{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:26px;height:26px;border-radius:50%;background:var(--violet);color:#fff;
+    font-size:13px;font-weight:700;margin-bottom:8px;
+  }
+  .type-card.active .letter{background:var(--purple);}
+  .type-card .name{font-weight:700;font-size:14.5px;margin-bottom:4px;}
+  .type-card .desc{font-size:13px;color:var(--gray);margin-bottom:6px;}
+  .type-card .ex{font-size:12.5px;color:var(--violet);font-style:italic;}
+
+  .reveal{
+    border-radius:12px;padding:20px 22px;margin-top:6px;
+    background:var(--coral-soft);border:1px solid #ffd6d0;
+    display:none;
+  }
+  .reveal.show{display:block;}
+  .reveal .label{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--coral);font-weight:700;margin-bottom:8px;}
+  .reveal .question{font-size:16px;font-weight:600;color:var(--ink);margin-bottom:12px;}
+  .reveal textarea{
+    width:100%;border:1px solid #ffc7c0;border-radius:8px;padding:10px 12px;
+    font-family:'DM Sans',sans-serif;font-size:14.5px;background:#fff;min-height:44px;resize:vertical;
+  }
+  .reveal textarea:focus{outline:none;border-color:var(--coral);}
+
+  .ambiguous{
+    font-size:13.5px;color:var(--gray);margin-top:14px;padding:12px 16px;
+    background:var(--violet-soft);border-radius:8px;
+  }
+  .ambiguous b{color:var(--violet);}
+
+  .rule-box{
+    margin-top:18px;border:2px solid var(--coral);border-radius:12px;
+    padding:16px 20px;background:#fff;
+  }
+  .rule-box .tag{font-size:11px;font-weight:700;color:#fff;background:var(--coral);
+    padding:3px 10px;border-radius:100px;text-transform:uppercase;letter-spacing:.05em;}
+  .rule-box p{margin:10px 0 0;font-size:14.5px;color:var(--ink);}
+
+  /* OPENING SCRIPT (Paso 0) */
+  .script-box{
+    background:var(--purple-soft);border-radius:14px;padding:20px 22px;margin-bottom:16px;
+  }
+  .script-box .label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--purple);margin-bottom:10px;}
+  .script-box .line{font-size:15.5px;color:var(--ink);font-style:italic;line-height:1.6;margin:0;}
+  .script-box .line b{font-style:normal;color:var(--purple);}
+
+  .thermo-box{
+    border:2px solid var(--violet);border-radius:12px;padding:16px 20px;margin-bottom:20px;
+    background:var(--violet-soft);
+  }
+  .thermo-box .tag{font-size:11px;font-weight:700;color:#fff;background:var(--violet);
+    padding:3px 10px;border-radius:100px;text-transform:uppercase;letter-spacing:.05em;}
+  .thermo-box p{margin:10px 0 0;font-size:14.5px;color:var(--ink);}
+
+  .branch-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px;}
+  @media(max-width:640px){.branch-grid{grid-template-columns:1fr;}}
+  .branch-card{border-radius:12px;padding:18px 20px;border:2px solid var(--line);}
+  .branch-card.go{border-color:#8fd19e;background:#f2fbf3;}
+  .branch-card.hold{border-color:var(--coral);background:var(--coral-soft);}
+  .branch-card .b-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;}
+  .branch-card.go .b-label{color:#2f8f45;}
+  .branch-card.hold .b-label{color:var(--coral);}
+  .branch-card p{margin:0;font-size:14px;color:var(--ink);}
+
+  .obj-mini{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px;}
+  .obj-mini .oq{font-size:14.5px;font-weight:700;color:var(--coral);margin-bottom:6px;}
+  .obj-mini .oa{font-size:13.5px;color:var(--gray);margin:0;}
+
+  /* OFERTA Y CIERRE (Paso 4) */
+  .transition-note{
+    font-size:14px;color:var(--violet);font-weight:600;margin-bottom:20px;
+    background:var(--violet-soft);border-radius:8px;padding:12px 16px;
+  }
+  .includes-box{
+    background:var(--white);border:1px solid var(--line);border-radius:12px;
+    padding:20px 22px;margin-bottom:20px;
+  }
+  .includes-box .inc-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--purple);margin-bottom:12px;}
+  .includes-box .solves{font-size:14px;color:var(--ink);margin:0 0 14px;padding:10px 14px;background:var(--violet-soft);border-radius:8px;}
+  .includes-box .solves b{color:var(--violet);}
+  .includes-box ul{margin:0;padding-left:20px;}
+  .includes-box li{font-size:14.5px;color:var(--ink);margin-bottom:7px;}
+
+  .price-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
+  @media(max-width:640px){.price-grid{grid-template-columns:1fr;}}
+  .price-card{
+    border:2px solid var(--line);border-radius:14px;padding:20px 22px;text-align:center;
+  }
+  .price-card.highlight{border-color:var(--purple);background:var(--purple-soft);}
+  .price-card .p-name{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--violet);margin-bottom:8px;}
+  .price-card .p-amount{font-family:'DM Serif Display', serif;font-size:32px;color:var(--purple);margin-bottom:6px;}
+  .price-card .p-detail{font-size:13px;color:var(--gray);}
+  .price-card .p-example{
+    font-family:'DM Sans',sans-serif;font-size:12px;color:var(--violet);
+    background:var(--violet-soft);border-radius:6px;padding:6px 8px;margin-top:10px;word-break:break-all;
+  }
+  .price-card.highlight .p-example{background:#fff;}
+  .price-card.plan-inicial{border-color:var(--coral);background:var(--coral-soft);}
+  .price-card .plan-tag{
+    display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+    color:#fff;background:var(--coral);padding:3px 10px;border-radius:100px;margin-bottom:8px;
+  }
+
+  .explain-box{
+    border-left:3px solid var(--violet);background:var(--violet-soft);
+    border-radius:0 10px 10px 0;padding:14px 18px;margin-bottom:14px;font-size:14px;color:var(--ink);
+  }
+  .explain-box b{color:var(--violet);}
+
+  .check-note{
+    border:2px dashed var(--coral);border-radius:10px;padding:14px 18px;margin-bottom:20px;
+    font-size:13.5px;color:var(--ink);background:var(--coral-soft);
+  }
+  .check-note .tag{font-size:11px;font-weight:700;color:#fff;background:var(--coral);
+    padding:3px 10px;border-radius:100px;text-transform:uppercase;letter-spacing:.05em;margin-right:8px;}
+
+  .closing-line{
+    font-size:16px;font-style:italic;color:var(--ink);
+    border-left:2px solid var(--coral);padding-left:16px;margin-top:8px;
+  }
+
+  .domain-choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:20px 0 12px;}
+  @media(max-width:640px){.domain-choice-grid{grid-template-columns:1fr;}}
+  .domain-choice-card{
+    border:2px solid var(--line);border-radius:12px;padding:14px 18px;cursor:pointer;
+    text-align:center;transition:border-color .15s ease, background .15s ease;
+  }
+  .domain-choice-card:hover{border-color:var(--violet);}
+  .domain-choice-card.active{border-color:var(--purple);background:var(--purple-soft);}
+  .domain-choice-card .dc-name{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--violet);margin-bottom:4px;}
+  .domain-choice-card.active .dc-name{color:var(--purple);}
+  .domain-choice-card .dc-price{font-family:'DM Serif Display', serif;font-size:22px;color:var(--ink);}
+
+  .domain-desired-field{margin:14px 0 4px;display:flex;flex-direction:column;gap:6px;max-width:360px;}
+  .domain-desired-field label{font-size:12px;font-weight:600;color:var(--violet);text-transform:uppercase;letter-spacing:.05em;}
+  .domain-desired-field input{
+    border:none;border-bottom:2px solid var(--violet);background:transparent;
+    font-family:'DM Sans',sans-serif;font-size:15px;padding:6px 2px;color:var(--ink);
+  }
+  .domain-desired-field input:focus{outline:none;border-color:var(--purple);}
+  .domain-note{font-size:12.5px;color:var(--gray);font-style:italic;margin:6px 0 4px;}
+
+  /* CHECK: ¿TIENE FICHA DE GOOGLE? */
+  .ficha-check{
+    background:var(--violet-soft);border-radius:12px;padding:18px 22px;margin-bottom:20px;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  }
+  .ficha-check .fc-label{font-size:14.5px;font-weight:700;color:var(--ink);}
+  .ficha-check .fc-sub{font-size:12.5px;color:var(--gray);margin-top:2px;}
+  .ficha-check .fc-toggle{display:flex;gap:10px;flex-shrink:0;}
+  button.fc-btn{
+    border:2px solid var(--violet);background:#fff;color:var(--violet);
+    font-family:'DM Sans',sans-serif;font-weight:700;font-size:13.5px;
+    padding:9px 20px;border-radius:100px;cursor:pointer;transition:all .15s ease;
+  }
+  button.fc-btn.active{background:var(--violet);color:#fff;}
+  button.fc-btn:hover{border-color:var(--purple);}
+
+  /* PRICING — 5 opciones, en filas escalonadas: Ficha sola → Landing → Ficha + Landing */
+  .price-grid-5{display:flex;flex-direction:column;gap:14px;margin-bottom:20px;}
+  .price-grid-5 .pg-row{display:grid;gap:14px;}
+  .price-grid-5 .pg-row-solo{grid-template-columns:1fr;max-width:320px;margin:0 auto;width:100%;}
+  .price-grid-5 .pg-row-pair{grid-template-columns:1fr 1fr;}
+  @media(max-width:480px){
+    .price-grid-5 .pg-row-solo{max-width:100%;}
+    .price-grid-5 .pg-row-pair{grid-template-columns:1fr;}
+  }
+  .price-grid-5 .price-card{padding:16px 14px;}
+  .price-grid-5 .price-card .p-amount{font-size:25px;}
+
+  /* SEND SEQUENCE — 3 pasos en orden */
+  .send-sequence{display:flex;flex-direction:column;gap:12px;margin-top:20px;}
+  .send-step{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    border:2px solid var(--line);border-radius:12px;padding:14px 18px;
+    opacity:.45;transition:opacity .2s ease, border-color .2s ease, background .2s ease;
+  }
+  .send-step.active{opacity:1;border-color:var(--purple);background:var(--purple-soft);}
+  .send-step.done{opacity:.7;border-color:#8fd19e;background:#f2fbf3;}
+  .send-step .ss-info{display:flex;align-items:center;gap:12px;}
+  .send-step .ss-num{
+    width:26px;height:26px;border-radius:50%;background:var(--violet);color:#fff;
+    font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .send-step.done .ss-num{background:#2f8f45;}
+  .send-step .ss-label{font-size:14px;font-weight:600;color:var(--ink);}
+  button.seq-btn{
+    background:var(--purple);color:#fff;border:none;border-radius:100px;
+    padding:9px 20px;font-family:'DM Sans',sans-serif;font-weight:600;font-size:13.5px;
+    cursor:pointer;white-space:nowrap;transition:background .15s ease;
+  }
+  button.seq-btn:hover:not(:disabled){background:#7a0083;}
+  button.seq-btn:disabled{background:var(--line);color:var(--gray);cursor:not-allowed;}
+
+  /* DISCARD CALL */
+  button.discard-link{
+    background:none;border:1px solid var(--coral);color:var(--coral);
+    font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;
+    padding:7px 14px;border-radius:100px;cursor:pointer;white-space:nowrap;
+    transition:background .15s ease;
+  }
+  button.discard-link:hover{background:var(--coral-soft);}
+
+
+  /* FLOW RECAP */
+  .flow-list{list-style:none;margin:0;padding:0;counter-reset:flow;}
+  .flow-list li{
+    counter-increment:flow;position:relative;padding:10px 0 10px 40px;
+    border-bottom:1px solid var(--line);font-size:14.5px;
+  }
+  .flow-list li:last-child{border-bottom:none;}
+  .flow-list li::before{
+    content:counter(flow);position:absolute;left:0;top:9px;
+    width:24px;height:24px;border-radius:50%;background:var(--violet);color:#fff;
+    font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;
+  }
+
+  /* SUMMARY / ACTION */
+  .action-bar{
+    display:flex;gap:14px;align-items:center;flex-wrap:wrap;
+    margin-top:8px;
+  }
+  button.copy-btn{
+    background:var(--purple);color:#fff;border:none;border-radius:100px;
+    padding:13px 26px;font-family:'DM Sans',sans-serif;font-weight:600;font-size:14.5px;
+    cursor:pointer;transition:background .15s ease;
+  }
+  button.copy-btn:hover{background:#7a0083;}
+  .copy-status{font-size:13px;color:var(--violet);opacity:0;transition:opacity .2s ease;}
+  .copy-status.show{opacity:1;}
+
+  footer{
+    margin-top:70px;padding-top:24px;border-top:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;
+  }
+  footer .contact{font-size:13px;color:var(--gray);line-height:1.7;}
+  footer .contact b{color:var(--ink);}
+  footer img{width:40px;opacity:.6;}
+
+  @media print{
+    button.copy-btn{display:none;}
+    .action-bar{display:none;}
+    .send-sequence{display:none;}
+    button.discard-link{display:none;}
+  }
+
+  /* COVER SCREEN */
+  #coverScreen{
+    min-height:60vh;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:60px 20px;
+  }
+  #coverScreen img.cover-logo{width:220px;margin-bottom:36px;}
+  #coverScreen .cover-eyebrow{
+    font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--coral);font-weight:700;margin-bottom:12px;
+  }
+  #coverScreen h1.cover-title{
+    font-family:'DM Serif Display', serif;font-weight:400;font-size:30px;
+    color:var(--purple);margin:0 0 34px;max-width:480px;
+  }
+  button.start-btn{
+    background:var(--purple);color:#fff;border:none;border-radius:100px;
+    padding:18px 40px;font-family:'DM Sans',sans-serif;font-weight:700;font-size:16px;
+    cursor:pointer;transition:background .15s ease, transform .1s ease;
+  }
+  button.start-btn:hover{background:#7a0083;}
+  button.start-btn:active{transform:scale(0.98);}
+  #formScreen{display:none;}
+
+  .cover-field{
+    display:flex;flex-direction:column;gap:6px;margin-bottom:30px;width:100%;max-width:280px;
+  }
+  .cover-field label{
+    font-size:12px;font-weight:600;color:var(--violet);text-transform:uppercase;letter-spacing:.05em;
+  }
+  .cover-field input{
+    border:none;border-bottom:2px solid var(--violet);background:transparent;
+    font-family:'DM Sans',sans-serif;font-size:16px;padding:6px 2px;color:var(--ink);
+    text-align:center;
+  }
+  .cover-field input:focus{outline:none;border-color:var(--purple);}
+
+  .cover-mode{
+    display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:30px;
+  }
+  .cover-mode label{
+    font-size:12px;font-weight:600;color:var(--violet);text-transform:uppercase;letter-spacing:.05em;
+  }
+  .cover-mode .mode-toggle{display:flex;gap:10px;}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div id="coverScreen">
+    <img class="cover-logo" src="https://raw.githubusercontent.com/rioimpulsodigital/rio-impulso-digital/refs/heads/main/assets/branding/rio-logo-horizontal.png" alt="RiO Impulso Digital" />
+    <div class="cover-eyebrow">Kit de venta · Equipo comercial</div>
+    <h1 class="cover-title">10 minutos con cualquier prospecto</h1>
+    <div class="cover-field">
+      <label>Tu nombre (ejecutivo)</label>
+      <input type="text" id="execName" placeholder="Ej: Martín">
+    </div>
+    <div class="cover-mode">
+      <label>¿Cómo contactas hoy?</label>
+      <div class="mode-toggle" id="contactModeToggle">
+        <button type="button" class="fc-btn active" data-mode="llamada">Llamada</button>
+        <button type="button" class="fc-btn" data-mode="terreno">Terreno</button>
+      </div>
+    </div>
+    <button class="start-btn" onclick="startNewClient()">Haz clic para ingresar un nuevo cliente</button>
+  </div>
+
+  <div id="formScreen">
+
+  <header class="top">
+    <img src="https://raw.githubusercontent.com/rioimpulsodigital/rio-impulso-digital/refs/heads/main/assets/branding/rio-logo-horizontal.png" alt="RiO Impulso Digital" />
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="badge">Uso interno · Equipo comercial</span>
+      <button class="discard-link" id="discardBtnLabel" onclick="discardCall()">Descartar llamada</button>
+    </div>
+  </header>
+
+  <div class="hero">
+    <div class="eyebrow">Kit de venta</div>
+    <h1>10 minutos con cualquier prospecto</h1>
+    <p>Cuestionario único que funciona para cualquier rubro. Complétalo durante la llamada o la visita — no es un guion para leer, es un mapa para no perder el hilo ni la venta.</p>
+  </div>
+
+  <div class="priority-box">
+    <div class="priority-head">
+      <span class="eyebrow" style="margin-bottom:6px;">Prioridad de prospección</span>
+      <h3>Los 10 mejores para empezar</h3>
+    </div>
+    <p class="priority-lead">Si RiO Impulso Digital tuviera que salir mañana a vender, este es el orden exacto en el que iría:</p>
+    <ol class="priority-list">
+      <li>Peluquerías</li>
+      <li>Barberías</li>
+      <li>Centros de estética</li>
+      <li>Restaurantes</li>
+      <li>Cafeterías</li>
+      <li>Veterinarias</li>
+      <li>Kinesiólogos</li>
+      <li>Nutricionistas</li>
+      <li>Psicólogos</li>
+      <li>Gimnasios boutique</li>
+    </ol>
+  </div>
+
+  <div class="prospect-box">
+    <div class="field">
+      <label>Negocio / Prospecto</label>
+      <input type="text" id="pname" placeholder="Nombre del negocio">
+    </div>
+    <div class="field">
+      <label>Rubro</label>
+      <input type="text" id="prubro" placeholder="Ej: dentista, gimnasio, restaurante">
+    </div>
+    <div class="field">
+      <label>WhatsApp del cliente</label>
+      <input type="text" id="pclientwa" placeholder="Ej: +54 9 3781 000000">
+    </div>
+    <div class="field">
+      <label>Email del cliente</label>
+      <input type="email" id="pclientemail" placeholder="Ej: juan@negocio.cl">
+    </div>
+  </div>
+
+  <div class="prep">
+    <h3 id="prepTitle">Antes de llamar</h3>
+    <p id="prepText">Busca el negocio en Google Maps para ver si tiene ficha activa, y marca la opción correspondiente abajo. <b>Si tiene ficha</b>, aprovecha para revisar sus fotos, reseñas y categoría — con eso ya llegas con más contexto a la llamada. <b>Si no tiene</b>, no hay nada que revisar ahí, directo al guion correspondiente. En cualquiera de los dos casos, clasifica mentalmente qué tipo de urgencia (A/B/C/D) le corresponde según su rubro — eso lo vas a confirmar recién en el paso 3.</p>
+  </div>
+
+  <div class="ficha-check">
+    <div>
+      <div class="fc-label">¿Tiene ficha de Google activa?</div>
+      <div class="fc-sub">Es lo primero que revisas tú, buscando el negocio en Google Maps — no hace falta preguntárselo al cliente.</div>
+    </div>
+    <div class="fc-toggle" id="fichaToggle">
+      <button type="button" class="fc-btn active" data-has-ficha="si">Sí tiene</button>
+      <button type="button" class="fc-btn" data-has-ficha="no">No tiene</button>
+    </div>
+  </div>
+
+  <!-- STEP 0: OPENING -->
+  <section class="block">
+    <div class="block-head">
+      <span class="step-num">0</span>
+      <div>
+        <h2 id="stepOpeningTitle">Apertura de la llamada</h2>
+        <div class="sub" id="stepOpeningSub">Antes de las 7 preguntas. Aquí no vendes — solo confirmas si hay interés real antes de invertir el resto de la llamada.</div>
+      </div>
+    </div>
+
+    <div class="script-box" id="scriptBox">
+      <div class="label">Guion sugerido — adáptalo a tu forma de hablar, no lo leas textual</div>
+      <p class="line" id="scriptLine"></p>
+    </div>
+
+    <div class="thermo-box" id="thermoBox">
+      <span class="tag">Termómetro de interés</span>
+      <p id="thermoLine"></p>
+    </div>
+
+    <div class="branch-grid">
+      <div class="branch-card go">
+        <div class="b-label">Hay interés</div>
+        <p>Muestra curiosidad, pregunta cómo funciona, o dice que sí. Pasa directo al <b>Paso 1</b> y completa las 7 preguntas.</p>
+      </div>
+      <div class="branch-card hold">
+        <div class="b-label">Duda u objeta</div>
+        <p>Pone un "pero", pregunta el precio antes de tiempo, o duda. Maneja la objeción con las respuestas de abajo — si se destraba, continúa al Paso 1.</p>
+      </div>
+    </div>
+
+    <div class="obj-mini">
+      <div class="oq">"No tengo dinero para esto ahora."</div>
+      <p class="oa">Arranca desde $50.000 CLP, sin gastos grandes de entrada, lista en 48 horas. No es una inversión grande ni un compromiso a largo plazo.</p>
+    </div>
+    <div class="obj-mini">
+      <div class="oq">"Ya tengo Instagram / Facebook, no necesito nada más."</div>
+      <p class="oa">Las redes sirven, pero cuando alguien busca directamente en Google (el buscador o el mapa), un negocio sin ficha ni página web no aparece ahí — y el de al lado sí. Las redes complementan, no reemplazan estar en Google.</p>
+    </div>
+    <div class="obj-mini">
+      <div class="oq">"Mándame información por WhatsApp."</div>
+      <p class="oa">"Está bien, te la envío — pero mandarte un mensaje no te va a traer más clientes. Cuéntame: ¿qué vendes y para quién es principalmente?" <i>(Nota: ya arrancaste la Pregunta 1 antes de colgar. Si sigue respondiendo, continúa con la 2 y la 3 mientras puedas.)</i></p>
+    </div>
+    <div class="obj-mini">
+      <div class="oq">"No tengo tiempo ahora."</div>
+      <p class="oa">No insistas en ese momento. Agenda un horario puntual: "Perfecto, ¿te llamo mañana a las [hora]?" — un horario concreto, no "te llamo después".</p>
+    </div>
+    <div class="obj-mini">
+      <div class="oq">"No, no me interesa."</div>
+      <p class="oa">No insistas. Cierra de forma cordial y anota el motivo para reintentar en 2-3 meses. Insistir después de un "no" claro arruina el contacto para siempre — ninguna landing vale eso.</p>
+    </div>
+  </section>
+
+  <!-- STEP 1 -->
+  <section class="block">
+    <div class="block-head">
+      <span class="step-num">1</span>
+      <div>
+        <h2>Las preguntas base</h2>
+      </div>
+    </div>
+
+    <div class="qcard">
+      <div class="qtext"><span class="n">01</span>¿Qué vendes y para quién es principalmente? <span style="font-weight:400;color:var(--gray);">(incluye el rango de precio)</span></div>
+      <textarea id="q1" placeholder="Notas..."></textarea>
+    </div>
+    <div class="qcard">
+      <div class="qtext"><span class="n">02</span>¿Qué te hace diferente de los negocios similares en tu zona?</div>
+      <textarea id="q2" placeholder="Notas..."></textarea>
+    </div>
+    <div class="qcard">
+      <div class="qtext"><span class="n">03</span>¿Qué objeción te dicen más seguido para no comprar o entrar?</div>
+      <textarea id="q3" placeholder="Notas..."></textarea>
+    </div>
+    <div class="qcard">
+      <div class="qtext"><span class="n">04</span>¿Qué necesitas que haga la persona que vea la página? <span style="font-weight:400;color:var(--gray);">(llamar, reservar, escribir, comprar)</span></div>
+      <textarea id="q4" placeholder="Notas..."></textarea>
+    </div>
+    <div class="qcard">
+      <div class="qtext"><span class="n">05</span>¿Tienes fotos buenas del lugar, producto o trabajo terminado que podamos usar?</div>
+      <textarea id="q5" placeholder="Notas..."></textarea>
+    </div>
+    <div class="qcard">
+      <div class="qtext"><span class="n">06</span>¿Puedes conseguir 2-3 clientes de confianza que dejen una reseña en Google esta semana?</div>
+      <textarea id="q6" placeholder="Notas..."></textarea>
+    </div>
+    <div class="qcard">
+      <div class="qtext"><span class="n">07</span>¿Hay algún color que identifiques con tu marca o que te gustaría que usemos en el diseño? <span style="font-weight:400;color:var(--gray);">(si no tienes uno definido, dilo — no hay problema)</span></div>
+      <textarea id="q7" placeholder="Notas..."></textarea>
+    </div>
+  </section>
+
+  <!-- STEP 1+: PREGUNTAS FICHA DE GOOGLE (solo si no tiene ficha) -->
+  <section class="block" id="fichaQuestionsSection" style="display:none;">
+    <div class="block-head">
+      <span class="step-num">1+</span>
+      <div>
+        <h2>Preguntas de Ficha de Google</h2>
+      </div>
+    </div>
+
+    <div class="qcard">
+      <div class="qtext" id="f1Text"><span class="n">F1</span>¿Tienes local físico, o solo atiendes a domicilio / por zona? Si tiene local, pídele la <b>dirección exacta</b> (calle, número, comuna) — Google la necesita para verificar la ficha. <span style="font-weight:400;color:var(--gray);">(pregúntaselo — no lo puedes ver por teléfono)</span></div>
+      <textarea id="f2" placeholder="Notas..."></textarea>
+    </div>
+    <div class="qcard">
+      <div class="qtext"><span class="n">F2</span>¿Cuál es tu horario de atención?</div>
+      <textarea id="f3" placeholder="Notas..."></textarea>
+    </div>
+    <div class="qcard">
+      <div class="qtext"><span class="n">F3</span>¿Tienes teléfono público y correo, aparte del WhatsApp?</div>
+      <textarea id="f4" placeholder="Notas..."></textarea>
+    </div>
+    <div class="qcard">
+      <div class="qtext"><span class="n">F4</span>¿Qué métodos de pago aceptas, y ofreces retiro en el local o entrega a domicilio?</div>
+      <textarea id="f5" placeholder="Notas..."></textarea>
+    </div>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="block">
+    <div class="block-head">
+      <span class="step-num">2</span>
+      <div>
+        <h2>Canal de contacto</h2>
+        <div class="sub">Pregunta agnóstica al canal — sirve igual para cualquier rubro.</div>
+      </div>
+    </div>
+    <div class="qcard">
+      <div class="qtext">¿Qué es lo primero que te preguntan cuando te contactan — sea que te llamen, te escriban por WhatsApp, o entren directo al local?</div>
+      <textarea id="qCanal" placeholder="Notas..."></textarea>
+    </div>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="block">
+    <div class="block-head">
+      <span class="step-num">3</span>
+      <div>
+        <h2>Clasificador de urgencia</h2>
+        <div class="sub">Esta es la que falla si la aplicas sin pensar. Elige el tipo antes de preguntar.</div>
+      </div>
+    </div>
+
+    <div class="types-grid" id="typesGrid">
+      <div class="type-card" data-type="A">
+        <div class="letter">A</div>
+        <div class="name">Capacidad limitada</div>
+        <div class="desc">Tiene un límite físico de atención en un momento dado.</div>
+        <div class="ex">Restaurante, gimnasio, peluquería, spa, clases</div>
+      </div>
+      <div class="type-card" data-type="B">
+        <div class="letter">B</div>
+        <div class="name">Empeora con el tiempo</div>
+        <div class="desc">La urgencia es del cliente — postergar sale caro.</div>
+        <div class="ex">Dentista, cerrajero, gasfitería, taller mecánico, abogado</div>
+      </div>
+      <div class="type-card" data-type="C">
+        <div class="letter">C</div>
+        <div class="name">Estacional / por fecha</div>
+        <div class="desc">La demanda sube en ciertas épocas, no todo el año.</div>
+        <div class="ex">Florería, matrículas, temporada de impuestos, disfraces</div>
+      </div>
+      <div class="type-card" data-type="D">
+        <div class="letter">D</div>
+        <div class="name">Sin urgencia real</div>
+        <div class="desc">No hay ningún gatillo genuino de tiempo.</div>
+        <div class="ex">Muebles, consultoría de largo plazo, mantención programada</div>
+      </div>
+    </div>
+
+    <div class="reveal" id="revealBox">
+      <div class="label">Pregunta correcta para este tipo</div>
+      <div class="question" id="revealQuestion"></div>
+      <textarea id="revealNotes" placeholder="Notas..."></textarea>
+    </div>
+
+    <div class="ambiguous">
+      <b>¿No estás seguro entre dos tipos?</b> Pregúntale directamente al dueño: "¿por qué alguien debería decidir hoy y no la próxima semana?" Si no tiene una respuesta honesta, es Tipo D. No le inventes urgencia.
+    </div>
+
+    <div class="rule-box">
+      <span class="tag">Regla no negociable</span>
+      <p>Nunca le pongas urgencia de <b>Capacidad (Tipo A)</b> a un negocio que en realidad es <b>Tipo D</b>. Es la forma más rápida de que el prospecto te diga "eso no es cierto" y pierdas la venta y la reputación con él.</p>
+    </div>
+  </section>
+
+  <!-- STEP 4: OFERTA Y CIERRE -->
+  <section class="block">
+    <div class="block-head">
+      <span class="step-num">4</span>
+      <div>
+        <h2>Oferta y cierre</h2>
+        <div class="sub">Recién acá se dice el precio. Antes de esto, ya hiciste el diagnóstico completo — ahora le muestras la solución concreta.</div>
+      </div>
+    </div>
+
+    <div class="transition-note">Frase de transición: "Con esto que me contaste, ya tengo claro lo que necesitas. Te cuento exactamente qué te ofrecemos y cuánto sale."</div>
+
+    <div class="includes-box" id="fichaIncludesBox" style="display:none;">
+      <div class="inc-label">Ficha de Google — Plan Inicial</div>
+      <p class="solves"><b>Soluciona:</b> hoy tu negocio no aparece cuando alguien lo busca en Google o en el mapa — quedas invisible frente a clientes que ya te están buscando. Con la ficha, apareces en Maps y en el buscador, con tus datos, fotos y reseñas a la vista, y te pueden llamar o escribir directo desde ahí.</p>
+      <div style="font-size:11px;color:var(--gray);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Qué incluye</div>
+      <ul>
+        <li>Creación o reclamo de tu perfil (ficha) en Google</li>
+        <li>Configuración completa: categoría, horarios, teléfono, WhatsApp y dirección o zona de cobertura</li>
+        <li>Logo, foto de portada y fotos del negocio</li>
+        <li>Carga inicial de productos o servicios</li>
+        <li>Optimización SEO local</li>
+        <li>Acompañamiento en la verificación con Google</li>
+      </ul>
+    </div>
+
+    <div class="includes-box">
+      <div class="inc-label">Landing Page</div>
+      <p class="solves"><b>Soluciona:</b> a la gente que te encuentra no le queda dónde ver más de tu negocio ni cómo contactarte con confianza. Con tu página, cualquiera puede ver quién eres, qué ofreces, y escribirte o llamarte al instante — sin depender de que te encuentren en redes sociales.</p>
+      <div style="font-size:11px;color:var(--gray);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Qué incluye</div>
+      <ul>
+        <li>Diseño profesional, adaptado al rubro y la identidad del negocio</li>
+        <li>Hosting gratuito de por vida — la página vive en la infraestructura de RiO, sin mensualidad de hosting nunca</li>
+        <li>Activación inmediata</li>
+        <li>Soporte técnico incluido</li>
+      </ul>
+    </div>
+
+    <div class="price-grid" id="priceGridLanding">
+      <div class="price-card">
+        <div class="p-name">Landing Page Dominio Genérico</div>
+        <div class="p-amount">$50.000</div>
+        <div class="p-detail">CLP · pago único</div>
+        <div class="p-example">rioimpulsodigital.github.io/tunegocio/</div>
+      </div>
+      <div class="price-card highlight">
+        <div class="p-name">Landing Page Dominio Propio</div>
+        <div class="p-amount">$60.000</div>
+        <div class="p-detail">CLP · pago único + renovación anual ~$10.000 CLP</div>
+        <div class="p-example">www.tunegocio.com</div>
+      </div>
+    </div>
+
+    <div class="price-grid-5" id="priceGridFull" style="display:none;">
+      <div class="pg-row pg-row-solo">
+        <div class="price-card plan-inicial">
+          <span class="plan-tag">Plan Inicial</span>
+          <div class="p-name">Ficha de Google</div>
+          <div class="p-amount">$50.000</div>
+          <div class="p-detail">CLP · sola, sin landing</div>
+        </div>
+      </div>
+      <div class="pg-row pg-row-pair">
+        <div class="price-card">
+          <div class="p-name">Landing Page Dominio Genérico</div>
+          <div class="p-amount">$50.000</div>
+          <div class="p-detail">CLP · sola, sin ficha</div>
+        </div>
+        <div class="price-card">
+          <div class="p-name">Landing Page Dominio Propio</div>
+          <div class="p-amount">$60.000</div>
+          <div class="p-detail">CLP + renovación anual ~$10.000</div>
+        </div>
+      </div>
+      <div class="pg-row pg-row-pair">
+        <div class="price-card highlight">
+          <div class="p-name">Ficha Google + Landing Page Dominio Genérico</div>
+          <div class="p-amount">$90.000</div>
+          <div class="p-detail">CLP · pack, ahorra $10.000</div>
+        </div>
+        <div class="price-card highlight">
+          <div class="p-name">Ficha Google + Landing Page Dominio Propio</div>
+          <div class="p-amount">$100.000</div>
+          <div class="p-detail">CLP + renovación anual ~$10.000, pack ahorra $10.000</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="explain-box" id="packExplainBox" style="display:none;">
+      <b>Cómo explicar el pack, en una frase:</b> "Si contratas la ficha de Google junto con la landing, te sale $10.000 más barato que contratarlas por separado — y quedas apareciendo en Google Maps, en el buscador, y con tu propia página, todo en un solo movimiento."
+    </div>
+
+    <div class="explain-box">
+      <b>Cómo explicar la diferencia, en una frase:</b> "Con el dominio genérico tu página funciona igual de bien, pero la dirección lleva nuestro nombre — algo así como <i>rioimpulsodigital.github.io/tunegocio</i>. Con el dominio propio, tu página tiene su propia dirección, como <i>www.tunegocio.com</i>: se ve más profesional y es más fácil de recordar para tus clientes."
+    </div>
+
+    <div class="check-note" style="border-style:solid;">
+      <span class="tag">Decir siempre</span>
+      <span id="checkNoteText">El dominio propio tiene un costo de renovación anual aproximado de <b>$10.000 CLP</b>, aparte del pago único inicial. Además, <b>la dirección que el cliente pida es tentativa</b> — puede que ya esté registrada por otra persona. Nunca confirmes un dominio propio como definitivo en la llamada: siempre aclara que queda sujeto a verificar disponibilidad, y que si no está libre, se le proponen alternativas.</span>
+    </div>
+
+    <p class="closing-line">"¿Cuál de estas opciones te sirve? En cuanto me digas, te mando ahora mismo el link de pago por WhatsApp. Apenas nos envíes tus datos y fotos, lo que corresponda queda listo en 48 horas — la verificación de la ficha, si aplica, depende de los tiempos de Google."</p>
+
+    <div class="domain-choice-grid" id="domainChoiceGrid">
+      <div class="domain-choice-card" data-domain="generico">
+        <div class="dc-name">Eligió Dominio Genérico</div>
+        <div class="dc-price">$50.000</div>
+      </div>
+      <div class="domain-choice-card" data-domain="personalizado">
+        <div class="dc-name">Eligió Dominio Propio</div>
+        <div class="dc-price">$60.000</div>
+      </div>
+    </div>
+
+    <div class="price-grid-5" id="domainChoiceGridFull" style="display:none;">
+      <div class="pg-row pg-row-solo">
+        <div class="domain-choice-card" data-domain="ficha">
+          <div class="dc-name">Solo Ficha (Plan Inicial)</div>
+          <div class="dc-price">$50.000</div>
+        </div>
+      </div>
+      <div class="pg-row pg-row-pair">
+        <div class="domain-choice-card" data-domain="generico">
+          <div class="dc-name">Solo Dominio Genérico</div>
+          <div class="dc-price">$50.000</div>
+        </div>
+        <div class="domain-choice-card" data-domain="personalizado">
+          <div class="dc-name">Solo Dominio Propio</div>
+          <div class="dc-price">$60.000</div>
+        </div>
+      </div>
+      <div class="pg-row pg-row-pair">
+        <div class="domain-choice-card" data-domain="ficha_generico">
+          <div class="dc-name">Ficha Google + Landing Genérico</div>
+          <div class="dc-price">$90.000</div>
+        </div>
+        <div class="domain-choice-card" data-domain="ficha_personalizado">
+          <div class="dc-name">Ficha Google + Landing Propio</div>
+          <div class="dc-price">$100.000</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="domain-desired-field">
+      <label>Dominio propio deseado (si aplica)</label>
+      <input type="text" id="desiredDomain" placeholder="Ej: tiendadejuanito.com">
+    </div>
+    <p class="domain-note">Recuerda: este dominio es tentativo hasta confirmar disponibilidad. Nunca prometas la dirección exacta como definitiva.</p>
+
+    <div class="send-sequence" id="sendSequence">
+      <div class="send-step" data-step="1">
+        <div class="ss-info">
+          <span class="ss-num">1</span>
+          <span class="ss-label">Enviar link de pago al cliente por WhatsApp</span>
+        </div>
+        <button class="seq-btn" onclick="runStep(1)">Enviar</button>
+      </div>
+      <div class="send-step" data-step="2">
+        <div class="ss-info">
+          <span class="ss-num">2</span>
+          <span class="ss-label">Enviar resumen de venta a RiO Impulso Digital</span>
+        </div>
+        <button class="seq-btn" onclick="runStep(2)" disabled>Enviar</button>
+      </div>
+      <div class="send-step" data-step="3">
+        <div class="ss-info">
+          <span class="ss-num">3</span>
+          <span class="ss-label">Enviar respuestas de Ficha de Google</span>
+        </div>
+        <button class="seq-btn" onclick="runStep(3)" disabled>Enviar</button>
+      </div>
+      <div class="send-step" data-step="4">
+        <div class="ss-info">
+          <span class="ss-num">4</span>
+          <span class="ss-label">Enviar respuestas de Landing Page</span>
+        </div>
+        <button class="seq-btn" onclick="runStep(4)" disabled>Enviar</button>
+      </div>
+    </div>
+    <span class="copy-status" id="seqStatus"></span>
+  </section>
+
+  <!-- FLOW RECAP -->
+  <section class="block">
+    <div class="block-head">
+      <span class="step-num">↺</span>
+      <div>
+        <h2 id="flowRecapTitle">Orden de la llamada</h2>
+      </div>
+    </div>
+    <ul class="flow-list">
+      <li id="flowStep1">Antes de llamar: revisa si el negocio tiene ficha de Google activa (buscándolo en Maps) y marca el check correspondiente arriba — eso decide qué guion y qué preguntas siguen.</li>
+      <li>Al atender: usa el guion de apertura y el termómetro de interés (Paso 0) que corresponda según el check. Si no hay interés real, cierra de forma cordial ahí — no fuerces las preguntas.</li>
+      <li>Si hay interés: haz las 6 preguntas fijas de landing, en orden. Si no tiene ficha, sigue con las 4 preguntas adicionales de Ficha de Google.</li>
+      <li>Continúa con la pregunta de canal de contacto.</li>
+      <li>Confirma o corrige tu clasificación de urgencia con la pregunta correspondiente.</li>
+      <li>Si el negocio es Tipo D, no fuerces la pregunta de urgencia — pasa directo a garantía o diferenciador fuerte. Eso va a anclar el bloque de conversión en la landing.</li>
+      <li>Recién ahí: presenta la oferta y el precio (Paso 4) — 2 opciones si ya tiene ficha, 5 si no la tiene — y cierra pidiendo que elija.</li>
+      <li>Envía los pasos, paso a paso, en el orden que aparecen: link de pago al cliente, resumen de venta, y las respuestas que correspondan (Ficha y/o Landing, según lo que compró). Al terminar el último, vuelve solo a la portada.</li>
+    </ul>
+  </section>
+
+
+  <footer>
+    <div class="contact">
+      <b>Brenda Rebeca Rivera Obando</b><br>
+      brenda@rioimpulsodigital.com · +54 3781 410164<br>
+      www.rioimpulsodigital.com
+    </div>
+    <img src="https://raw.githubusercontent.com/rioimpulsodigital/rio-impulso-digital/refs/heads/main/assets/branding/rio-logo-short.png" alt="RiO" />
+  </footer>
+
+  </div>
+
+</div>
+
+<script>
+  let sendStep = 1;
+
+  function startNewClient(){
+    document.getElementById('coverScreen').style.display = 'none';
+    document.getElementById('formScreen').style.display = 'block';
+    updateScript();
+    document.getElementById('pname').focus();
+  }
+
+  function showCover(){
+    document.getElementById('formScreen').style.display = 'none';
+    document.getElementById('coverScreen').style.display = 'flex';
+  }
+
+  function updateScript(){
+    renderOpeningScript();
+  }
+
+  document.getElementById('pname').addEventListener('input', updateScript);
+  document.getElementById('execName').addEventListener('input', updateScript);
+
+  // ¿TIENE FICHA DE GOOGLE? — decide guion, preguntas extra y oferta
+  let hasFicha = true;
+
+  // ¿LLAMADA O TERRENO? — decide el guion de apertura y cómo se formula F1
+  let contactMode = 'llamada';
+
+  const F1_TEXT = {
+    llamada: '<span class="n">F1</span>¿Tienes local físico, o solo atiendes a domicilio / por zona? Si tiene local, pídele la <b>dirección exacta</b> (calle, número, comuna) — Google la necesita para verificar la ficha. <span style="font-weight:400;color:var(--gray);">(pregúntaselo — no lo puedes ver por teléfono)</span>',
+    terreno: '<span class="n">F1</span>Local físico o a domicilio/por zona. Si tiene local, anota la <b>dirección exacta</b> (calle, número, comuna) — Google la necesita para verificar la ficha. <span style="font-weight:400;color:var(--gray);">(obsérvalo vos, no hace falta preguntarlo)</span>'
+  };
+
+  const OPENING_HEADER = {
+    llamada: { title: 'Apertura de la llamada', sub: 'Antes de las 7 preguntas. Aquí no vendes — solo confirmas si hay interés real antes de invertir el resto de la llamada.' },
+    terreno: { title: 'Iniciando la visita', sub: 'Antes de las 7 preguntas. Aquí no vendes — solo confirmas si hay interés real antes de invertir el resto de la visita.' }
+  };
+
+  // Todo lo demás que menciona "llamada" en modo texto plano — un mismo mapa para no perder ninguno.
+  const MODE_TEXT = {
+    llamada: {
+      discardBtn: 'Descartar llamada',
+      prepTitle: 'Antes de llamar',
+      prepText: 'Busca el negocio en Google Maps para ver si tiene ficha activa, y marca la opción correspondiente abajo. <b>Si tiene ficha</b>, aprovecha para revisar sus fotos, reseñas y categoría — con eso ya llegas con más contexto a la llamada. <b>Si no tiene</b>, no hay nada que revisar ahí, directo al guion correspondiente. En cualquiera de los dos casos, clasifica mentalmente qué tipo de urgencia (A/B/C/D) le corresponde según su rubro — eso lo vas a confirmar recién en el paso 3.',
+      checkNote: 'El dominio propio tiene un costo de renovación anual aproximado de <b>$10.000 CLP</b>, aparte del pago único inicial. Además, <b>la dirección que el cliente pida es tentativa</b> — puede que ya esté registrada por otra persona. Nunca confirmes un dominio propio como definitivo en la llamada: siempre aclara que queda sujeto a verificar disponibilidad, y que si no está libre, se le proponen alternativas.',
+      flowTitle: 'Orden de la llamada',
+      flowStep1: 'Antes de llamar: revisa si el negocio tiene ficha de Google activa (buscándolo en Maps) y marca el check correspondiente arriba — eso decide qué guion y qué preguntas siguen.',
+      discardConfirm: '¿Descartar esta llamada y limpiar todos los campos? No se envía nada y no se puede deshacer.'
+    },
+    terreno: {
+      discardBtn: 'Descartar visita',
+      prepTitle: 'Antes de la visita',
+      prepText: 'Busca el negocio en Google Maps para ver si tiene ficha activa, y marca la opción correspondiente abajo. <b>Si tiene ficha</b>, aprovecha para revisar sus fotos, reseñas y categoría — con eso ya llegas con más contexto a la visita. <b>Si no tiene</b>, no hay nada que revisar ahí, directo al guion correspondiente. En cualquiera de los dos casos, clasifica mentalmente qué tipo de urgencia (A/B/C/D) le corresponde según su rubro — eso lo vas a confirmar recién en el paso 3.',
+      checkNote: 'El dominio propio tiene un costo de renovación anual aproximado de <b>$10.000 CLP</b>, aparte del pago único inicial. Además, <b>la dirección que el cliente pida es tentativa</b> — puede que ya esté registrada por otra persona. Nunca confirmes un dominio propio como definitivo en la visita: siempre aclara que queda sujeto a verificar disponibilidad, y que si no está libre, se le proponen alternativas.',
+      flowTitle: 'Orden de la visita',
+      flowStep1: 'Antes de visitar: revisa si el negocio tiene ficha de Google activa (buscándolo en Maps) y marca el check correspondiente arriba — eso decide qué guion y qué preguntas siguen.',
+      discardConfirm: '¿Descartar esta visita y limpiar todos los campos? No se envía nada y no se puede deshacer.'
+    }
+  };
+
+  // 4 combinaciones: llamada/terreno × tiene ficha/no tiene ficha. {BIZ} y {EXEC} se reemplazan al vuelo.
+  const SCRIPTS = {
+    llamada: {
+      si: `"Hola, ¿hablo con <b>{BIZ}</b>? Te habla {EXEC} de RiO Impulso Digital. Solo te robo dos minutos: vi tu ficha de Google, tienes [buena categoría / buenas reseñas], pero no encontré una página web tuya. Hoy los negocios que aparecen primero cuando alguien busca en Google son los que tienen página propia, y son los que se quedan con ese cliente. Estamos preparando páginas rápidas y accesibles para negocios como el tuyo — ¿tienes dos minutos para contarme cómo funciona hoy tu negocio?"`,
+      no: `"Hola, ¿hablo con <b>{BIZ}</b>? Te habla {EXEC} de RiO Impulso Digital. Solo te robo dos minutos: busqué tu negocio en Google y no encontré ni tu ficha ni una página web tuya — hoy, si alguien te busca ahí, no apareces en ningún lado, ni en el mapa ni en el buscador. Estamos ayudando a negocios como el tuyo a aparecer en Google y tener su propia página, todo junto y rápido — ¿tienes dos minutos para contarme cómo funciona hoy tu negocio?"`
+    },
+    terreno: {
+      si: `"Hola, ¿qué tal? Vengo de parte de RiO Impulso Digital, soy {EXEC}. Te robo dos minutos: vi la ficha de Google de <b>{BIZ}</b>, tienes [buena categoría / buenas reseñas], pero no te encontré página web. Hoy los negocios que aparecen primero cuando alguien busca en Google son los que tienen página propia, y son los que se quedan con ese cliente. Estamos preparando páginas rápidas y accesibles para negocios como el tuyo — ¿tienes dos minutos para contarme cómo funciona hoy tu negocio?"`,
+      no: `"Hola, ¿qué tal? Vengo de parte de RiO Impulso Digital, soy {EXEC}. Te robo dos minutos: busqué <b>{BIZ}</b> en Google y no encontré ni tu ficha ni una página web tuya — hoy, si alguien te busca ahí, no apareces en ningún lado, ni en el mapa ni en el buscador. Estamos ayudando a negocios como el tuyo a aparecer en Google y tener su propia página, todo junto y rápido — ¿tienes dos minutos para contarme cómo funciona hoy tu negocio?"`
+    }
+  };
+
+  const THERMOS = {
+    si: '¿Te serviría algo así, o ya tienes resuelto el tema de la página web?',
+    no: '¿Te serviría aparecer en Google y tener tu propia página, o ya tienes esto resuelto?'
+  };
+
+  function renderOpeningScript(){
+    const biz = document.getElementById('pname').value.trim() || '[nombre del negocio]';
+    const exec = document.getElementById('execName').value.trim() || '[tu nombre]';
+    const fichaKey = hasFicha ? 'si' : 'no';
+    const template = SCRIPTS[contactMode][fichaKey];
+    document.getElementById('scriptLine').innerHTML = template.replace('{BIZ}', biz).replace('{EXEC}', exec);
+    const closingWord = contactMode === 'terreno' ? 'la visita' : 'la llamada';
+    document.getElementById('thermoLine').innerHTML =
+      `No sigas directo con las preguntas. Primero confirma el interés real con algo simple: <b>"${THERMOS[fichaKey]}"</b> Lo que responda aquí te dice si continúas o cierras ${closingWord}.`;
+  }
+
+  document.querySelectorAll('#contactModeToggle .fc-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#contactModeToggle .fc-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      contactMode = btn.dataset.mode;
+      applyContactMode();
+    });
+  });
+
+  function applyContactMode(){
+    document.getElementById('f1Text').innerHTML = F1_TEXT[contactMode];
+    document.getElementById('stepOpeningTitle').textContent = OPENING_HEADER[contactMode].title;
+    document.getElementById('stepOpeningSub').textContent = OPENING_HEADER[contactMode].sub;
+    const t = MODE_TEXT[contactMode];
+    document.getElementById('discardBtnLabel').textContent = t.discardBtn;
+    document.getElementById('prepTitle').textContent = t.prepTitle;
+    document.getElementById('prepText').innerHTML = t.prepText;
+    document.getElementById('checkNoteText').innerHTML = t.checkNote;
+    document.getElementById('flowRecapTitle').textContent = t.flowTitle;
+    document.getElementById('flowStep1').textContent = t.flowStep1;
+    renderOpeningScript();
+  }
+
+  document.querySelectorAll('#fichaToggle .fc-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#fichaToggle .fc-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      hasFicha = btn.dataset.hasFicha === 'si';
+      applyFichaState();
+    });
+  });
+
+  function applyFichaState(){
+    document.getElementById('fichaQuestionsSection').style.display = hasFicha ? 'none' : 'block';
+    document.getElementById('fichaIncludesBox').style.display = hasFicha ? 'none' : 'block';
+    document.getElementById('priceGridLanding').style.display = hasFicha ? 'grid' : 'none';
+    document.getElementById('priceGridFull').style.display = hasFicha ? 'none' : 'flex';
+    document.getElementById('packExplainBox').style.display = hasFicha ? 'none' : 'block';
+    document.getElementById('domainChoiceGrid').style.display = hasFicha ? 'grid' : 'none';
+    document.getElementById('domainChoiceGridFull').style.display = hasFicha ? 'none' : 'flex';
+    // Al cambiar el check, la elección de producto queda obsoleta — se limpia para evitar mandar el link equivocado.
+    document.querySelectorAll('.domain-choice-card').forEach(c => c.classList.remove('active'));
+    if(typeof updateSendUI === 'function') updateSendUI();
+    renderOpeningScript();
+  }
+
+  applyContactMode();
+
+  const questions = {
+    A: "¿Hay momentos donde se llenan o no dan abasto?",
+    B: "¿Hay algo que la gente posterga y le sale más caro no resolver a tiempo?",
+    C: "¿Hay fechas o temporadas donde tu demanda sube naturalmente?",
+    D: "No preguntes por urgencia — usá otro gancho (garantía, diferenciación, prueba social)."
+  };
+
+  document.querySelectorAll('.type-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.type-card').forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+      const type = card.dataset.type;
+      const box = document.getElementById('revealBox');
+      document.getElementById('revealQuestion').textContent = questions[type];
+      box.classList.add('show');
+    });
+  });
+
+  document.querySelectorAll('.domain-choice-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.domain-choice-card').forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+      if(typeof updateSendUI === 'function') updateSendUI();
+    });
+  });
+
+  // Define cada producto vendible: qué incluye y su precio.
+  const PRODUCTS = {
+    generico:             { landing:true,  ficha:false, personalizado:false, price:50000,  label:'Landing Page Dominio Genérico' },
+    personalizado:        { landing:true,  ficha:false, personalizado:true,  price:60000,  label:'Landing Page Dominio Propio' },
+    ficha:                { landing:false, ficha:true,  personalizado:false, price:50000,  label:'Ficha de Google — Plan Inicial' },
+    ficha_generico:       { landing:true,  ficha:true,  personalizado:false, price:90000,  label:'Ficha Google + Landing Page Dominio Genérico' },
+    ficha_personalizado:  { landing:true,  ficha:true,  personalizado:true,  price:100000, label:'Ficha Google + Landing Page Dominio Propio' }
+  };
+
+  // Los 5 links de pago de Mercado Pago, uno por producto.
+  const PAYMENT_LINKS = {
+    generico: 'https://mpago.la/2tiWxC7',
+    personalizado: 'https://mpago.la/1BhuLBq',
+    ficha: 'https://mpago.la/2u2x2cK',
+    ficha_generico: 'https://mpago.la/33xENP1',
+    ficha_personalizado: 'https://mpago.la/2BbjWYG'
+  };
+
+  // Número interno de RiO — recibe el resumen de venta y las respuestas para producción
+  const WHATSAPP_NUMBER = "543781410164"; // formato internacional, sin "+" ni espacios
+
+  function normalizePhone(raw){
+    return raw.replace(/[^\d]/g, '');
+  }
+
+  function formatCLP(n){
+    return '$' + n.toLocaleString('es-CL');
+  }
+
+  function getProductLabel(key, forClientMessage){
+    const p = PRODUCTS[key];
+    if(!p) return key;
+    if(!p.personalizado){
+      return forClientMessage ? p.label : `${p.label} (${formatCLP(p.price)} CLP)`;
+    }
+    const desired = document.getElementById('desiredDomain').value.trim();
+    const domainName = desired || '(a definir)';
+    if(forClientMessage){
+      return `${p.label} — dominio: ${domainName} (tentativo, sujeto a confirmar disponibilidad)`;
+    }
+    return `${p.label} — ${domainName} (${formatCLP(p.price)} CLP + renovación anual ~$10.000 CLP, tentativo)`;
+  }
+
+  function buildPaymentMessage(productKey){
+    const p = PRODUCTS[productKey];
+    const biz = document.getElementById('pname').value.trim() || 'tu negocio';
+    const exec = document.getElementById('execName').value.trim() || 'RiO Impulso Digital';
+    const productLabel = getProductLabel(productKey, true);
+    const link = PAYMENT_LINKS[productKey];
+
+    let lines = [
+      `¡Hola! Gracias por tu confianza en RiO Impulso Digital 🚀`,
+      ``,
+      `Así queda tu pedido para ${biz}:`
+    ];
+
+    if(p.landing){
+      lines.push(
+        `✅ Diseño profesional`,
+        `✅ Hosting gratuito de por vida`,
+        `✅ Activación inmediata`,
+        `✅ Soporte técnico incluido`,
+        `✅ ${productLabel}`
+      );
+    }
+
+    if(p.ficha){
+      lines.push(
+        `✅ Creación o reclamo de tu perfil (ficha) en Google`,
+        `✅ Configuración completa (categoría, horarios, teléfono, dirección o zona)`,
+        `✅ Logo, foto de portada y fotos del negocio`,
+        `✅ Optimización SEO local`
+      );
+      if(!p.landing){
+        lines.push(`✅ ${productLabel}`);
+      }
+    }
+
+    lines.push(``);
+
+    if(p.landing && p.ficha){
+      lines.push(`Tu landing estará lista en 48 horas después de que nos envíes tus fotos y tu logo (si tienes). La ficha de Google la dejamos configurada y enviada a verificación en el mismo plazo — la confirmación final de Google puede demorar más, eso depende de sus tiempos, no de nosotros.`);
+    } else if(p.ficha){
+      lines.push(`Dejamos tu ficha configurada y enviada a verificación en 48 horas después de que nos envíes tus fotos y tus datos. La confirmación final depende de los tiempos de Google, puede demorar un poco más.`);
+    } else {
+      lines.push(`Tu página estará lista en 48 horas después de que nos envíes tus fotos y tu logo (si tienes).`);
+    }
+
+    if(p.personalizado){
+      lines.push(``);
+      lines.push(`Recordatorio: el dominio propio tiene una renovación anual aproximada de $10.000 CLP, aparte de este pago. Además, la dirección que elegiste queda sujeta a que esté disponible — te confirmamos apenas la verifiquemos, y si no lo está, te proponemos alternativas.`);
+    }
+
+    lines.push(``);
+    lines.push(`Para confirmar y comenzar, puedes pagar aquí: ${link}`);
+    lines.push(``);
+    lines.push(`Cualquier duda, escríbeme.`);
+    lines.push(`— ${exec}, RiO Impulso Digital`);
+
+    return lines.join('\n');
+  }
+
+  function buildSalesSummaryText(){
+    const name = document.getElementById('pname').value || '(sin nombre)';
+    const rubro = document.getElementById('prubro').value || '(sin rubro)';
+    const clientWa = document.getElementById('pclientwa').value || '(sin whatsapp)';
+    const exec = document.getElementById('execName').value || '(sin ejecutivo)';
+    const fecha = new Date().toLocaleDateString('es-419');
+
+    let lines = [
+      `Resumen de venta — ${name} (${rubro})`,
+      `Ejecutivo: ${exec}`,
+      `WhatsApp cliente: ${clientWa}`,
+      `Email cliente: ${document.getElementById('pclientemail').value || '(sin email)'}`,
+      `Fecha: ${fecha}`,
+      `¿Tenía ficha de Google?: ${hasFicha ? 'Sí' : 'No'}`
+    ];
+
+    const activeProduct = document.querySelector('.domain-choice-card.active');
+    if(activeProduct){
+      lines.push(`Producto elegido: ${getProductLabel(activeProduct.dataset.domain, false)}`);
+    }
+
+    const activeType = document.querySelector('.type-card.active');
+    if(activeType){
+      lines.push(`Tipo de urgencia: ${activeType.dataset.type} — ${activeType.querySelector('.name').textContent}`);
+    }
+
+    return lines.join('\n');
+  }
+
+  // Bloque de contacto compartido — va al principio de ambos mensajes de respuestas.
+  function buildContactBlock(){
+    const wa = document.getElementById('pclientwa').value || '—';
+    const email = document.getElementById('pclientemail').value || '—';
+    const dir = !hasFicha ? (document.getElementById('f2').value || '—') : '— (no se pidió, el negocio ya tenía ficha)';
+    return [
+      `WhatsApp: ${wa}`,
+      `Email: ${email}`,
+      `Dirección / zona de servicio: ${dir}`
+    ];
+  }
+
+  function buildFichaAnswersText(){
+    const name = document.getElementById('pname').value || '(sin nombre)';
+    const rubro = document.getElementById('prubro').value || '(sin rubro)';
+    const exec = document.getElementById('execName').value || '(sin ejecutivo)';
+
+    const fichaFields = [
+      ['f2', "F1. Local físico o área de servicio"],
+      ['f3', "F2. Horario de atención"],
+      ['f4', "F3. Teléfono público / correo"],
+      ['f5', "F4. Métodos de pago / retiro / entrega"]
+    ];
+
+    let lines = [`Respuestas de Ficha de Google — ${name} (${rubro})`, `Ejecutivo: ${exec}`, ''];
+    lines.push(...buildContactBlock());
+    lines.push('');
+    lines.push(`Categoría principal (de Rubro): ${rubro}`);
+    fichaFields.forEach(([id, label]) => {
+      lines.push(`${label}: ${document.getElementById(id).value || '—'}`);
+    });
+
+    const activeProduct = document.querySelector('.domain-choice-card.active');
+    if(activeProduct){
+      lines.push('');
+      lines.push(`Producto elegido: ${getProductLabel(activeProduct.dataset.domain, false)}`);
+    }
+
+    return lines.join('\n');
+  }
+
+  function buildLandingAnswersText(){
+    const name = document.getElementById('pname').value || '(sin nombre)';
+    const rubro = document.getElementById('prubro').value || '(sin rubro)';
+    const exec = document.getElementById('execName').value || '(sin ejecutivo)';
+
+    const landingFields = [
+      ['q1', "1. Qué vende / para quién / rango de precio"],
+      ['q2', "2. Diferencial"],
+      ['q3', "3. Objeción más común"],
+      ['q4', "4. Acción esperada de la página"],
+      ['q5', "5. Fotos disponibles"],
+      ['q6', "6. Puede conseguir reseñas"],
+      ['q7', "7. Color / identidad visual"],
+      ['qCanal', "Canal de contacto"]
+    ];
+
+    let lines = [`Respuestas de Landing Page — ${name} (${rubro})`, `Ejecutivo: ${exec}`, ''];
+    lines.push(...buildContactBlock());
+    lines.push('');
+    landingFields.forEach(([id, label]) => {
+      lines.push(`${label}: ${document.getElementById(id).value || '—'}`);
+    });
+
+    const activeType = document.querySelector('.type-card.active');
+    if(activeType){
+      lines.push('');
+      lines.push(`Tipo de urgencia: ${activeType.dataset.type} — ${activeType.querySelector('.name').textContent}`);
+      lines.push(`Notas urgencia: ${document.getElementById('revealNotes').value || '—'}`);
+    }
+
+    const activeProduct = document.querySelector('.domain-choice-card.active');
+    if(activeProduct){
+      lines.push('');
+      lines.push(`Producto elegido: ${getProductLabel(activeProduct.dataset.domain, false)}`);
+    }
+
+    return lines.join('\n');
+  }
+
+  function flashStatus(msg){
+    const status = document.getElementById('seqStatus');
+    status.textContent = msg;
+    status.classList.add('show');
+    setTimeout(() => status.classList.remove('show'), 2200);
+  }
+
+  // Paso 1: link de pago al WhatsApp del cliente
+  function doSendPaymentLink(){
+    const selected = document.querySelector('.domain-choice-card.active');
+    if(!selected){
+      alert('Primero selecciona qué producto eligió el cliente.');
+      return false;
+    }
+    const link = PAYMENT_LINKS[selected.dataset.domain];
+    if(!link || link.startsWith('PENDIENTE')){
+      alert('Este producto todavía no tiene link de pago cargado en el sistema. Avisale a Brenda antes de seguir — no se puede enviar un link que no existe.');
+      return false;
+    }
+    const rawPhone = document.getElementById('pclientwa').value.trim();
+    const phone = normalizePhone(rawPhone);
+    if(!phone){
+      alert('Falta el WhatsApp del cliente. Completalo en el campo "WhatsApp del cliente" arriba de todo.');
+      return false;
+    }
+    const text = buildPaymentMessage(selected.dataset.domain);
+    if(navigator.clipboard){ navigator.clipboard.writeText(text).catch(()=>{}); }
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
+    flashStatus('Abriendo WhatsApp del cliente...');
+    return true;
+  }
+
+  // Paso 2: resumen de venta a RiO
+  function doSendSalesSummary(){
+    const text = buildSalesSummaryText();
+    if(navigator.clipboard){ navigator.clipboard.writeText(text).catch(()=>{}); }
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`, '_blank');
+    flashStatus('Abriendo WhatsApp de RiO (resumen de venta)...');
+    return true;
+  }
+
+  // Paso 3: respuestas de Ficha de Google (solo si el producto elegido incluye ficha)
+  function doSendFichaAnswers(){
+    const text = buildFichaAnswersText();
+    if(navigator.clipboard){ navigator.clipboard.writeText(text).catch(()=>{}); }
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`, '_blank');
+    flashStatus('Abriendo WhatsApp de RiO (respuestas de Ficha de Google)...');
+    return true;
+  }
+
+  // Paso 4: respuestas de Landing Page (solo si el producto elegido incluye landing)
+  function doSendLandingAnswers(){
+    const text = buildLandingAnswersText();
+    if(navigator.clipboard){ navigator.clipboard.writeText(text).catch(()=>{}); }
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`, '_blank');
+    flashStatus('Abriendo WhatsApp de RiO (respuestas de Landing Page)...');
+    return true;
+  }
+
+  // Determina qué producto se está tramitando ahora mismo (según la tarjeta marcada).
+  function currentProduct(){
+    const el = document.querySelector('.domain-choice-card.active');
+    return el ? PRODUCTS[el.dataset.domain] : null;
+  }
+
+  // Pasos 1 y 2 siempre aplican. El 3 (ficha) y el 4 (landing) dependen de qué compró el cliente.
+  function stepApplies(n){
+    if(n <= 2) return true;
+    if(n === 3){
+      if(hasFicha) return false; // ya tenía ficha — ninguna opción de compra en este caso incluye ficha
+      const p = currentProduct();
+      return p ? p.ficha : true; // sin producto elegido todavía, se muestra como posible
+    }
+    if(n === 4){
+      const p = currentProduct();
+      return p ? p.landing : true;
+    }
+    return true;
+  }
+
+  function updateSendUI(){
+    const visible = [1,2,3,4].filter(stepApplies);
+    document.querySelectorAll('.send-step').forEach(step => {
+      const n = parseInt(step.dataset.step, 10);
+      if(!stepApplies(n)){
+        step.style.display = 'none';
+        return;
+      }
+      step.style.display = '';
+      const displayNum = visible.indexOf(n) + 1; // posición real entre los pasos visibles, no el número fijo
+      const btn = step.querySelector('.seq-btn');
+      const num = step.querySelector('.ss-num');
+      if(n < sendStep){
+        step.classList.add('done');
+        step.classList.remove('active');
+        btn.disabled = true;
+        btn.textContent = 'Enviado';
+        num.textContent = '✓';
+      } else if(n === sendStep){
+        step.classList.add('active');
+        step.classList.remove('done');
+        btn.disabled = false;
+        btn.textContent = 'Enviar';
+        num.textContent = displayNum;
+      } else {
+        step.classList.remove('active','done');
+        btn.disabled = true;
+        btn.textContent = 'Enviar';
+        num.textContent = displayNum;
+      }
+    });
+  }
+
+  // Avanza al siguiente paso que realmente aplica (salta el 3 o el 4 si el producto no los necesita).
+  function advanceStep(){
+    let n = sendStep + 1;
+    while(n <= 4 && !stepApplies(n)) n++;
+    sendStep = n;
+  }
+
+  function runStep(n){
+    if(n !== sendStep) return;
+    let ok = false;
+    if(n === 1) ok = doSendPaymentLink();
+    else if(n === 2) ok = doSendSalesSummary();
+    else if(n === 3) ok = doSendFichaAnswers();
+    else if(n === 4) ok = doSendLandingAnswers();
+    if(!ok) return;
+
+    advanceStep();
+    if(sendStep > 4){
+      updateSendUI();
+      setTimeout(() => {
+        resetForm();
+        sendStep = 1;
+        updateSendUI();
+        showCover();
+      }, 1000);
+    } else {
+      updateSendUI();
+    }
+  }
+
+  function resetForm(){
+    document.getElementById('pname').value = '';
+    document.getElementById('prubro').value = '';
+    document.getElementById('pclientwa').value = '';
+    document.getElementById('pclientemail').value = '';
+    document.getElementById('desiredDomain').value = '';
+    document.querySelectorAll('.qcard textarea').forEach(ta => ta.value = '');
+    document.getElementById('revealNotes').value = '';
+    document.querySelectorAll('.type-card').forEach(c => c.classList.remove('active'));
+    document.getElementById('revealBox').classList.remove('show');
+    document.getElementById('revealQuestion').textContent = '';
+    document.querySelectorAll('.domain-choice-card').forEach(c => c.classList.remove('active'));
+
+    hasFicha = true;
+    document.querySelectorAll('#fichaToggle .fc-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('#fichaToggle .fc-btn[data-has-ficha="si"]').classList.add('active');
+    applyFichaState();
+
+    sendStep = 1;
+    updateSendUI();
+    updateScript();
+  }
+
+  // Para cuando el prospecto corta la llamada/visita a la mitad: limpia todo sin enviar nada
+  function discardCall(){
+    if(!confirm(MODE_TEXT[contactMode].discardConfirm)){
+      return;
+    }
+    resetForm();
+    document.getElementById('pname').focus();
+  }
+
+  applyFichaState();
+  updateSendUI();
+</script>
+</body>
+</html>
