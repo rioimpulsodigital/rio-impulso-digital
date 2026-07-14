@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Agenda una reunión con RiO Impulso Digital para conversar sobre tecnología, automatización, inteligencia artificial y crecimiento empresarial.">
+
+  <link rel="canonical" href="https://www.rioimpulsodigital.com/agenda">
+
+  <meta property="og:title" content="Agenda una reunión | RiO Impulso Digital">
+  <meta property="og:description" content="Agenda una reunión con RiO Impulso Digital para conversar sobre tecnología, automatización, inteligencia artificial y crecimiento empresarial.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://www.rioimpulsodigital.com/agenda">
+  <meta property="og:image" content="https://www.rioimpulsodigital.com/assets/branding/rio-logo-short.png">
+  <meta property="og:image:alt" content="RiO Impulso Digital">
+  <meta property="og:locale" content="es_CL">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Agenda una reunión | RiO Impulso Digital">
+  <meta name="twitter:description" content="Agenda una reunión con RiO Impulso Digital para conversar sobre tecnología, automatización, inteligencia artificial y crecimiento empresarial.">
+  <meta name="twitter:image" content="https://www.rioimpulsodigital.com/assets/branding/rio-logo-short.png">
+
+  <link rel="icon" type="image/png" href="./assets/branding/rio-favicon.png">
+  <title>Agenda una reunión | RiO Impulso Digital</title>
+
+  <!-- Google tag (gtag.js) — GA4 · G-XZBL7LVSWX -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XZBL7LVSWX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-XZBL7LVSWX');
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/main.css?v=20260627">
+
+  <style>
+    /* ── PAGE HERO ───────────────────────────────── */
+    .page-hero {
+      background: var(--p-deep);
+      position: relative; overflow: hidden;
+      padding: 10rem 2.5rem 6rem;
+    }
+    .page-hero-grid {
+      position: absolute; inset: 0; pointer-events: none;
+      background-image: radial-gradient(rgba(255,255,255,.045) 1px, transparent 1px);
+      background-size: 38px 38px;
+    }
+    .page-hero-orb-1 {
+      position: absolute; width: 600px; height: 600px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(147,0,159,.32) 0%, transparent 68%);
+      top: -200px; right: -100px; pointer-events: none;
+    }
+    .page-hero-orb-2 {
+      position: absolute; width: 340px; height: 340px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,107,107,.14) 0%, transparent 70%);
+      bottom: -100px; left: 5%; pointer-events: none;
+    }
+    .page-hero-content {
+      position: relative; z-index: 2;
+      max-width: 760px; margin: 0 auto; text-align: center;
+    }
+    .page-hero-eyebrow {
+      font-family: var(--ff-mono); font-size: .72rem;
+      color: var(--coral); letter-spacing: .12em; text-transform: uppercase;
+      display: flex; align-items: center; justify-content: center; gap: 9px;
+      margin-bottom: 1.5rem;
+    }
+    .page-hero-eyebrow::before,
+    .page-hero-eyebrow::after {
+      content: ''; display: block; width: 22px; height: 1px; background: var(--coral);
+    }
+    .page-hero h1 {
+      font-family: var(--ff-head);
+      font-size: clamp(2.2rem, 5vw, 3.8rem);
+      font-weight: 800; line-height: 1.05;
+      color: var(--white); letter-spacing: -.03em;
+      margin-bottom: 1.25rem;
+    }
+    .page-hero h1 span { color: var(--coral); }
+    .page-hero-desc {
+      font-size: 1.05rem; font-weight: 300;
+      color: rgba(255,255,255,.58); line-height: 1.75;
+      max-width: 600px; margin: 0 auto 2.5rem;
+    }
+    .page-hero-badges {
+      display: flex; gap: .85rem; flex-wrap: wrap; justify-content: center;
+    }
+    .page-hero-badge {
+      font-family: var(--ff-mono); font-size: .65rem;
+      color: rgba(255,255,255,.55);
+      border: 1px solid rgba(255,255,255,.12);
+      padding: 5px 14px; border-radius: 999px;
+      letter-spacing: .07em; text-transform: uppercase;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .page-hero-badge::before {
+      content: ''; display: block; flex-shrink: 0;
+      width: 5px; height: 5px; border-radius: 50%; background: var(--coral);
+    }
+
+    /* ── AGENDA INFO ─────────────────────────────── */
+    .agenda-info {
+      background: var(--off);
+      padding: 5rem 2.5rem;
+    }
+    .agenda-info-inner {
+      max-width: 760px; margin: 0 auto;
+    }
+    .agenda-list {
+      list-style: none; padding: 0; margin: 0 0 2rem;
+    }
+    .agenda-list li {
+      display: flex; align-items: flex-start; gap: .85rem;
+      font-size: .97rem; color: var(--ink); line-height: 1.65;
+      padding: .78rem 0; border-bottom: 1px solid var(--border);
+    }
+    .agenda-list li:first-child { border-top: 1px solid var(--border); }
+    .agenda-list li::before {
+      content: '→'; font-family: var(--ff-head); font-weight: 700;
+      color: var(--coral); font-size: .8rem; flex-shrink: 0; margin-top: .22rem;
+    }
+    .agenda-note {
+      background: var(--white);
+      border-left: 3px solid var(--p);
+      border-radius: 0 var(--r-m) var(--r-m) 0;
+      padding: 1.25rem 1.5rem;
+      font-size: .92rem; color: var(--muted); line-height: 1.75;
+    }
+    .agenda-note strong { color: var(--ink); }
+
+    /* ── EMBED ───────────────────────────────────── */
+    .agenda-embed {
+      background: var(--white);
+      padding: 4rem 2.5rem 6rem;
+    }
+    .agenda-embed-inner {
+      max-width: 900px; margin: 0 auto;
+    }
+    .meetings-iframe-container {
+      width: 100%;
+      min-height: 700px;
+    }
+
+    /* ── RESPONSIVE ──────────────────────────────── */
+    @media (max-width: 640px) {
+      .page-hero  { padding: 8rem 1.25rem 4rem; }
+      .agenda-info  { padding: 3.5rem 1.25rem; }
+      .agenda-embed { padding: 2.5rem 1.25rem 4rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── NAV ──────────────────────────────────────── -->
+<nav class="nav" id="mainNav">
+  <a href="/" class="nav-logo" aria-label="RiO Impulso Digital">
+    <img
+      src="./assets/branding/rio-logo-horizontal-245w.webp"
+      srcset="./assets/branding/rio-logo-horizontal-245w.webp 1x,
+              ./assets/branding/rio-logo-horizontal-429w.webp 2x,
+              ./assets/branding/rio-logo-horizontal.webp 3x"
+      alt="RiO Impulso Digital"
+      width="245" height="60"
+      fetchpriority="high"
+      onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+    >
+    <span class="nav-logo-text">RiO <em>Impulso</em> Digital</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="/#servicios">Soluciones</a></li>
+    <li><a href="/#portfolio">Proyectos</a></li>
+    <li><a href="/#nosotros">Sobre mí</a></li>
+  </ul>
+  <a href="/#contacto" class="nav-cta">Hablemos →</a>
+  <button class="nav-hamburger" aria-label="Abrir menú" onclick="openDrawer()">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<!-- Mobile drawer -->
+<div class="nav-drawer" id="navDrawer">
+  <button class="nav-drawer-close" onclick="closeDrawer()" aria-label="Cerrar">✕</button>
+  <a href="/#servicios" onclick="closeDrawer()">Soluciones</a>
+  <a href="/#portfolio" onclick="closeDrawer()">Proyectos</a>
+  <a href="/#nosotros" onclick="closeDrawer()">Sobre mí</a>
+  <a href="/#contacto" onclick="closeDrawer()" style="color:var(--coral)">Hablemos →</a>
+</div>
+
+<!-- ── PAGE HERO ─────────────────────────────────── -->
+<section class="page-hero">
+  <div class="page-hero-grid"></div>
+  <div class="page-hero-orb-1"></div>
+  <div class="page-hero-orb-2"></div>
+  <div class="page-hero-content">
+    <p class="page-hero-eyebrow">Tecnología · Automatización · IA</p>
+    <h1>Agenda una reunión<br>con <span>RiO Impulso Digital</span></h1>
+    <p class="page-hero-desc">
+      Agenda una reunión de 30 minutos para conversar sobre tu empresa, comprender tus objetivos y explorar cómo la tecnología, la automatización, la inteligencia artificial y las soluciones digitales pueden contribuir al crecimiento de tu organización.
+    </p>
+    <div class="page-hero-badges">
+      <span class="page-hero-badge">30 minutos</span>
+      <span class="page-hero-badge">Sin costo</span>
+      <span class="page-hero-badge">Sin compromiso</span>
+      <span class="page-hero-badge">Zoom</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── ¿QUÉ HAREMOS? ─────────────────────────────── -->
+<section class="agenda-info">
+  <div class="agenda-info-inner">
+    <p class="sec-label">La reunión</p>
+    <h2 class="sec-title">¿Qué haremos durante<br>la <span class="hl">reunión?</span></h2>
+    <ul class="agenda-list">
+      <li>Conocer tu empresa y sus objetivos.</li>
+      <li>Comprender tus principales desafíos.</li>
+      <li>Identificar oportunidades de mejora.</li>
+      <li>Resolver tus dudas.</li>
+      <li>Evaluar posibles líneas de colaboración.</li>
+    </ul>
+    <div class="agenda-note">
+      La reunión se realiza mediante <strong>Zoom</strong>, tiene una duración aproximada de <strong>30 minutos</strong> y no tiene costo ni compromiso de contratación.
+    </div>
+  </div>
+</section>
+
+<!-- ── HUBSPOT MEETINGS ───────────────────────────── -->
+<section class="agenda-embed">
+  <div class="agenda-embed-inner">
+    <!-- Start of Meetings Embed Script -->
+    <div class="meetings-iframe-container" data-src="https://meetings.hubspot.com/brenda163?embed=true"></div>
+    <script type="text/javascript" src="https://static.hsappstatic.net/MeetingsEmbed/ex/MeetingsEmbedCode.js"></script>
+    <!-- End of Meetings Embed Script -->
+  </div>
+</section>
+
+<!-- ── FOOTER ────────────────────────────────────── -->
+<footer>
+  <div class="footer-row">
+    <div class="footer-col">
+      <div class="footer-brand">RiO <em>Impulso</em> Digital</div>
+      <div class="footer-tag">Tecnología • Integración • Automatización</div>
+    </div>
+    <div class="footer-col footer-col--center">
+      <picture>
+        <source media="(max-width: 900px)" srcset="./assets/branding/rio-logo-primary-48x48.webp">
+        <source srcset="./assets/branding/rio-logo-primary-84x84.webp">
+        <img src="./assets/branding/rio-logo-primary.png" alt="RiO Impulso Digital" class="footer-logo" width="48" height="48">
+      </picture>
+    </div>
+    <ul class="footer-links footer-col footer-col--right">
+      <li><a href="/#servicios">Soluciones</a></li>
+      <li><a href="/#portfolio">Proyectos</a></li>
+      <li><a href="/#nosotros">Sobre mí</a></li>
+      <li><a href="https://github.com/rioimpulsodigital/rio-impulso-digital" target="_blank" rel="noopener" class="footer-link-muted">GitHub ↗</a></li>
+    </ul>
+  </div>
+  <div class="footer-copy">
+    © 2026 RiO Impulso Digital · Brenda Rivera Obando · Todos los derechos reservados
+  </div>
+</footer>
+
+<!-- ── SCRIPTS ───────────────────────────────────── -->
+<script src="./assets/js/main.js?v=20260627" defer></script>
+
+</body>
+</html>
