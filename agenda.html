@@ -141,8 +141,18 @@
       max-width: 900px; margin: 0 auto;
     }
     .meetings-iframe-container {
+      position: relative;
       width: 100%;
       min-height: 700px;
+    }
+    .meetings-iframe-container::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 44px;
+      background: var(--white);
+      pointer-events: none;
+      z-index: 1;
     }
 
     /* ── RESPONSIVE ──────────────────────────────── */
