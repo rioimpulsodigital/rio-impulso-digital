@@ -166,34 +166,6 @@
 <!-- ── SCRIPTS ───────────────────────────────────── -->
 <script src="./assets/js/main.js?v=20260627" defer></script>
 
-<script>
-  /* Oculta el branding de HubSpot Meetings recortando el iframe
-     dinámicamente. El ::after de CSS actúa como fallback inmediato
-     mientras el JS espera a que el iframe sea inyectado por HubSpot. */
-  (function () {
-    var BRANDING_PX = 56;
-    var container   = document.querySelector('.meetings-iframe-container');
-    var wrapper     = document.querySelector('.meetings-embed-wrapper');
-    if (!container || !wrapper) return;
-
-    new MutationObserver(function (_, obs) {
-      var iframe = container.querySelector('iframe');
-      if (!iframe) return;
-      obs.disconnect();
-
-      function clip() {
-        var h = iframe.offsetHeight || parseInt(iframe.style.height, 10) || 0;
-        if (h > BRANDING_PX) wrapper.style.height = (h - BRANDING_PX) + 'px';
-      }
-
-      new MutationObserver(clip).observe(iframe, {
-        attributes: true, attributeFilter: ['style', 'height']
-      });
-      if (window.ResizeObserver) new ResizeObserver(clip).observe(iframe);
-      clip();
-    }).observe(container, { childList: true, subtree: true });
-  })();
-</script>
 
 </body>
 </html>
