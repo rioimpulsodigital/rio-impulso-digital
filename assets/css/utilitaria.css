@@ -1,0 +1,207 @@
+/* ═══════════════════════════════════════════════════════
+   PÁGINA UTILITARIA (Tipo C) — RiO Impulso Digital
+   Sistema de componentes para páginas de acción concreta.
+   Prioridad: experiencia de usuario, sin fricción.
+   Ejemplos: /agenda · /interno · /gracias · /privacidad
+   Requiere: main.css (variables y reset base)
+   ═══════════════════════════════════════════════════════ */
+
+/* ── HERO MÍNIMO ─────────────────────────────────────
+   Ocupa solo el espacio necesario para contextualizar
+   al usuario. La acción principal debe quedar visible
+   sin hacer scroll en escritorio estándar.           */
+
+.ut-hero {
+  background: var(--p-deep);
+  position: relative; overflow: hidden;
+  padding: 5.5rem 2.5rem 2.5rem;
+  border-bottom: 1px solid var(--bd-dark);
+}
+.ut-hero::before {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none;
+  background-image: radial-gradient(rgba(255,255,255,.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.ut-hero-content {
+  position: relative; z-index: 1;
+  max-width: 720px; margin: 0 auto;
+}
+.ut-label {
+  font-family: var(--ff-mono); font-size: .62rem;
+  color: var(--coral); letter-spacing: .12em; text-transform: uppercase;
+  display: flex; align-items: center; gap: 7px;
+  margin-bottom: .85rem;
+}
+.ut-label::before {
+  content: ''; display: block; width: 14px; height: 1px; background: var(--coral);
+}
+.ut-hero h1 {
+  font-family: var(--ff-head);
+  font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+  font-weight: 800; line-height: 1.1;
+  color: var(--white); letter-spacing: -.03em;
+  margin-bottom: .65rem;
+}
+.ut-hero h1 em { font-style: normal; color: var(--coral); }
+.ut-hero-desc {
+  font-size: .92rem; font-weight: 300;
+  color: rgba(255,255,255,.5); line-height: 1.7;
+  max-width: 520px; margin: 0;
+}
+
+/* ── CONTENEDORES ────────────────────────────────────── */
+
+.ut-main {
+  background: var(--white);
+  padding: 2.5rem 2.5rem 4rem;
+}
+.ut-main--light {
+  background: var(--off);
+  padding: 2.5rem 2.5rem 4rem;
+}
+.ut-main--dark {
+  background: var(--p-deep);
+  padding: 2.5rem 2.5rem 4rem;
+}
+.ut-container       { max-width: 760px; margin: 0 auto; }
+.ut-container--wide { max-width: 960px; margin: 0 auto; }
+
+/* ── SECCIÓN SECUNDARIA (cuando se necesita más de un bloque) */
+
+.ut-section { padding: 2.5rem 2.5rem; }
+.ut-section--light { background: var(--off); }
+.ut-section--white { background: var(--white); }
+.ut-section--dark  { background: var(--p-deep); }
+
+/* ── ENCABEZADO DE BLOQUE ────────────────────────────── */
+
+.ut-block-title {
+  font-family: var(--ff-head); font-size: 1.1rem; font-weight: 700;
+  color: var(--ink); letter-spacing: -.02em; margin-bottom: .4rem;
+}
+.ut-block-desc {
+  font-size: .85rem; color: var(--muted); line-height: 1.7;
+  margin-bottom: 1.5rem;
+}
+.ut-section--dark .ut-block-title { color: var(--white); }
+.ut-section--dark .ut-block-desc  { color: rgba(255,255,255,.5); }
+
+/* ── TARJETAS ────────────────────────────────────────── */
+
+.ut-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+.ut-cards--3 { grid-template-columns: repeat(3, 1fr); }
+
+.ut-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-l);
+  padding: 1.5rem 1.25rem;
+  display: flex; flex-direction: column; gap: .55rem;
+  text-decoration: none; color: inherit;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.ut-card:hover {
+  border-color: var(--p);
+  box-shadow: 0 4px 18px rgba(147,0,159,.09);
+  transform: translateY(-2px);
+}
+.ut-card-icon {
+  width: 38px; height: 38px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.ut-card-icon--coral  { background: rgba(255,107,107,.1); }
+.ut-card-icon--purple { background: rgba(147,0,159,.08); }
+.ut-card-icon--violet { background: rgba(107,91,149,.1); }
+
+.ut-card-tag {
+  font-family: var(--ff-mono); font-size: .57rem;
+  color: var(--muted); letter-spacing: .07em; text-transform: uppercase;
+}
+.ut-card h3 {
+  font-family: var(--ff-head); font-size: .95rem; font-weight: 700;
+  color: var(--ink); letter-spacing: -.01em; line-height: 1.25; margin: 0;
+}
+.ut-card p {
+  font-size: .8rem; color: var(--muted); line-height: 1.6; flex: 1; margin: 0;
+}
+.ut-card-link {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: .78rem; font-weight: 700; color: var(--p); margin-top: .15rem;
+}
+.ut-card-link svg {
+  width: 12px; height: 12px; stroke: var(--p); fill: none;
+  stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* ── NOTA / CALLOUT ──────────────────────────────────── */
+
+.ut-note {
+  font-size: .88rem; line-height: 1.7;
+  border-radius: 0 var(--r-m) var(--r-m) 0;
+  border-left: 3px solid var(--p);
+  background: var(--off);
+  padding: 1rem 1.25rem;
+  color: var(--muted);
+  margin-bottom: 1.25rem;
+}
+.ut-note:last-child { margin-bottom: 0; }
+.ut-note strong { color: var(--ink); }
+
+.ut-note--coral {
+  border-color: var(--coral);
+  background: rgba(255,107,107,.05);
+}
+.ut-note--coral strong { color: var(--ink); }
+
+/* ── ESTADO / CONFIRMACIÓN ───────────────────────────── */
+
+.ut-status {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  max-width: 480px; margin: 0 auto;
+}
+.ut-status-icon {
+  width: 56px; height: 56px; margin: 0 auto 1rem;
+}
+.ut-status-title {
+  font-family: var(--ff-head); font-size: 1.4rem; font-weight: 800;
+  color: var(--ink); letter-spacing: -.02em; margin-bottom: .4rem;
+}
+.ut-status-desc {
+  font-size: .9rem; color: var(--muted); line-height: 1.75; margin: 0;
+}
+.ut-status--dark .ut-status-title { color: var(--white); }
+.ut-status--dark .ut-status-desc  { color: rgba(255,255,255,.5); }
+
+/* ── VOLVER ──────────────────────────────────────────── */
+
+.ut-back {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--ff-mono); font-size: .62rem;
+  color: rgba(255,255,255,.4); letter-spacing: .05em;
+  text-decoration: none; margin-bottom: 1.25rem;
+  transition: color .15s;
+}
+.ut-back:hover { color: rgba(255,255,255,.75); }
+.ut-back::before { content: '←'; }
+
+/* ── RESPONSIVE ──────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .ut-cards--3 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .ut-hero     { padding: 5rem 1.25rem 2rem; }
+  .ut-main,
+  .ut-main--light,
+  .ut-main--dark { padding: 2rem 1.25rem 3rem; }
+  .ut-section  { padding: 2rem 1.25rem; }
+  .ut-cards,
+  .ut-cards--3 { grid-template-columns: 1fr; }
+}
