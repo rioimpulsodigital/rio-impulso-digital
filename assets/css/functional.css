@@ -38,8 +38,8 @@
   max-width: 700px; margin: 0 auto; text-align: center;
 }
 .fp-eyebrow {
-  font-family: var(--ff-mono); font-size: .58rem;
-  color: var(--coral); letter-spacing: .12em; text-transform: uppercase;
+  font-family: var(--ff-mono); font-size: .68rem;
+  color: var(--coral); letter-spacing: .14em; text-transform: uppercase;
   display: flex; align-items: center; justify-content: center; gap: 8px;
   margin-bottom: 1.1rem;
 }
