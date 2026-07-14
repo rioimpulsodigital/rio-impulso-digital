@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Plantilla — Página Funcional | RiO Impulso Digital</title>
+
+  <link rel="icon" type="image/png" href="./assets/branding/rio-favicon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="./assets/css/main.css?v=20260627">
+  <link rel="stylesheet" href="./assets/css/functional.css?v=20260714">
+</head>
+<body>
+
+<!-- ── NAV ──────────────────────────────────────── -->
+<nav class="nav" id="mainNav">
+  <a href="/" class="nav-logo" aria-label="RiO Impulso Digital">
+    <img
+      src="./assets/branding/rio-logo-horizontal-245w.webp"
+      srcset="./assets/branding/rio-logo-horizontal-245w.webp 1x,
+              ./assets/branding/rio-logo-horizontal-429w.webp 2x,
+              ./assets/branding/rio-logo-horizontal.webp 3x"
+      alt="RiO Impulso Digital"
+      width="245" height="60"
+      fetchpriority="high"
+      onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+    >
+    <span class="nav-logo-text">RiO <em>Impulso</em> Digital</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="/#servicios">Soluciones</a></li>
+    <li><a href="/#portfolio">Proyectos</a></li>
+    <li><a href="/#nosotros">Sobre mí</a></li>
+  </ul>
+  <a href="/#contacto" class="nav-cta">Hablemos →</a>
+  <button class="nav-hamburger" aria-label="Abrir menú" onclick="openDrawer()">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<div class="nav-drawer" id="navDrawer">
+  <button class="nav-drawer-close" onclick="closeDrawer()" aria-label="Cerrar">✕</button>
+  <a href="/#servicios" onclick="closeDrawer()">Soluciones</a>
+  <a href="/#portfolio" onclick="closeDrawer()">Proyectos</a>
+  <a href="/#nosotros" onclick="closeDrawer()">Sobre mí</a>
+  <a href="/#contacto" onclick="closeDrawer()" style="color:var(--coral)">Hablemos →</a>
+</div>
+
+<!-- ── HERO COMPACTO ─────────────────────────────── -->
+<!-- Componente: .fp-hero
+     Uso: encabezado de toda página funcional.
+     Variantes: ajustar eyebrow, h1 em (coral), desc y badges según página. -->
+<section class="fp-hero">
+  <div class="fp-hero-orb"></div>
+  <div class="fp-hero-content">
+    <p class="fp-eyebrow">Etiqueta de contexto</p>
+    <h1>Título de la página<br>con <em>acento coral</em></h1>
+    <p class="fp-hero-desc">
+      Descripción breve del propósito de esta página. Máximo dos líneas. El usuario debe entender de inmediato qué puede hacer aquí.
+    </p>
+    <div class="fp-badges">
+      <span class="fp-badge">Badge uno</span>
+      <span class="fp-badge">Badge dos</span>
+      <span class="fp-badge">Badge tres</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── SECCIÓN CLARA — Tarjetas ──────────────────── -->
+<!-- Componente: .fp-section--light + .fp-cards-grid
+     Uso: índice de herramientas, opciones, accesos. -->
+<section class="fp-section fp-section--light">
+  <div class="fp-container">
+
+    <a href="/" class="fp-back">Volver al inicio</a>
+
+    <p class="sec-label">Sección</p>
+    <h2 class="fp-title">Tarjetas de <span class="hl">acción</span></h2>
+    <p class="fp-desc">Descripción opcional de la sección. Puede omitirse si el contenido es autoexplicativo.</p>
+
+    <div class="fp-cards-grid">
+
+      <a class="fp-card" href="#">
+        <div class="fp-card-icon fp-card-icon--coral">🎯</div>
+        <span class="fp-card-tag">Etiqueta</span>
+        <h3>Título de la tarjeta</h3>
+        <p>Descripción breve de lo que el usuario encontrará al hacer click en esta tarjeta.</p>
+        <span class="fp-card-link">
+          Abrir
+          <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </span>
+      </a>
+
+      <a class="fp-card" href="#">
+        <div class="fp-card-icon fp-card-icon--violet">📖</div>
+        <span class="fp-card-tag">Referencia</span>
+        <h3>Segunda tarjeta</h3>
+        <p>Descripción de esta herramienta o acción. Mantener consistencia en longitud con la tarjeta anterior.</p>
+        <span class="fp-card-link">
+          Abrir
+          <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </span>
+      </a>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── SECCIÓN OSCURA — Lista + Callout ──────────── -->
+<!-- Componente: .fp-section--dark + .fp-list--dark + .fp-callout--purple
+     Uso: pasos, requisitos, información contextual sobre fondo oscuro. -->
+<section class="fp-section fp-section--dark">
+  <div class="fp-container">
+
+    <p class="sec-label">Información</p>
+    <h2 class="fp-title">Lista sobre fondo <span class="hl">oscuro</span></h2>
+    <p class="fp-desc">Sección de contraste que rompe visualmente con las secciones claras.</p>
+
+    <ul class="fp-list fp-list--dark">
+      <li>Primer ítem de la lista con texto descriptivo.</li>
+      <li>Segundo ítem con información adicional relevante.</li>
+      <li>Tercer ítem. Las listas deben tener entre 3 y 7 ítems.</li>
+      <li>Cuarto ítem opcional para completar el bloque.</li>
+    </ul>
+
+    <div class="fp-callout fp-callout--purple">
+      <strong>Nota destacada:</strong> Este callout resalta información importante sobre fondo oscuro. Se usa para avisos, condiciones o datos clave que el usuario no debe pasar por alto.
+    </div>
+
+  </div>
+</section>
+
+<!-- ── SECCIÓN BLANCA — Callouts + CTAs ──────────── -->
+<!-- Componente: .fp-section--white + variantes de .fp-callout
+     Uso: información complementaria, condiciones, siguiente paso. -->
+<section class="fp-section fp-section--white">
+  <div class="fp-container">
+
+    <p class="sec-label">Detalles</p>
+    <h2 class="fp-title">Callouts y <span class="hl">llamados a la acción</span></h2>
+
+    <div class="fp-callout fp-callout--border">
+      <strong>Callout con borde:</strong> Ideal para notas, condiciones o aclaraciones. El borde lateral en purple refuerza la marca. Se usa para información que complementa sin interrumpir el flujo.
+    </div>
+
+    <div class="fp-callout fp-callout--soft">
+      <strong>Callout suave:</strong> Para información secundaria o contextual que no necesita énfasis visual fuerte. Tono neutro, discreto.
+    </div>
+
+    <div class="fp-callout fp-callout--coral">
+      <strong>Callout coral:</strong> Para advertencias, pasos obligatorios o llamados de atención que no son errores pero sí requieren acción del usuario.
+    </div>
+
+    <div style="display:flex; gap:1rem; flex-wrap:wrap; margin-top:2rem;">
+      <a href="#" class="btn-p">Acción principal</a>
+      <a href="#" class="btn-ghost" style="color:var(--ink);border-color:var(--border);">Acción secundaria</a>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── SECCIÓN OSCURA — Confirmación / Status ────── -->
+<!-- Componente: .fp-section--dark + .fp-status
+     Uso: /gracias, confirmaciones, estados de éxito o error. -->
+<section class="fp-section fp-section--dark">
+  <div class="fp-container">
+    <div class="fp-status">
+      <div class="fp-status-icon">
+        <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="40" cy="40" r="35" stroke="#ff6b6b" stroke-width="3" fill="none"/>
+          <path d="M24 41 L35 52 L57 28" stroke="#ff6b6b" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <p class="fp-status-title">Acción completada</p>
+      <p class="fp-status-desc">Descripción del estado de confirmación. Se usa en páginas como /gracias o /confirmacion para cerrar el flujo del usuario.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ────────────────────────────────────── -->
+<footer>
+  <div class="footer-row">
+    <div class="footer-col">
+      <div class="footer-brand">RiO <em>Impulso</em> Digital</div>
+      <div class="footer-tag">Tecnología • Integración • Automatización</div>
+    </div>
+    <div class="footer-col footer-col--center">
+      <picture>
+        <source media="(max-width: 900px)" srcset="./assets/branding/rio-logo-primary-48x48.webp">
+        <source srcset="./assets/branding/rio-logo-primary-84x84.webp">
+        <img src="./assets/branding/rio-logo-primary.png" alt="RiO Impulso Digital" class="footer-logo" width="48" height="48">
+      </picture>
+    </div>
+    <ul class="footer-links footer-col footer-col--right">
+      <li><a href="/#servicios">Soluciones</a></li>
+      <li><a href="/#portfolio">Proyectos</a></li>
+      <li><a href="/#nosotros">Sobre mí</a></li>
+      <li><a href="https://github.com/rioimpulsodigital/rio-impulso-digital" target="_blank" rel="noopener" class="footer-link-muted">GitHub ↗</a></li>
+    </ul>
+  </div>
+  <div class="footer-copy">
+    © 2026 RiO Impulso Digital · Brenda Rivera Obando · Todos los derechos reservados
+  </div>
+</footer>
+
+<script src="./assets/js/main.js?v=20260627" defer></script>
+</body>
+</html>
