@@ -176,6 +176,14 @@
 }
 .ut-note--coral strong { color: var(--ink); }
 
+/* Variante automática para sección oscura */
+.ut-section--dark .ut-note {
+  background: rgba(255,255,255,.05);
+  border-color: rgba(147,0,159,.5);
+  color: rgba(255,255,255,.6);
+}
+.ut-section--dark .ut-note strong { color: var(--white); }
+
 /* ── ESTADO / CONFIRMACIÓN ───────────────────────────── */
 
 .ut-status {
