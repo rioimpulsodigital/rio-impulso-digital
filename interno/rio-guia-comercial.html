@@ -3,280 +3,179 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RiO Impulso Digital — Guía Comercial</title>
+<meta name="robots" content="noindex, nofollow">
+<title>Guía Comercial | RiO Impulso Digital</title>
+<link rel="icon" type="image/png" href="../assets/branding/rio-favicon.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="../assets/css/main.css?v=20260627">
+<link rel="stylesheet" href="../assets/css/utilitaria.css?v=20260714">
+
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap');
+  /* ── SCROLL OFFSET para nav fijo ── */
+  section[id] { scroll-margin-top: 80px; }
 
-:root{
-  --purple:#93009f;
-  --coral:#ff6b6b;
-  --secondary:#6b5b95;
-  --bg:#130019;
-  --bg-panel:#1c0526;
-  --bg-card:#210a2c;
-  --line:rgba(255,255,255,0.09);
-  --text:#f3ecf6;
-  --text-dim:#b8a8c4;
-  --text-faint:#8a7796;
-}
-*{box-sizing:border-box; margin:0; padding:0;}
-html{scroll-behavior:smooth;}
-body{
-  background:var(--bg);
-  color:var(--text);
-  font-family:'DM Sans', sans-serif;
-  line-height:1.6;
-  font-size:16px;
-}
-h1,h2,h3{font-family:'Syne', sans-serif; font-weight:700; letter-spacing:-0.01em;}
-.mono{font-family:'DM Mono', monospace;}
-
-/* Layout */
-.wrap{display:flex; max-width:1280px; margin:0 auto;}
-nav.rail{
-  width:240px;
-  flex-shrink:0;
-  position:sticky;
-  top:0;
-  height:100vh;
-  padding:40px 24px;
-  border-right:1px solid var(--line);
-  overflow-y:auto;
-}
-nav.rail .brand{
-  font-family:'Syne', sans-serif;
-  font-size:15px;
-  font-weight:800;
-  color:var(--text);
-  margin-bottom:6px;
-}
-nav.rail .brand span{color:var(--coral);}
-nav.rail .subtitle{
-  font-family:'DM Mono', monospace;
-  font-size:10.5px;
-  letter-spacing:0.08em;
-  text-transform:uppercase;
-  color:var(--text-faint);
-  margin-bottom:40px;
-  display:block;
-}
-nav.rail a{
-  display:flex;
-  gap:10px;
-  align-items:baseline;
-  font-size:13px;
-  color:var(--text-dim);
-  text-decoration:none;
-  padding:9px 0;
-  border-bottom:1px solid transparent;
-  transition:color .15s ease;
-}
-nav.rail a:hover{color:var(--text);}
-nav.rail a .num{
-  font-family:'DM Mono', monospace;
-  font-size:10.5px;
-  color:var(--coral);
-  min-width:18px;
-}
-
-/* Mobile top nav — hidden on desktop, shown under 900px */
-nav.mobile-rail{
-  display:none;
-}
-
-main{flex:1; padding:56px 64px 120px; min-width:0;}
-
-header.hero{margin-bottom:64px; max-width:640px;}
-header.hero .eyebrow{
-  font-family:'DM Mono', monospace;
-  font-size:11px;
-  letter-spacing:0.12em;
-  text-transform:uppercase;
-  color:var(--coral);
-  display:block;
-  margin-bottom:16px;
-}
-header.hero h1{font-size:38px; line-height:1.15; margin-bottom:18px;}
-header.hero p{color:var(--text-dim); font-size:16px; max-width:520px;}
-
-section{padding-top:64px; scroll-margin-top:24px;}
-section:first-of-type{padding-top:0;}
-section + section{border-top:1px solid var(--line);}
-
-.section-head{display:flex; gap:16px; align-items:baseline; margin-bottom:28px;}
-.section-head .idx{font-family:'DM Mono', monospace; color:var(--coral); font-size:13px;}
-.section-head h2{font-size:24px;}
-.section-lead{color:var(--text-dim); max-width:640px; margin-bottom:32px; font-size:15px;}
-
-/* Cómo trabajamos strip */
-.steps{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--line); border:1px solid var(--line); margin-bottom:8px;}
-.steps .step{background:var(--bg-panel); padding:20px;}
-.steps .step .n{font-family:'DM Mono',monospace; color:var(--coral); font-size:12px; display:block; margin-bottom:8px;}
-.steps .step h4{font-size:14.5px; margin-bottom:6px;}
-.steps .step p{font-size:13px; color:var(--text-dim);}
-
-/* Business line cards */
-.line-card{
-  background:var(--bg-card);
-  border:1px solid var(--line);
-  border-left:3px solid var(--accent, var(--purple));
-  border-radius:6px;
-  padding:28px 28px 24px;
-  margin-bottom:24px;
-}
-.line-card .line-top{display:flex; justify-content:space-between; align-items:flex-start; gap:20px; margin-bottom:14px; flex-wrap:wrap;}
-.line-card h3{font-size:19px;}
-.line-card .tag{
-  font-family:'DM Mono', monospace;
-  font-size:10.5px;
-  text-transform:uppercase;
-  letter-spacing:0.06em;
-  color:var(--accent, var(--coral));
-  border:1px solid var(--accent, var(--coral));
-  padding:4px 9px;
-  border-radius:20px;
-  white-space:nowrap;
-}
-.line-card .grid2{display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:16px;}
-.line-card .col-label{font-family:'DM Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-faint); margin-bottom:8px; display:block;}
-.line-card ul{padding-left:18px; font-size:14px; color:var(--text-dim);}
-.line-card ul li{margin-bottom:5px;}
-.line-card .pitch{
-  font-size:15px;
-  font-style:italic;
-  color:var(--text);
-  border-left:2px solid var(--accent, var(--coral));
-  padding-left:14px;
-  margin-top:18px;
-}
-.line-card .pitch::before{content:"“"; }
-.line-card .pitch::after{content:"”"; }
-
-/* proof cases */
-.cases{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
-.case{background:var(--bg-panel); border:1px solid var(--line); border-radius:6px; padding:20px;}
-.case .cat{font-family:'DM Mono',monospace; font-size:10px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.05em; display:block; margin-bottom:10px;}
-.case h4{font-size:15px; margin-bottom:8px; line-height:1.3;}
-.case p{font-size:13px; color:var(--text-dim); margin-bottom:14px;}
-.case .metric{font-family:'DM Mono',monospace; font-size:12.5px; color:var(--coral);}
-
-/* accordion (discovery questions) */
-.acc{border:1px solid var(--line); border-radius:6px; overflow:hidden; margin-bottom:14px;}
-.acc summary{
-  cursor:pointer;
-  list-style:none;
-  padding:16px 20px;
-  background:var(--bg-panel);
-  font-family:'Syne', sans-serif;
-  font-weight:700;
-  font-size:14.5px;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-}
-.acc summary::-webkit-details-marker{display:none;}
-.acc summary::after{content:"+"; font-family:'DM Mono',monospace; color:var(--coral); font-size:18px;}
-.acc[open] summary::after{content:"–";}
-.acc .acc-body{padding:18px 20px 22px; font-size:14px; color:var(--text-dim);}
-.acc .acc-body ul{padding-left:18px;}
-.acc .acc-body li{margin-bottom:8px;}
-
-/* objections table */
-.obj{display:grid; grid-template-columns:1fr; gap:14px;}
-.obj-row{display:grid; grid-template-columns:280px 1fr; gap:20px; padding:18px 0; border-bottom:1px solid var(--line);}
-.obj-row:last-child{border-bottom:none;}
-.obj-row .q{font-weight:700; font-size:14.5px; color:var(--text);}
-.obj-row .q .mono-tag{display:block; font-family:'DM Mono',monospace; font-size:10px; color:var(--coral); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; font-weight:400;}
-.obj-row .a{font-size:14px; color:var(--text-dim);}
-
-/* callout */
-.callout{
-  background:linear-gradient(135deg, rgba(147,0,159,0.18), rgba(255,107,107,0.10));
-  border:1px solid rgba(255,107,107,0.3);
-  border-radius:8px;
-  padding:22px 26px;
-  font-size:14px;
-  color:var(--text);
-  margin-top:8px;
-}
-.callout .mono-tag{font-family:'DM Mono',monospace; font-size:10.5px; color:var(--coral); text-transform:uppercase; letter-spacing:.06em; display:block; margin-bottom:8px;}
-
-/* process steps */
-.process{counter-reset:step;}
-.process .p-step{display:flex; gap:18px; padding:18px 0; border-bottom:1px solid var(--line);}
-.process .p-step:last-child{border-bottom:none;}
-.process .p-step .marker{
-  counter-increment:step;
-  font-family:'DM Mono',monospace;
-  color:var(--purple);
-  background:rgba(147,0,159,0.15);
-  border:1px solid var(--purple);
-  width:30px; height:30px;
-  border-radius:50%;
-  display:flex; align-items:center; justify-content:center;
-  font-size:13px;
-  flex-shrink:0;
-}
-.process .p-step .marker::before{content:counter(step);}
-.process .p-step h4{font-size:14.5px; margin-bottom:4px;}
-.process .p-step p{font-size:13.5px; color:var(--text-dim);}
-
-/* contact */
-.contact-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
-.contact-card{background:var(--bg-panel); border:1px solid var(--line); border-radius:6px; padding:18px 20px;}
-.contact-card .col-label{font-family:'DM Mono',monospace; font-size:10px; text-transform:uppercase; color:var(--text-faint); letter-spacing:.05em; display:block; margin-bottom:8px;}
-.contact-card .val{font-size:14.5px; font-weight:500;}
-
-footer{margin-top:64px; padding-top:24px; border-top:1px solid var(--line); font-size:12px; color:var(--text-faint); font-family:'DM Mono',monospace;}
-
-@media (max-width:900px){
-  nav.rail{display:none;}
-  nav.mobile-rail{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:12px;
-    position:sticky;
-    top:0;
-    z-index:20;
-    background:var(--bg-panel);
-    border-bottom:1px solid var(--line);
-    padding:14px 20px;
+  /* ── NAVEGACIÓN RÁPIDA (solo mobile) ── */
+  .guia-nav {
+    display: none;
+    background: var(--off); border-bottom: 1px solid var(--border);
+    padding: 12px 1.25rem;
   }
-  nav.mobile-rail .brand-mini{
-    font-family:'Syne', sans-serif;
-    font-weight:800;
-    font-size:14px;
-    color:var(--text);
-    white-space:nowrap;
+  @media(max-width:900px) { .guia-nav { display: block; } }
+  .guia-nav select {
+    width: 100%; max-width: 320px;
+    background: var(--white); color: var(--ink);
+    border: 1px solid var(--border); border-radius: var(--r);
+    padding: 9px 12px; font-family: var(--ff-mono); font-size: .72rem;
+    -webkit-appearance: none; appearance: none;
   }
-  nav.mobile-rail .brand-mini span{color:var(--coral);}
-  nav.mobile-rail select{
-    flex:1;
-    max-width:220px;
-    background:var(--bg-card);
-    color:var(--text);
-    border:1px solid var(--line);
-    border-radius:6px;
-    padding:9px 12px;
-    font-family:'DM Mono', monospace;
-    font-size:12.5px;
-    -webkit-appearance:none;
-    appearance:none;
+
+  /* ── ENCABEZADO DE SECCIÓN ── */
+  .section-head { display: flex; gap: 14px; align-items: baseline; margin-bottom: 22px; }
+  .section-head .idx { font-family: var(--ff-mono); color: var(--coral); font-size: .78rem; flex-shrink: 0; }
+  .section-head h2 {
+    font-family: var(--ff-head); font-size: 1.35rem; font-weight: 700;
+    color: var(--ink); letter-spacing: -.02em;
   }
-  main{padding:40px 24px 100px;}
-  .steps{grid-template-columns:1fr 1fr;}
-  .line-card .grid2{grid-template-columns:1fr;}
-  .cases{grid-template-columns:1fr;}
-  .obj-row{grid-template-columns:1fr;}
-  .contact-grid{grid-template-columns:1fr;}
-}
+  .section-lead { color: var(--muted); max-width: 640px; margin-bottom: 28px; font-size: .9rem; line-height: 1.7; }
+
+  .ut-section--dark .section-head h2 { color: var(--white); }
+  .ut-section--dark .section-lead    { color: rgba(255,255,255,.55); }
+
+  /* ── CÓMO TRABAJAMOS ── */
+  .steps {
+    display: grid; grid-template-columns: repeat(4,1fr);
+    gap: 1px; background: var(--border);
+    border: 1px solid var(--border); border-radius: var(--r-m); overflow: hidden;
+  }
+  .steps .step { background: var(--white); padding: 20px; }
+  .steps .step .n { font-family: var(--ff-mono); color: var(--coral); font-size: .65rem; display: block; margin-bottom: 8px; }
+  .steps .step h4 { font-family: var(--ff-head); font-size: .88rem; font-weight: 700; color: var(--ink); margin-bottom: 6px; }
+  .steps .step p  { font-size: .8rem; color: var(--muted); }
+  @media(max-width:640px) { .steps { grid-template-columns: 1fr 1fr; } }
+
+  /* ── LÍNEAS DE NEGOCIO ── */
+  .line-card {
+    background: var(--white); border: 1px solid var(--border);
+    border-left: 3px solid var(--accent, var(--p));
+    border-radius: var(--r-m); padding: 24px 26px; margin-bottom: 20px;
+  }
+  .line-card .line-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+  .line-card h3 { font-family: var(--ff-head); font-size: 1.05rem; font-weight: 700; color: var(--ink); letter-spacing: -.02em; }
+  .line-card .tag {
+    font-family: var(--ff-mono); font-size: .6rem; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--accent, var(--coral)); border: 1px solid var(--accent, var(--coral));
+    padding: 4px 9px; border-radius: 100px; white-space: nowrap;
+  }
+  .line-card .line-desc { font-size: .85rem; color: var(--muted); margin-bottom: 4px; }
+  .line-card .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 14px; }
+  @media(max-width:640px) { .line-card .grid2 { grid-template-columns: 1fr; } }
+  .line-card .col-label { font-family: var(--ff-mono); font-size: .6rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 8px; display: block; }
+  .line-card ul { padding-left: 16px; font-size: .82rem; color: var(--muted); }
+  .line-card ul li { margin-bottom: 5px; }
+  .line-card .pitch {
+    font-size: .88rem; font-style: italic; color: var(--ink);
+    border-left: 2px solid var(--accent, var(--coral));
+    padding-left: 14px; margin-top: 16px;
+  }
+  .line-card .pitch::before { content: "\201C"; }
+  .line-card .pitch::after  { content: "\201D"; }
+
+  /* ── CASOS REALES (sobre fondo oscuro) ── */
+  .cases { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+  @media(max-width:640px) { .cases { grid-template-columns: 1fr; } }
+  .case { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); border-radius: var(--r-m); padding: 20px; }
+  .case .cat { font-family: var(--ff-mono); font-size: .6rem; color: rgba(255,255,255,.4); text-transform: uppercase; letter-spacing: .05em; display: block; margin-bottom: 10px; }
+  .case h4 { font-family: var(--ff-head); font-size: .92rem; font-weight: 700; color: rgba(255,255,255,.85); margin-bottom: 8px; line-height: 1.3; }
+  .case p { font-size: .8rem; color: rgba(255,255,255,.5); margin-bottom: 14px; }
+  .case .metric { font-family: var(--ff-mono); font-size: .75rem; color: var(--coral); }
+
+  /* ── ACORDEÓN ── */
+  .acc { border: 1px solid var(--border); border-radius: var(--r-m); overflow: hidden; margin-bottom: 14px; }
+  .acc summary {
+    cursor: pointer; list-style: none; padding: 16px 20px;
+    background: var(--off); font-family: var(--ff-head); font-weight: 700; font-size: .9rem;
+    color: var(--ink); display: flex; justify-content: space-between; align-items: center;
+  }
+  .acc summary::-webkit-details-marker { display: none; }
+  .acc summary::after { content: "+"; font-family: var(--ff-mono); color: var(--coral); font-size: 1.1rem; }
+  .acc[open] summary::after { content: "–"; }
+  .acc .acc-body { padding: 18px 20px 22px; font-size: .85rem; color: var(--muted); background: var(--white); }
+  .acc .acc-body ul { padding-left: 16px; }
+  .acc .acc-body li { margin-bottom: 8px; }
+
+  /* ── OBJECIONES ── */
+  .obj-row { display: grid; grid-template-columns: 240px 1fr; gap: 24px; padding: 20px 0; border-bottom: 1px solid var(--border); }
+  .obj-row:first-child { border-top: 1px solid var(--border); }
+  .obj-row .q { font-weight: 700; font-size: .88rem; color: var(--ink); }
+  .obj-row .q .mono-tag { display: block; font-family: var(--ff-mono); font-size: .6rem; color: var(--coral); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; font-weight: 400; }
+  .obj-row .a { font-size: .85rem; color: var(--muted); line-height: 1.7; }
+  @media(max-width:640px) { .obj-row { grid-template-columns: 1fr; } }
+
+  /* ── PROCESO DE VENTA ── */
+  .process { counter-reset: step; }
+  .p-step { display: flex; gap: 18px; padding: 18px 0; border-bottom: 1px solid var(--border); }
+  .p-step:last-child { border-bottom: none; }
+  .p-step .marker {
+    counter-increment: step; font-family: var(--ff-mono);
+    color: var(--p); background: rgba(147,0,159,.08); border: 1px solid rgba(147,0,159,.25);
+    width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .75rem; flex-shrink: 0; margin-top: 2px;
+  }
+  .p-step .marker::before { content: counter(step); }
+  .p-step h4 { font-family: var(--ff-head); font-size: .9rem; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+  .p-step p  { font-size: .82rem; color: var(--muted); line-height: 1.65; }
+
+  /* ── CONTACTO (sobre fondo oscuro) ── */
+  .contact-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+  @media(max-width:640px) { .contact-grid { grid-template-columns: 1fr; } }
+  .contact-card { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); border-radius: var(--r-m); padding: 18px 20px; }
+  .contact-card .col-label { font-family: var(--ff-mono); font-size: .6rem; text-transform: uppercase; color: rgba(255,255,255,.4); letter-spacing: .05em; display: block; margin-bottom: 8px; }
+  .contact-card .val { font-size: .9rem; font-weight: 500; color: rgba(255,255,255,.85); }
 </style>
 </head>
 <body>
 
-<nav class="mobile-rail">
-  <span class="brand-mini">RiO <span>Impulso</span></span>
+<!-- ── NAV ──────────────────────────────────────── -->
+<nav class="nav" id="mainNav">
+  <a href="/" class="nav-logo" aria-label="RiO Impulso Digital">
+    <img
+      src="../assets/branding/rio-logo-horizontal-245w.webp"
+      srcset="../assets/branding/rio-logo-horizontal-245w.webp 1x,
+              ../assets/branding/rio-logo-horizontal-429w.webp 2x,
+              ../assets/branding/rio-logo-horizontal.webp 3x"
+      alt="RiO Impulso Digital"
+      width="245" height="60"
+      fetchpriority="high"
+      onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+    >
+    <span class="nav-logo-text">RiO <em>Impulso</em> Digital</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="/#servicios">Soluciones</a></li>
+    <li><a href="/#portfolio">Proyectos</a></li>
+    <li><a href="/#nosotros">Sobre mí</a></li>
+  </ul>
+  <a href="/#contacto" class="nav-cta">Hablemos →</a>
+  <button class="nav-hamburger" aria-label="Abrir menú" onclick="openDrawer()">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<div class="nav-drawer" id="navDrawer">
+  <button class="nav-drawer-close" onclick="closeDrawer()" aria-label="Cerrar">✕</button>
+  <a href="/#servicios" onclick="closeDrawer()">Soluciones</a>
+  <a href="/#portfolio" onclick="closeDrawer()">Proyectos</a>
+  <a href="/#nosotros" onclick="closeDrawer()">Sobre mí</a>
+  <a href="/#contacto" onclick="closeDrawer()" style="color:var(--coral)">Hablemos →</a>
+</div>
+
+<!-- ── NAVEGACIÓN RÁPIDA (mobile) ──────────────── -->
+<div class="guia-nav">
   <select id="mobileNavSelect" aria-label="Ir a sección">
     <option value="posicionamiento">01 · Posicionamiento</option>
     <option value="metodologia">02 · Cómo trabajamos</option>
@@ -287,47 +186,39 @@ footer{margin-top:64px; padding-top:24px; border-top:1px solid var(--line); font
     <option value="proceso">07 · Proceso de venta</option>
     <option value="contacto">08 · Contacto</option>
   </select>
-</nav>
+</div>
 
-<div class="wrap">
+<!-- ── HERO ──────────────────────────────────────── -->
+<section class="ut-hero">
+  <div class="ut-hero-content">
+    <a href="/interno/" class="ut-back">Volver al portal</a>
+    <p class="ut-label">Referencia Comercial</p>
+    <h1>Guía Comercial</h1>
+    <p class="ut-hero-desc">
+      Documento de consulta con información sobre servicios, posicionamiento, perfiles de cliente, argumentos comerciales y lineamientos para el proceso de venta.
+    </p>
+  </div>
+</section>
 
-<nav class="rail">
-  <div class="brand">RiO <span>Impulso</span> Digital</div>
-  <span class="subtitle">Guía Comercial · Interna</span>
-  <a href="#posicionamiento"><span class="num">01</span> Posicionamiento</a>
-  <a href="#metodologia"><span class="num">02</span> Cómo trabajamos</a>
-  <a href="#lineas"><span class="num">03</span> Qué vendemos</a>
-  <a href="#casos"><span class="num">04</span> Casos reales</a>
-  <a href="#diagnostico"><span class="num">05</span> Preguntas clave</a>
-  <a href="#objeciones"><span class="num">06</span> Objeciones</a>
-  <a href="#proceso"><span class="num">07</span> Proceso de venta</a>
-  <a href="#contacto"><span class="num">08</span> Contacto</a>
-</nav>
-
-<main>
-
-  <header class="hero">
-    <span class="eyebrow">Material interno · No compartir fuera del equipo comercial</span>
-    <h1>Cómo vender RiO Impulso Digital.</h1>
-    <p>Esta guía te da lo esencial para calificar un lead, explicar qué hacemos sin sonar genérico, y pasarle a Brenda una conversación ya avanzada — no un contacto en frío.</p>
-  </header>
-
-  <section id="posicionamiento">
+<!-- ── 01 POSICIONAMIENTO ────────────────────────── -->
+<div class="ut-section ut-section--white" id="posicionamiento">
+  <div class="ut-container">
     <div class="section-head"><span class="idx">01</span><h2>Posicionamiento</h2></div>
     <p class="section-lead">
       RiO no es una agencia de marketing ni una consultora genérica de "transformación digital". Es un equipo técnico <strong>liderado directamente por Brenda</strong>, ingeniera en ciberseguridad, que gestiona personalmente la relación con cada cliente. Eso es la ventaja competitiva y así se vende: cada proyecto tiene una dueña visible y responsable, no un account manager que después desaparece.
     </p>
-    <div class="callout">
-      <span class="mono-tag">Frase ancla</span>
-      Vendemos claridad antes que tecnología. El cliente no compra un ERP integrado o un sitio web — compra dejar de perder tiempo y plata en procesos que hoy fallan o son manuales.
+    <div class="ut-note">
+      <strong>Frase ancla —</strong> Vendemos claridad antes que tecnología. El cliente no compra un ERP integrado o un sitio web — compra dejar de perder tiempo y plata en procesos que hoy fallan o son manuales.
     </div>
-    <div class="callout" style="margin-top:16px;">
-      <span class="mono-tag">Equipo</span>
-      RiO es un equipo, no una sola persona. <strong>Brenda</strong> lidera el proyecto de punta a punta y es la responsable directa de cada cliente. Los <strong>ejecutivos de ventas</strong> califican leads y llevan la primera conversación. El <strong>analista de sistemas junior</strong> apoya en la ejecución técnica. Frente al cliente, el mensaje es: "vas a tener a Brenda liderando tu proyecto y gestionándolo personalmente" — no "vas a tratar con quien te toque".
+    <div class="ut-note">
+      <strong>Equipo —</strong> RiO es un equipo, no una sola persona. <strong>Brenda</strong> lidera el proyecto de punta a punta y es la responsable directa de cada cliente. Los <strong>ejecutivos de ventas</strong> califican leads y llevan la primera conversación. El <strong>analista de sistemas junior</strong> apoya en la ejecución técnica. Frente al cliente, el mensaje es: "vas a tener a Brenda liderando tu proyecto y gestionándolo personalmente" — no "vas a tratar con quien te toque".
     </div>
-  </section>
+  </div>
+</div>
 
-  <section id="metodologia">
+<!-- ── 02 CÓMO TRABAJAMOS ────────────────────────── -->
+<div class="ut-section ut-section--light" id="metodologia">
+  <div class="ut-container">
     <div class="section-head"><span class="idx">02</span><h2>Cómo trabajamos</h2></div>
     <p class="section-lead">Esto es parte del pitch, no solo un proceso interno. Los clientes valoran esto porque ya se quemaron con proveedores que improvisan.</p>
     <div class="steps">
@@ -336,9 +227,12 @@ footer{margin-top:64px; padding-top:24px; border-top:1px solid var(--line); font
       <div class="step"><span class="n">03</span><h4>Ejecución directa</h4><p>Sin intermediarios ni equipos externos desconocidos. Brenda lidera el proyecto y responde personalmente a cada cliente.</p></div>
       <div class="step"><span class="n">04</span><h4>Entrega con autonomía</h4><p>Todo proyecto cierra con documentación y capacitación. El cliente no queda dependiendo de soporte externo.</p></div>
     </div>
-  </section>
+  </div>
+</div>
 
-  <section id="lineas">
+<!-- ── 03 QUÉ VENDEMOS ───────────────────────────── -->
+<div class="ut-section ut-section--white" id="lineas">
+  <div class="ut-container">
     <div class="section-head"><span class="idx">03</span><h2>Qué vendemos: 3 líneas de negocio</h2></div>
     <p class="section-lead">No ofrezcas "tecnología" en general. Identifica primero en cuál de estas tres líneas cae el lead — cada una tiene un dolor, un cliente y un pitch distintos.</p>
 
@@ -347,7 +241,7 @@ footer{margin-top:64px; padding-top:24px; border-top:1px solid var(--line); font
         <h3>Soluciones Estandarizadas</h3>
         <span class="tag">Ticket más bajo · Venta rápida</span>
       </div>
-      <p style="font-size:14px; color:var(--text-dim)">Para empresas que pierden tiempo en tareas manuales y repetitivas, y necesitan resultados rápidos sin un proyecto largo.</p>
+      <p class="line-desc">Para empresas que pierden tiempo en tareas manuales y repetitivas, y necesitan resultados rápidos sin un proyecto largo.</p>
       <div class="grid2">
         <div>
           <span class="col-label">Qué incluye</span>
@@ -374,7 +268,7 @@ footer{margin-top:64px; padding-top:24px; border-top:1px solid var(--line); font
         <h3>Proyectos Tecnológicos a Medida</h3>
         <span class="tag">Ticket más alto · Ciclo más largo</span>
       </div>
-      <p style="font-size:14px; color:var(--text-dim)">Para empresas que necesitan algo que no existe como producto en el mercado: integraciones, plataformas, ERP, eCommerce.</p>
+      <p class="line-desc">Para empresas que necesitan algo que no existe como producto en el mercado: integraciones, plataformas, ERP, eCommerce.</p>
       <div class="grid2">
         <div>
           <span class="col-label">Qué incluye</span>
@@ -401,7 +295,7 @@ footer{margin-top:64px; padding-top:24px; border-top:1px solid var(--line); font
         <h3>Consultoría Tecnológica</h3>
         <span class="tag">Puerta de entrada · Genera los otros dos</span>
       </div>
-      <p style="font-size:14px; color:var(--text-dim)">Para empresas que necesitan claridad antes de invertir, o quieren entender su nivel de riesgo antes de que ocurra un incidente.</p>
+      <p class="line-desc">Para empresas que necesitan claridad antes de invertir, o quieren entender su nivel de riesgo antes de que ocurra un incidente.</p>
       <div class="grid2">
         <div>
           <span class="col-label">Qué incluye</span>
@@ -423,13 +317,15 @@ footer{margin-top:64px; padding-top:24px; border-top:1px solid var(--line); font
       <p class="pitch">Antes de invertir en tecnología, definamos juntos dónde realmente está el problema.</p>
     </div>
 
-    <div class="callout">
-      <span class="mono-tag">Sobre precios</span>
-      No hay tarifario público — cada proyecto se cotiza según alcance, siguiendo el modelo de precio fijo. No inventes ni prometas cifras en la conversación comercial: levanta el dolor, el contexto y el presupuesto aproximado del cliente, y pasa esa información a Brenda para la cotización.
+    <div class="ut-note ut-note--coral">
+      <strong>Sobre precios —</strong> No hay tarifario público — cada proyecto se cotiza según alcance, siguiendo el modelo de precio fijo. No inventes ni prometas cifras en la conversación comercial: levanta el dolor, el contexto y el presupuesto aproximado del cliente, y pasa esa información a Brenda para la cotización.
     </div>
-  </section>
+  </div>
+</div>
 
-  <section id="casos">
+<!-- ── 04 CASOS REALES ───────────────────────────── -->
+<div class="ut-section ut-section--dark" id="casos">
+  <div class="ut-container">
     <div class="section-head"><span class="idx">04</span><h2>Casos reales (prueba social)</h2></div>
     <p class="section-lead">Úsalos para dar credibilidad concreta en la primera llamada — números reales, no promesas genéricas.</p>
     <div class="cases">
@@ -452,9 +348,12 @@ footer{margin-top:64px; padding-top:24px; border-top:1px solid var(--line); font
         <span class="metric">2 sistemas integrados</span>
       </div>
     </div>
-  </section>
+  </div>
+</div>
 
-  <section id="diagnostico">
+<!-- ── 05 PREGUNTAS CLAVE ────────────────────────── -->
+<div class="ut-section ut-section--light" id="diagnostico">
+  <div class="ut-container">
     <div class="section-head"><span class="idx">05</span><h2>Preguntas para calificar al lead</h2></div>
     <p class="section-lead">No vendas en la primera llamada — diagnostica. Estas preguntas te dicen en qué línea de negocio cae el lead y qué tan listo está para comprar.</p>
 
@@ -490,11 +389,14 @@ footer{margin-top:64px; padding-top:24px; border-top:1px solid var(--line); font
         </ul>
       </div>
     </details>
-  </section>
+  </div>
+</div>
 
-  <section id="objeciones">
+<!-- ── 06 OBJECIONES ─────────────────────────────── -->
+<div class="ut-section ut-section--white" id="objeciones">
+  <div class="ut-container">
     <div class="section-head"><span class="idx">06</span><h2>Objeciones comunes y cómo responderlas</h2></div>
-    <div class="obj">
+    <div>
       <div class="obj-row">
         <div class="q"><span class="mono-tag">Objeción</span>"No sé exactamente qué necesitamos."</div>
         <div class="a">Es la situación más común, no una barrera. El diagnóstico inicial existe justamente para eso: identificar el problema real antes de proponer una solución. No necesitan llegar con la solución definida.</div>
@@ -516,9 +418,12 @@ footer{margin-top:64px; padding-top:24px; border-top:1px solid var(--line); font
         <div class="a">RiO es un equipo, pero cada cliente tiene una dueña de proyecto: Brenda. Ella lidera el diagnóstico, dirige cada etapa y gestiona la relación personalmente de principio a fin. El equipo la apoya en ejecución, pero la responsabilidad y el contacto directo con el cliente son siempre suyos — no hay rotación de personal ni "se lo paso a otro".</div>
       </div>
     </div>
-  </section>
+  </div>
+</div>
 
-  <section id="proceso">
+<!-- ── 07 PROCESO DE VENTA ───────────────────────── -->
+<div class="ut-section ut-section--light" id="proceso">
+  <div class="ut-container">
     <div class="section-head"><span class="idx">07</span><h2>Proceso de venta: qué haces tú, qué hace Brenda</h2></div>
     <div class="process">
       <div class="p-step">
@@ -538,21 +443,48 @@ footer{margin-top:64px; padding-top:24px; border-top:1px solid var(--line); font
         <div><h4>Brenda hace el diagnóstico y cotiza</h4><p>Precio fijo, alcance fijo, entregables por fase. El analista de sistemas puede apoyar en la ejecución, pero Brenda lidera el proyecto y es el punto de contacto del cliente. Respuesta personal en menos de 24 horas desde el primer contacto.</p></div>
       </div>
     </div>
-  </section>
+  </div>
+</div>
 
-  <section id="contacto">
+<!-- ── 08 CONTACTO ───────────────────────────────── -->
+<div class="ut-section ut-section--dark" id="contacto">
+  <div class="ut-container">
     <div class="section-head"><span class="idx">08</span><h2>Canales de contacto</h2></div>
     <div class="contact-grid">
       <div class="contact-card"><span class="col-label">Email</span><span class="val">brenda@rioimpulsodigital.com</span></div>
       <div class="contact-card"><span class="col-label">WhatsApp Chile</span><span class="val">+56 9 8592 1512</span></div>
       <div class="contact-card"><span class="col-label">WhatsApp Argentina</span><span class="val">+54 3781 410164</span></div>
     </div>
-  </section>
-
-  <footer>rioimpulsodigital.com · Guía comercial interna · Actualizar cuando cambien líneas de negocio o casos publicados</footer>
-
-</main>
+  </div>
 </div>
+
+<!-- ── FOOTER ────────────────────────────────────── -->
+<footer>
+  <div class="footer-row">
+    <div class="footer-col">
+      <div class="footer-brand">RiO <em>Impulso</em> Digital</div>
+      <div class="footer-tag">Tecnología • Integración • Automatización</div>
+    </div>
+    <div class="footer-col footer-col--center">
+      <picture>
+        <source media="(max-width: 900px)" srcset="../assets/branding/rio-logo-primary-48x48.webp">
+        <source srcset="../assets/branding/rio-logo-primary-84x84.webp">
+        <img src="../assets/branding/rio-logo-primary.png" alt="RiO Impulso Digital" class="footer-logo" width="48" height="48">
+      </picture>
+    </div>
+    <ul class="footer-links footer-col footer-col--right">
+      <li><a href="/#servicios">Soluciones</a></li>
+      <li><a href="/#portfolio">Proyectos</a></li>
+      <li><a href="/#nosotros">Sobre mí</a></li>
+      <li><a href="https://github.com/rioimpulsodigital/rio-impulso-digital" target="_blank" rel="noopener" class="footer-link-muted">GitHub ↗</a></li>
+    </ul>
+  </div>
+  <div class="footer-copy">
+    © 2026 RiO Impulso Digital · Brenda Rivera Obando · Todos los derechos reservados
+  </div>
+</footer>
+
+<script src="../assets/js/main.js?v=20260627" defer></script>
 
 <script>
   var mobileNav = document.getElementById('mobileNavSelect');
@@ -562,15 +494,12 @@ footer{margin-top:64px; padding-top:24px; border-top:1px solid var(--line); font
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
-    // Keep the dropdown in sync with whatever section is currently on screen
     var sectionIds = ['posicionamiento','metodologia','lineas','casos','diagnostico','objeciones','proceso','contacto'];
     var sections = sectionIds.map(function (id) { return document.getElementById(id); }).filter(Boolean);
 
     var observer = new IntersectionObserver(function (entries) {
       entries.forEach(function (entry) {
-        if (entry.isIntersecting) {
-          mobileNav.value = entry.target.id;
-        }
+        if (entry.isIntersecting) { mobileNav.value = entry.target.id; }
       });
     }, { rootMargin: '-40% 0px -55% 0px' });
 
