@@ -413,6 +413,12 @@
     font-size: .9rem; color: var(--muted); line-height: 1.65;
   }
 
+  @media(max-width:640px) {
+    .send-step { flex-direction: column; align-items: center; text-align: center; }
+    .send-step .ss-info { justify-content: center; }
+    .send-step .seq-btn { width: 100%; }
+  }
+
   @media print {
     button.seq-btn, .send-sequence, button.discard-link, .kit-toolbar { display: none; }
   }
