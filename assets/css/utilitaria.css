@@ -43,12 +43,20 @@
   font-weight: 800; line-height: 1.1;
   color: var(--white); letter-spacing: -.03em;
   margin-bottom: .65rem;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
 }
 .ut-hero h1 em { font-style: normal; color: var(--coral); }
 .ut-hero-desc {
   font-size: .92rem; font-weight: 300;
   color: rgba(255,255,255,.5); line-height: 1.7;
   max-width: 520px; margin: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 /* ── CONTENEDORES ────────────────────────────────────── */
