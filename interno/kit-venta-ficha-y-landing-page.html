@@ -73,6 +73,23 @@
   button.start-btn:active { transform: scale(.98); }
   #formScreen { display: none; }
 
+  /* ── BIENVENIDA PERSONALIZADA ── */
+  #coverGreeting { display: none; text-align: center; margin-bottom: 36px; }
+  .cover-hello {
+    font-family: var(--ff-mono); font-size: .72rem;
+    color: rgba(255,255,255,.45); letter-spacing: .1em; text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .cover-name {
+    font-family: var(--ff-head); font-size: clamp(2.2rem, 6vw, 3.2rem);
+    font-weight: 800; color: var(--white); letter-spacing: -.03em; margin: 0 0 8px;
+  }
+  .cover-welcome {
+    font-family: var(--ff-mono); font-size: .65rem;
+    color: rgba(255,255,255,.35); letter-spacing: .07em; text-transform: uppercase;
+  }
+  #coverGeneric { display: flex; flex-direction: column; align-items: center; }
+
   /* ── BARRA DE HERRAMIENTA ── */
   .kit-toolbar {
     display: flex; align-items: center; justify-content: space-between;
@@ -481,12 +498,24 @@
 
 <!-- ── PANTALLA DE INICIO ─────────────────────── -->
 <div id="coverScreen">
-  <div class="cover-eyebrow">Kit de venta · Equipo comercial</div>
-  <h1 class="cover-title">10 minutos con cualquier prospecto</h1>
-  <div class="cover-field">
-    <label>Tu nombre (ejecutivo)</label>
-    <input type="text" id="execName" placeholder="Ej: Martín">
+
+  <!-- Bienvenida personalizada (usuario identificado por Cloudflare Access) -->
+  <div id="coverGreeting">
+    <p class="cover-hello">Hola,</p>
+    <h1 class="cover-name" id="coverGreetingName"></h1>
+    <p class="cover-welcome">Bienvenido al Portal Interno · RiO Impulso Digital</p>
   </div>
+
+  <!-- Pantalla genérica (usuario no identificado) -->
+  <div id="coverGeneric">
+    <div class="cover-eyebrow">Kit de venta · Equipo comercial</div>
+    <h1 class="cover-title">10 minutos con cualquier prospecto</h1>
+    <div class="cover-field">
+      <label>Tu nombre (ejecutivo)</label>
+      <input type="text" id="execName" placeholder="Ej: Martín">
+    </div>
+  </div>
+
   <div class="cover-mode">
     <label>¿Cómo contactas hoy?</label>
     <div class="mode-toggle" id="contactModeToggle">
@@ -494,7 +523,8 @@
       <button type="button" class="fc-btn" data-mode="terreno">Terreno</button>
     </div>
   </div>
-  <button class="start-btn" onclick="startNewClient()">Haz clic para ingresar un nuevo cliente</button>
+  <button class="start-btn" onclick="startNewClient()">Comenzar</button>
+
 </div>
 
 <!-- ── PANTALLA DE FORMULARIO ────────────────── -->
@@ -987,6 +1017,35 @@
 <script src="../assets/js/main.js?v=20260627" defer></script>
 
 <script>
+  /* ── IDENTIFICACIÓN POR CLOUDFLARE ACCESS ── */
+  const USER_MAP = {
+    'xikorivera@gmail.com':         'Pablo',
+    'albertoperezmatta@gmail.com':  'Alberto',
+    'brenda@rioimpulsodigital.com': 'Brenda'
+  };
+
+  function getCFUserEmail() {
+    const cookie = document.cookie.split('; ').find(r => r.startsWith('CF_Authorization='));
+    if (!cookie) return null;
+    try {
+      const payload = JSON.parse(atob(cookie.split('=')[1].split('.')[1]));
+      return payload.email || null;
+    } catch(e) { return null; }
+  }
+
+  (function initUser() {
+    const email = getCFUserEmail();
+    const name  = email ? USER_MAP[email] : null;
+    if (name) {
+      document.getElementById('execName').value          = name;
+      document.getElementById('coverGreetingName').textContent = name;
+      document.getElementById('coverGreeting').style.display   = 'block';
+      document.getElementById('coverGeneric').style.display    = 'none';
+    }
+  })();
+
+  /* ── ─────────────────────────────────────── ── */
+
   let sendStep = 1;
 
   function startNewClient(){
