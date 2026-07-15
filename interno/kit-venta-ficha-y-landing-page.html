@@ -1124,7 +1124,11 @@
     ficha_personalizado: 'https://mpago.la/2BbjWYG'
   };
 
-  const WHATSAPP_NUMBER = "543781410164";
+  const WHATSAPP_NUMBER    = "543781410164";
+
+  const HUBSPOT_PORTAL_ID  = '51671122';
+  const HUBSPOT_FORM_GUID  = 'cb4cb2df-ca0f-42ee-bf54-a0830e8ba6a5';
+  const HUBSPOT_ENDPOINT   = `https://api.hsforms.com/submissions/v3/integration/submit/${HUBSPOT_PORTAL_ID}/${HUBSPOT_FORM_GUID}`;
 
   function normalizePhone(raw){ return raw.replace(/[^\d]/g, ''); }
   function formatCLP(n){ return '$' + n.toLocaleString('es-CL'); }
@@ -1290,6 +1294,39 @@
     return lines.join('\n');
   }
 
+  async function doSendToCRM() {
+    const activeProduct = document.querySelector('.domain-choice-card.active');
+    const productLabel  = activeProduct ? getProductLabel(activeProduct.dataset.domain, false) : '—';
+
+    const fields = [
+      { objectTypeId: '0-1', name: 'company',                  value: document.getElementById('pname').value        || '—' },
+      { objectTypeId: '0-1', name: 'industry',                 value: document.getElementById('prubro').value       || '—' },
+      { objectTypeId: '0-1', name: 'producto_elegido',         value: productLabel },
+      { objectTypeId: '0-1', name: 'ejecutivo_responsable',    value: document.getElementById('execName').value     || '—' }
+    ];
+
+    const email    = (document.getElementById('pclientemail').value || '').trim();
+    const whatsapp = (document.getElementById('pclientwa').value    || '').trim();
+    if (email)    fields.push({ objectTypeId: '0-1', name: 'email',                    value: email });
+    if (whatsapp) fields.push({ objectTypeId: '0-1', name: 'hs_whatsapp_phone_number', value: whatsapp.replace(/[^\d+]/g, '') });
+
+    const payload = {
+      fields,
+      context: { pageUri: window.location.href, pageName: document.title }
+    };
+
+    const res = await fetch(HUBSPOT_ENDPOINT, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${res.status}`);
+    }
+  }
+
   function flashStatus(msg){
     const status = document.getElementById('seqStatus');
     status.textContent = msg;
@@ -1394,7 +1431,10 @@
     advanceStep();
     if(sendStep > 4){
       updateSendUI();
-      setTimeout(() => { resetForm(); sendStep = 1; updateSendUI(); window.scrollTo(0, 0); }, 1000);
+      doSendToCRM()
+        .then(() => flashStatus('Contacto registrado en CRM ✓'))
+        .catch(err  => console.error('HubSpot CRM error:', err));
+      setTimeout(() => { resetForm(); sendStep = 1; updateSendUI(); window.scrollTo(0, 0); }, 1500);
     } else {
       updateSendUI();
     }
