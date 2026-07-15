@@ -460,16 +460,14 @@
     <div class="kit-toolbar">
       <div class="kit-toolbar-left">
         <span class="kit-badge">Uso interno · Equipo comercial</span>
-        <div class="exec-name-wrap" id="execNameWrap" style="display:none;">
-          <input type="text" id="execName" placeholder="Tu nombre">
-        </div>
+        <input type="hidden" id="execName" value="">
       </div>
       <div class="kit-toolbar-right">
         <div class="mode-toggle" id="contactModeToggle">
           <button type="button" class="fc-btn active" data-mode="llamada">Llamada</button>
           <button type="button" class="fc-btn" data-mode="terreno">Terreno</button>
         </div>
-        <button class="discard-link" id="discardBtnLabel" onclick="discardCall()">Descartar llamada</button>
+        <button class="discard-link" id="discardBtnLabel" onclick="discardCall()">Descartar Lead</button>
       </div>
     </div>
 
@@ -962,11 +960,7 @@
   (function initUser() {
     const email = getCFUserEmail();
     const name  = email ? USER_MAP[email] : null;
-    if (name) {
-      document.getElementById('execName').value = name;
-    } else {
-      document.getElementById('execNameWrap').style.display = 'block';
-    }
+    if (name) { document.getElementById('execName').value = name; }
   })();
 
   /* ── ─────────────────────────────────────── ── */
@@ -995,22 +989,22 @@
 
   const MODE_TEXT = {
     llamada: {
-      discardBtn: 'Descartar llamada',
+      discardBtn: 'Descartar Lead',
       prepTitle: 'Antes de llamar',
       prepText: 'Busca el negocio en Google Maps para ver si tiene ficha activa, y marca la opción correspondiente abajo. <b>Si tiene ficha</b>, aprovecha para revisar sus fotos, reseñas y categoría — con eso ya llegas con más contexto a la llamada. <b>Si no tiene</b>, no hay nada que revisar ahí, directo al guion correspondiente. En cualquiera de los dos casos, clasifica mentalmente qué tipo de urgencia (A/B/C/D) le corresponde según su rubro — eso lo vas a confirmar recién en el paso 3.',
       checkNote: 'El dominio propio tiene un costo de renovación anual aproximado de <b>$10.000 CLP</b>, aparte del pago único inicial. Además, <b>la dirección que el cliente pida es tentativa</b> — puede que ya esté registrada por otra persona. Nunca confirmes un dominio propio como definitivo en la llamada: siempre aclara que queda sujeto a verificar disponibilidad, y que si no está libre, se le proponen alternativas.',
       flowTitle: 'Orden de la llamada',
       flowStep1: 'Antes de llamar: revisa si el negocio tiene ficha de Google activa (buscándolo en Maps) y marca el check correspondiente arriba — eso decide qué guion y qué preguntas siguen.',
-      discardConfirm: '¿Descartar esta llamada y limpiar todos los campos? No se envía nada y no se puede deshacer.'
+      discardConfirm: '¿Descartar este lead y limpiar todos los campos? No se envía nada y no se puede deshacer.'
     },
     terreno: {
-      discardBtn: 'Descartar visita',
+      discardBtn: 'Descartar Lead',
       prepTitle: 'Antes de la visita',
       prepText: 'Busca el negocio en Google Maps para ver si tiene ficha activa, y marca la opción correspondiente abajo. <b>Si tiene ficha</b>, aprovecha para revisar sus fotos, reseñas y categoría — con eso ya llegas con más contexto a la visita. <b>Si no tiene</b>, no hay nada que revisar ahí, directo al guion correspondiente. En cualquiera de los dos casos, clasifica mentalmente qué tipo de urgencia (A/B/C/D) le corresponde según su rubro — eso lo vas a confirmar recién en el paso 3.',
       checkNote: 'El dominio propio tiene un costo de renovación anual aproximado de <b>$10.000 CLP</b>, aparte del pago único inicial. Además, <b>la dirección que el cliente pida es tentativa</b> — puede que ya esté registrada por otra persona. Nunca confirmes un dominio propio como definitivo en la visita: siempre aclara que queda sujeto a verificar disponibilidad, y que si no está libre, se le proponen alternativas.',
       flowTitle: 'Orden de la visita',
       flowStep1: 'Antes de visitar: revisa si el negocio tiene ficha de Google activa (buscándolo en Maps) y marca el check correspondiente arriba — eso decide qué guion y qué preguntas siguen.',
-      discardConfirm: '¿Descartar esta visita y limpiar todos los campos? No se envía nada y no se puede deshacer.'
+      discardConfirm: '¿Descartar este lead y limpiar todos los campos? No se envía nada y no se puede deshacer.'
     }
   };
 
