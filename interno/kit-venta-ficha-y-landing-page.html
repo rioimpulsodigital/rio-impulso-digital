@@ -906,7 +906,7 @@
 
       <div id="saleSuccess">
         <div class="sale-success-card">
-          <p class="sale-success-title">¡Excelente trabajo!</p>
+          <p class="sale-success-title" id="saleSuccessTitle">¡Excelente trabajo!</p>
           <p class="sale-success-msg">Venta realizada con éxito. No olvides recordarle al cliente que debe enviarnos sus fotos y logo (si tiene).</p>
           <button class="start-btn" style="margin-top:20px;" onclick="nextProspect()">Siguiente prospecto →</button>
         </div>
@@ -1460,6 +1460,8 @@
     advanceStep();
     if(sendStep > 4){
       updateSendUI();
+      const execName = document.getElementById('execName').value || '';
+      document.getElementById('saleSuccessTitle').textContent = execName ? `¡Excelente trabajo, ${execName}!` : '¡Excelente trabajo!';
       document.getElementById('saleSuccess').style.display = 'block';
       document.getElementById('saleSuccess').scrollIntoView({ behavior: 'smooth', block: 'center' });
       doSendToCRM()
