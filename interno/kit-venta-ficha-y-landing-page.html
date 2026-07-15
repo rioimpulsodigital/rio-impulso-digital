@@ -1322,7 +1322,14 @@
   }
 
   function runPaymentStep(){
-    doSendPaymentLink();
+    const ok = doSendPaymentLink();
+    if(ok){
+      const step = document.querySelector('#sendSequence .send-step');
+      step.classList.add('done');
+      step.querySelector('.seq-btn').disabled = true;
+      step.querySelector('.seq-btn').textContent = 'Enviado';
+      step.querySelector('.ss-num').textContent = '✓';
+    }
   }
 
   async function doCloseVenta(){
