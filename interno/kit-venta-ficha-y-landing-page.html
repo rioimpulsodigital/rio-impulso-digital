@@ -992,8 +992,9 @@
   function startNewClient(){
     document.getElementById('coverScreen').style.display = 'none';
     document.getElementById('formScreen').style.display = 'block';
+    window.scrollTo(0, 0);
     updateScript();
-    document.getElementById('pname').focus();
+    document.getElementById('pname').focus({ preventScroll: true });
   }
 
   function showCover(){
