@@ -370,6 +370,8 @@
   }
   button.seq-btn:hover:not(:disabled) { background: var(--p-dark); }
   button.seq-btn:disabled { background: var(--line); color: var(--muted); cursor: not-allowed; }
+  button.seq-btn--close { background: var(--coral); }
+  button.seq-btn--close:hover:not(:disabled) { background: #e55a5a; }
 
   button.discard-link {
     background: none; border: 1px solid var(--coral); color: var(--coral);
@@ -873,33 +875,19 @@
       <p class="domain-note">Recuerda: este dominio es tentativo hasta confirmar disponibilidad. Nunca prometas la dirección exacta como definitiva.</p>
 
       <div class="send-sequence" id="sendSequence">
-        <div class="send-step" data-step="1">
+        <div class="send-step active">
           <div class="ss-info">
             <span class="ss-num">1</span>
             <span class="ss-label">Enviar link de pago al cliente por WhatsApp</span>
           </div>
-          <button class="seq-btn" onclick="runStep(1)">Enviar</button>
+          <button class="seq-btn" onclick="runPaymentStep()">Enviar</button>
         </div>
-        <div class="send-step" data-step="2">
+        <div class="send-step active">
           <div class="ss-info">
             <span class="ss-num">2</span>
-            <span class="ss-label">Enviar resumen de venta a RiO Impulso Digital</span>
+            <span class="ss-label">Cerrar venta y registrar en CRM</span>
           </div>
-          <button class="seq-btn" onclick="runStep(2)" disabled>Enviar</button>
-        </div>
-        <div class="send-step" data-step="3">
-          <div class="ss-info">
-            <span class="ss-num">3</span>
-            <span class="ss-label">Enviar respuestas de Ficha de Google</span>
-          </div>
-          <button class="seq-btn" onclick="runStep(3)" disabled>Enviar</button>
-        </div>
-        <div class="send-step" data-step="4">
-          <div class="ss-info">
-            <span class="ss-num">4</span>
-            <span class="ss-label">Enviar respuestas de Landing Page</span>
-          </div>
-          <button class="seq-btn" onclick="runStep(4)" disabled>Enviar</button>
+          <button class="seq-btn seq-btn--close" onclick="runCloseVenta()">Cerrar venta</button>
         </div>
       </div>
       <span class="copy-status" id="seqStatus"></span>
@@ -986,8 +974,6 @@
   })();
 
   /* ── ─────────────────────────────────────── ── */
-
-  let sendStep = 1;
 
   function updateScript(){
     renderOpeningScript();
@@ -1146,8 +1132,6 @@
     ficha_personalizado: 'https://mpago.la/2BbjWYG'
   };
 
-  const WHATSAPP_NUMBER    = "543781410164";
-
   const HUBSPOT_PORTAL_ID  = '51671122';
   const HUBSPOT_FORM_GUID  = 'cb4cb2df-ca0f-42ee-bf54-a0830e8ba6a5';
   const HUBSPOT_ENDPOINT   = `https://api.hsforms.com/submissions/v3/integration/submit/${HUBSPOT_PORTAL_ID}/${HUBSPOT_FORM_GUID}`;
@@ -1226,27 +1210,26 @@
     return lines.join('\n');
   }
 
-  function buildSalesSummaryText(){
+  function buildDesafioText(){
     const name       = document.getElementById('pname').value       || '(sin nombre)';
     const clientName = document.getElementById('pclientname').value || '—';
-    const clientWa   = document.getElementById('pclientwa').value   || '(sin whatsapp)';
     const exec       = document.getElementById('execName').value    || '(sin ejecutivo)';
     const fecha      = new Date().toLocaleDateString('es-419');
+    const activeProduct = document.querySelector('.domain-choice-card.active');
+    const productLabel  = activeProduct ? getProductLabel(activeProduct.dataset.domain, false) : '(sin producto)';
+    const activeType    = document.querySelector('.type-card.active');
 
     let lines = [
-      `Resumen de venta — ${name}`,
+      `Empresa: ${name}`,
       `Contacto: ${clientName}`,
+      `WhatsApp: ${document.getElementById('pclientwa').value || '—'}`,
+      `Email: ${document.getElementById('pclientemail').value || '—'}`,
+      `Producto: ${productLabel}`,
       `Ejecutivo: ${exec}`,
-      `WhatsApp cliente: ${clientWa}`,
-      `Email cliente: ${document.getElementById('pclientemail').value || '(sin email)'}`,
       `Fecha: ${fecha}`,
-      `¿Tenía ficha de Google?: ${hasFicha ? 'Sí' : 'No'}`
+      `Ficha de Google previa: ${hasFicha ? 'Sí' : 'No'}`
     ];
 
-    const activeProduct = document.querySelector('.domain-choice-card.active');
-    if(activeProduct){ lines.push(`Producto elegido: ${getProductLabel(activeProduct.dataset.domain, false)}`); }
-
-    const activeType = document.querySelector('.type-card.active');
     if(activeType){ lines.push(`Tipo de urgencia: ${activeType.dataset.type} — ${activeType.querySelector('.name').textContent}`); }
 
     return lines.join('\n');
@@ -1316,46 +1299,6 @@
     return lines.join('\n');
   }
 
-  async function doSendToCRM() {
-    const activeProduct = document.querySelector('.domain-choice-card.active');
-    const productLabel  = activeProduct ? getProductLabel(activeProduct.dataset.domain, false) : '—';
-
-    const clientName = (document.getElementById('pclientname').value || '').trim();
-    const nameParts  = clientName.split(' ');
-    const firstname  = nameParts[0] || '';
-    const lastname   = nameParts.slice(1).join(' ') || '';
-
-    const fields = [
-      { objectTypeId: '0-1', name: 'company',               value: document.getElementById('pname').value    || '—' },
-      { objectTypeId: '0-1', name: 'producto_elegido',      value: productLabel },
-      { objectTypeId: '0-1', name: 'ejecutivo_responsable', value: document.getElementById('execName').value || '—' }
-    ];
-
-    if (firstname) fields.push({ objectTypeId: '0-1', name: 'firstname', value: firstname });
-    if (lastname)  fields.push({ objectTypeId: '0-1', name: 'lastname',  value: lastname });
-
-    const email    = (document.getElementById('pclientemail').value || '').trim();
-    const whatsapp = (document.getElementById('pclientwa').value    || '').trim();
-    if (email)    fields.push({ objectTypeId: '0-1', name: 'email',                    value: email });
-    if (whatsapp) fields.push({ objectTypeId: '0-1', name: 'hs_whatsapp_phone_number', value: whatsapp.replace(/[^\d+]/g, '') });
-
-    const payload = {
-      fields,
-      context: { pageUri: window.location.href, pageName: document.title }
-    };
-
-    const res = await fetch(HUBSPOT_ENDPOINT, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload)
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `HTTP ${res.status}`);
-    }
-  }
-
   function flashStatus(msg){
     const status = document.getElementById('seqStatus');
     status.textContent = msg;
@@ -1378,99 +1321,66 @@
     return true;
   }
 
-  function doSendSalesSummary(){
-    const text = buildSalesSummaryText();
-    if(navigator.clipboard){ navigator.clipboard.writeText(text).catch(()=>{}); }
-    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`, '_blank');
-    flashStatus('Abriendo WhatsApp de RiO (resumen de venta)...');
-    return true;
+  function runPaymentStep(){
+    doSendPaymentLink();
   }
 
-  function doSendFichaAnswers(){
-    const text = buildFichaAnswersText();
-    if(navigator.clipboard){ navigator.clipboard.writeText(text).catch(()=>{}); }
-    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`, '_blank');
-    flashStatus('Abriendo WhatsApp de RiO (respuestas de Ficha de Google)...');
-    return true;
-  }
+  async function doCloseVenta(){
+    const activeProduct = document.querySelector('.domain-choice-card.active');
+    const productLabel  = activeProduct ? getProductLabel(activeProduct.dataset.domain, false) : '—';
+    const clientName    = (document.getElementById('pclientname').value || '').trim();
+    const nameParts     = clientName.split(' ');
+    const firstname     = nameParts[0] || '';
+    const lastname      = nameParts.slice(1).join(' ') || '';
 
-  function doSendLandingAnswers(){
-    const text = buildLandingAnswersText();
-    if(navigator.clipboard){ navigator.clipboard.writeText(text).catch(()=>{}); }
-    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`, '_blank');
-    flashStatus('Abriendo WhatsApp de RiO (respuestas de Landing Page)...');
-    return true;
-  }
+    const fields = [
+      { objectTypeId: '0-1', name: 'company',               value: document.getElementById('pname').value    || '—' },
+      { objectTypeId: '0-1', name: 'producto_elegido',      value: productLabel },
+      { objectTypeId: '0-1', name: 'ejecutivo_responsable', value: document.getElementById('execName').value || '—' },
+      { objectTypeId: '0-1', name: 'desafio',               value: buildDesafioText() },
+      { objectTypeId: '0-1', name: 'respuestas_landing',    value: buildLandingAnswersText() }
+    ];
 
-  function currentProduct(){
-    const el = document.querySelector('.domain-choice-card.active');
-    return el ? PRODUCTS[el.dataset.domain] : null;
-  }
+    if(firstname) fields.push({ objectTypeId: '0-1', name: 'firstname', value: firstname });
+    if(lastname)  fields.push({ objectTypeId: '0-1', name: 'lastname',  value: lastname });
 
-  function stepApplies(n){
-    if(n <= 2) return true;
-    if(n === 3){
-      if(hasFicha) return false;
-      const p = currentProduct();
-      return p ? p.ficha : true;
+    const email    = (document.getElementById('pclientemail').value || '').trim();
+    const whatsapp = (document.getElementById('pclientwa').value    || '').trim();
+    if(email)    fields.push({ objectTypeId: '0-1', name: 'email',                    value: email });
+    if(whatsapp) fields.push({ objectTypeId: '0-1', name: 'hs_whatsapp_phone_number', value: whatsapp.replace(/[^\d+]/g, '') });
+
+    if(!hasFicha){
+      fields.push({ objectTypeId: '0-1', name: 'respuestas_ficha', value: buildFichaAnswersText() });
     }
-    if(n === 4){
-      const p = currentProduct();
-      return p ? p.landing : true;
-    }
-    return true;
-  }
 
-  function updateSendUI(){
-    const visible = [1,2,3,4].filter(stepApplies);
-    document.querySelectorAll('.send-step').forEach(step => {
-      const n = parseInt(step.dataset.step, 10);
-      if(!stepApplies(n)){ step.style.display = 'none'; return; }
-      step.style.display = '';
-      const displayNum = visible.indexOf(n) + 1;
-      const btn = step.querySelector('.seq-btn');
-      const num = step.querySelector('.ss-num');
-      if(n < sendStep){
-        step.classList.add('done'); step.classList.remove('active');
-        btn.disabled = true; btn.textContent = 'Enviado'; num.textContent = '✓';
-      } else if(n === sendStep){
-        step.classList.add('active'); step.classList.remove('done');
-        btn.disabled = false; btn.textContent = 'Enviar'; num.textContent = displayNum;
-      } else {
-        step.classList.remove('active','done');
-        btn.disabled = true; btn.textContent = 'Enviar'; num.textContent = displayNum;
-      }
+    const payload = {
+      fields,
+      context: { pageUri: window.location.href, pageName: document.title }
+    };
+
+    const res = await fetch(HUBSPOT_ENDPOINT, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload)
     });
-  }
 
-  function advanceStep(){
-    let n = sendStep + 1;
-    while(n <= 4 && !stepApplies(n)) n++;
-    sendStep = n;
-  }
-
-  function runStep(n){
-    if(n !== sendStep) return;
-    let ok = false;
-    if(n === 1) ok = doSendPaymentLink();
-    else if(n === 2) ok = doSendSalesSummary();
-    else if(n === 3) ok = doSendFichaAnswers();
-    else if(n === 4) ok = doSendLandingAnswers();
-    if(!ok) return;
-    advanceStep();
-    if(sendStep > 4){
-      updateSendUI();
-      const execName = document.getElementById('execName').value || '';
-      document.getElementById('saleSuccessTitle').textContent = execName ? `¡Excelente trabajo, ${execName}!` : '¡Excelente trabajo!';
-      document.getElementById('saleSuccess').style.display = 'block';
-      document.getElementById('saleSuccess').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      doSendToCRM()
-        .then(() => flashStatus('Contacto registrado en CRM ✓'))
-        .catch(err  => console.error('HubSpot CRM error:', err));
-    } else {
-      updateSendUI();
+    if(!res.ok){
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `HTTP ${res.status}`);
     }
   }
+
+  function runCloseVenta(){
+    const execName = document.getElementById('execName').value || '';
+    document.getElementById('saleSuccessTitle').textContent = execName ? `¡Excelente trabajo, ${execName}!` : '¡Excelente trabajo!';
+    document.getElementById('saleSuccess').style.display = 'block';
+    document.getElementById('saleSuccess').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    doCloseVenta()
+      .then(() => flashStatus('Venta registrada en CRM ✓'))
+      .catch(err => console.error('HubSpot CRM error:', err));
+  }
+
 
   function resetForm(){
     ['pname','pclientname','pclientwa','pclientemail','desiredDomain'].forEach(id => { document.getElementById(id).value = ''; });
@@ -1484,14 +1394,12 @@
     document.querySelectorAll('#fichaToggle .fc-btn').forEach(b => b.classList.remove('active'));
     document.querySelector('#fichaToggle .fc-btn[data-has-ficha="si"]').classList.add('active');
     applyFichaState();
-    sendStep = 1;
-    updateSendUI();
     updateScript();
   }
 
   function nextProspect(){
     document.getElementById('saleSuccess').style.display = 'none';
-    resetForm(); sendStep = 1; updateSendUI(); window.scrollTo(0, 0);
+    resetForm(); window.scrollTo(0, 0);
   }
 
   function discardCall(){
@@ -1501,7 +1409,6 @@
   }
 
   applyFichaState();
-  updateSendUI();
 </script>
 </body>
 </html>
