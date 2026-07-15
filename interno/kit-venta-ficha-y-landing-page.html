@@ -397,6 +397,20 @@
   .copy-status { font-size: .8rem; color: var(--sec); opacity: 0; transition: opacity .2s; }
   .copy-status.show { opacity: 1; }
 
+  /* ── MENSAJE DE ÉXITO ── */
+  #saleSuccess { display: none; margin-top: 24px; }
+  .sale-success-card {
+    background: var(--purple-soft); border: 2px solid var(--p);
+    border-radius: var(--r-m); padding: 28px 32px; text-align: center;
+  }
+  .sale-success-title {
+    font-family: var(--ff-head); font-size: 1.3rem; font-weight: 800;
+    color: var(--p); letter-spacing: -.02em; margin-bottom: 10px;
+  }
+  .sale-success-msg {
+    font-size: .9rem; color: var(--muted); line-height: 1.65;
+  }
+
   @media print {
     button.seq-btn, .send-sequence, button.discard-link, .kit-toolbar { display: none; }
   }
@@ -497,8 +511,8 @@
         <input type="text" id="pname" placeholder="Nombre del negocio">
       </div>
       <div class="field">
-        <label>Rubro</label>
-        <input type="text" id="prubro" placeholder="Ej: dentista, gimnasio, restaurante">
+        <label>Nombre del cliente</label>
+        <input type="text" id="pclientname" placeholder="Ej: Juan García">
       </div>
       <div class="field">
         <label>WhatsApp del cliente</label>
@@ -587,7 +601,7 @@
       </div>
 
       <div class="qcard">
-        <div class="qtext"><span class="n">01</span>¿Qué vendes y para quién es principalmente? <span style="font-weight:400;color:var(--muted);">(incluye el rango de precio)</span></div>
+        <div class="qtext"><span class="n">01</span>¿Qué vendes, para quién es principalmente y cuál es el rubro? <span style="font-weight:400;color:var(--muted);">(incluye el rango de precio)</span></div>
         <textarea id="q1" placeholder="Notas..."></textarea>
       </div>
       <div class="qcard">
@@ -889,6 +903,13 @@
         </div>
       </div>
       <span class="copy-status" id="seqStatus"></span>
+
+      <div id="saleSuccess">
+        <div class="sale-success-card">
+          <p class="sale-success-title">¡Excelente trabajo!</p>
+          <p class="sale-success-msg">Venta realizada con éxito. No olvides recordarle al cliente que debe enviarnos sus fotos y logo (si tiene).</p>
+        </div>
+      </div>
     </section>
 
     <!-- FLOW RECAP -->
@@ -1205,14 +1226,15 @@
   }
 
   function buildSalesSummaryText(){
-    const name    = document.getElementById('pname').value         || '(sin nombre)';
-    const rubro   = document.getElementById('prubro').value        || '(sin rubro)';
-    const clientWa = document.getElementById('pclientwa').value    || '(sin whatsapp)';
-    const exec    = document.getElementById('execName').value      || '(sin ejecutivo)';
-    const fecha   = new Date().toLocaleDateString('es-419');
+    const name       = document.getElementById('pname').value       || '(sin nombre)';
+    const clientName = document.getElementById('pclientname').value || '—';
+    const clientWa   = document.getElementById('pclientwa').value   || '(sin whatsapp)';
+    const exec       = document.getElementById('execName').value    || '(sin ejecutivo)';
+    const fecha      = new Date().toLocaleDateString('es-419');
 
     let lines = [
-      `Resumen de venta — ${name} (${rubro})`,
+      `Resumen de venta — ${name}`,
+      `Contacto: ${clientName}`,
       `Ejecutivo: ${exec}`,
       `WhatsApp cliente: ${clientWa}`,
       `Email cliente: ${document.getElementById('pclientemail').value || '(sin email)'}`,
@@ -1230,15 +1252,15 @@
   }
 
   function buildContactBlock(){
-    const wa    = document.getElementById('pclientwa').value    || '—';
-    const email = document.getElementById('pclientemail').value || '—';
-    const dir   = !hasFicha ? (document.getElementById('f2').value || '—') : '— (no se pidió, el negocio ya tenía ficha)';
-    return [`WhatsApp: ${wa}`, `Email: ${email}`, `Dirección / zona de servicio: ${dir}`];
+    const clientName = document.getElementById('pclientname').value || '—';
+    const wa         = document.getElementById('pclientwa').value   || '—';
+    const email      = document.getElementById('pclientemail').value || '—';
+    const dir        = !hasFicha ? (document.getElementById('f2').value || '—') : '— (no se pidió, el negocio ya tenía ficha)';
+    return [`Contacto: ${clientName}`, `WhatsApp: ${wa}`, `Email: ${email}`, `Dirección / zona de servicio: ${dir}`];
   }
 
   function buildFichaAnswersText(){
-    const name  = document.getElementById('pname').value  || '(sin nombre)';
-    const rubro = document.getElementById('prubro').value || '(sin rubro)';
+    const name  = document.getElementById('pname').value    || '(sin nombre)';
     const exec  = document.getElementById('execName').value || '(sin ejecutivo)';
 
     const fichaFields = [
@@ -1248,7 +1270,7 @@
       ['f5', "F4. Métodos de pago / retiro / entrega"]
     ];
 
-    let lines = [`Respuestas de Ficha de Google — ${name} (${rubro})`, `Ejecutivo: ${exec}`, ''];
+    let lines = [`Respuestas de Ficha de Google — ${name}`, `Ejecutivo: ${exec}`, ''];
     lines.push(...buildContactBlock());
     lines.push('');
     lines.push(`Categoría principal (de Rubro): ${rubro}`);
@@ -1261,8 +1283,7 @@
   }
 
   function buildLandingAnswersText(){
-    const name  = document.getElementById('pname').value  || '(sin nombre)';
-    const rubro = document.getElementById('prubro').value || '(sin rubro)';
+    const name  = document.getElementById('pname').value    || '(sin nombre)';
     const exec  = document.getElementById('execName').value || '(sin ejecutivo)';
 
     const landingFields = [
@@ -1276,7 +1297,7 @@
       ['qCanal',"Canal de contacto"]
     ];
 
-    let lines = [`Respuestas de Landing Page — ${name} (${rubro})`, `Ejecutivo: ${exec}`, ''];
+    let lines = [`Respuestas de Landing Page — ${name}`, `Ejecutivo: ${exec}`, ''];
     lines.push(...buildContactBlock());
     lines.push('');
     landingFields.forEach(([id, label]) => { lines.push(`${label}: ${document.getElementById(id).value || '—'}`); });
@@ -1298,12 +1319,19 @@
     const activeProduct = document.querySelector('.domain-choice-card.active');
     const productLabel  = activeProduct ? getProductLabel(activeProduct.dataset.domain, false) : '—';
 
+    const clientName = (document.getElementById('pclientname').value || '').trim();
+    const nameParts  = clientName.split(' ');
+    const firstname  = nameParts[0] || '';
+    const lastname   = nameParts.slice(1).join(' ') || '';
+
     const fields = [
-      { objectTypeId: '0-1', name: 'company',                  value: document.getElementById('pname').value        || '—' },
-      { objectTypeId: '0-1', name: 'industry',                 value: document.getElementById('prubro').value       || '—' },
-      { objectTypeId: '0-1', name: 'producto_elegido',         value: productLabel },
-      { objectTypeId: '0-1', name: 'ejecutivo_responsable',    value: document.getElementById('execName').value     || '—' }
+      { objectTypeId: '0-1', name: 'company',               value: document.getElementById('pname').value    || '—' },
+      { objectTypeId: '0-1', name: 'producto_elegido',      value: productLabel },
+      { objectTypeId: '0-1', name: 'ejecutivo_responsable', value: document.getElementById('execName').value || '—' }
     ];
+
+    if (firstname) fields.push({ objectTypeId: '0-1', name: 'firstname', value: firstname });
+    if (lastname)  fields.push({ objectTypeId: '0-1', name: 'lastname',  value: lastname });
 
     const email    = (document.getElementById('pclientemail').value || '').trim();
     const whatsapp = (document.getElementById('pclientwa').value    || '').trim();
@@ -1431,17 +1459,21 @@
     advanceStep();
     if(sendStep > 4){
       updateSendUI();
+      document.getElementById('saleSuccess').style.display = 'block';
       doSendToCRM()
         .then(() => flashStatus('Contacto registrado en CRM ✓'))
         .catch(err  => console.error('HubSpot CRM error:', err));
-      setTimeout(() => { resetForm(); sendStep = 1; updateSendUI(); window.scrollTo(0, 0); }, 1500);
+      setTimeout(() => {
+        document.getElementById('saleSuccess').style.display = 'none';
+        resetForm(); sendStep = 1; updateSendUI(); window.scrollTo(0, 0);
+      }, 4000);
     } else {
       updateSendUI();
     }
   }
 
   function resetForm(){
-    ['pname','prubro','pclientwa','pclientemail','desiredDomain'].forEach(id => { document.getElementById(id).value = ''; });
+    ['pname','pclientname','pclientwa','pclientemail','desiredDomain'].forEach(id => { document.getElementById(id).value = ''; });
     document.querySelectorAll('.qcard textarea').forEach(ta => ta.value = '');
     document.getElementById('revealNotes').value = '';
     document.querySelectorAll('.type-card').forEach(c => c.classList.remove('active'));
