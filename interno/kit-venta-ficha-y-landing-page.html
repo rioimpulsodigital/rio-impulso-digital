@@ -23,73 +23,6 @@
     --line:        #e7e1ec;
   }
 
-  /* ── PANTALLA DE INICIO ── */
-  #coverScreen {
-    min-height: 100vh;
-    background: var(--p-deep);
-    display: flex; flex-direction: column; align-items: center;
-    justify-content: center; text-align: center;
-    padding: 90px 20px 60px;
-  }
-  .cover-eyebrow {
-    font-family: var(--ff-mono); font-size: .68rem;
-    color: var(--coral); letter-spacing: .12em; text-transform: uppercase;
-    font-weight: 500; margin-bottom: 12px;
-  }
-  h1.cover-title {
-    font-family: var(--ff-head); font-size: clamp(1.5rem, 4vw, 2rem);
-    font-weight: 800; color: var(--white); letter-spacing: -.02em;
-    margin: 0 0 30px; max-width: 480px;
-  }
-  .cover-field {
-    display: flex; flex-direction: column; gap: 6px;
-    margin-bottom: 24px; width: 100%; max-width: 280px;
-  }
-  .cover-field label {
-    font-family: var(--ff-mono); font-size: .65rem; font-weight: 500;
-    color: rgba(255,255,255,.55); text-transform: uppercase; letter-spacing: .07em;
-  }
-  .cover-field input {
-    border: none; border-bottom: 2px solid rgba(107,91,149,.8); background: transparent;
-    font-family: var(--ff-body); font-size: 1rem; padding: 6px 2px;
-    color: var(--white); text-align: center;
-  }
-  .cover-field input::placeholder { color: rgba(255,255,255,.3); }
-  .cover-field input:focus { outline: none; border-color: var(--p); }
-  .cover-mode {
-    display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 28px;
-  }
-  .cover-mode label {
-    font-family: var(--ff-mono); font-size: .65rem; font-weight: 500;
-    color: rgba(255,255,255,.55); text-transform: uppercase; letter-spacing: .07em;
-  }
-  .cover-mode .mode-toggle { display: flex; gap: 10px; }
-  button.start-btn {
-    background: var(--p); color: var(--white); border: none; border-radius: var(--r);
-    padding: 16px 36px; font-family: var(--ff-head); font-weight: 700; font-size: .95rem;
-    letter-spacing: .02em; cursor: pointer; transition: background .15s ease, transform .1s ease;
-  }
-  button.start-btn:hover  { background: var(--coral); }
-  button.start-btn:active { transform: scale(.98); }
-  #formScreen { display: none; }
-
-  /* ── BIENVENIDA PERSONALIZADA ── */
-  #coverGreeting { display: none; text-align: center; margin-bottom: 36px; }
-  .cover-hello {
-    font-family: var(--ff-mono); font-size: .72rem;
-    color: rgba(255,255,255,.45); letter-spacing: .1em; text-transform: uppercase;
-    margin-bottom: 6px;
-  }
-  .cover-name {
-    font-family: var(--ff-head); font-size: clamp(2.2rem, 6vw, 3.2rem);
-    font-weight: 800; color: var(--white); letter-spacing: -.03em; margin: 0 0 8px;
-  }
-  .cover-welcome {
-    font-family: var(--ff-mono); font-size: .65rem;
-    color: rgba(255,255,255,.35); letter-spacing: .07em; text-transform: uppercase;
-  }
-  #coverGeneric { display: flex; flex-direction: column; align-items: center; }
-
   /* ── BARRA DE HERRAMIENTA ── */
   .kit-toolbar {
     display: flex; align-items: center; justify-content: space-between;
@@ -97,11 +30,20 @@
     padding: 14px 0; margin-bottom: 28px;
     border-bottom: 1px solid var(--line);
   }
+  .kit-toolbar-left  { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .kit-toolbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .kit-badge {
     font-family: var(--ff-mono); font-size: .62rem; letter-spacing: .07em;
     text-transform: uppercase; color: var(--sec);
     border: 1px solid var(--sec); border-radius: 100px; padding: 5px 12px;
   }
+  .exec-name-wrap input {
+    border: none; border-bottom: 1px solid var(--border); background: transparent;
+    font-family: var(--ff-body); font-size: .82rem; padding: 4px 2px;
+    color: var(--ink); width: 110px;
+  }
+  .exec-name-wrap input::placeholder { color: var(--muted); }
+  .exec-name-wrap input:focus { outline: none; border-color: var(--p); }
 
   /* ── CONTENEDOR DEL FORMULARIO ── */
   .form-page { max-width: 860px; margin: 0 auto; padding: 32px 28px 80px; }
@@ -496,38 +438,7 @@
   <a href="/#contacto" onclick="closeDrawer()" style="color:var(--coral)">Hablemos →</a>
 </div>
 
-<!-- ── PANTALLA DE INICIO ─────────────────────── -->
-<div id="coverScreen">
-
-  <!-- Bienvenida personalizada (usuario identificado por Cloudflare Access) -->
-  <div id="coverGreeting">
-    <p class="cover-hello">Hola,</p>
-    <h1 class="cover-name" id="coverGreetingName"></h1>
-    <p class="cover-welcome">Bienvenido al Portal Interno · RiO Impulso Digital</p>
-  </div>
-
-  <!-- Pantalla genérica (usuario no identificado) -->
-  <div id="coverGeneric">
-    <div class="cover-eyebrow">Kit de venta · Equipo comercial</div>
-    <h1 class="cover-title">10 minutos con cualquier prospecto</h1>
-    <div class="cover-field">
-      <label>Tu nombre (ejecutivo)</label>
-      <input type="text" id="execName" placeholder="Ej: Martín">
-    </div>
-  </div>
-
-  <div class="cover-mode">
-    <label>¿Cómo contactas hoy?</label>
-    <div class="mode-toggle" id="contactModeToggle">
-      <button type="button" class="fc-btn active" data-mode="llamada">Llamada</button>
-      <button type="button" class="fc-btn" data-mode="terreno">Terreno</button>
-    </div>
-  </div>
-  <button class="start-btn" onclick="startNewClient()">Comenzar</button>
-
-</div>
-
-<!-- ── PANTALLA DE FORMULARIO ────────────────── -->
+<!-- ── FORMULARIO ─────────────────────────────── -->
 <div id="formScreen">
 
   <!-- HERO -->
@@ -543,8 +454,19 @@
   <div class="form-page">
 
     <div class="kit-toolbar">
-      <span class="kit-badge">Uso interno · Equipo comercial</span>
-      <button class="discard-link" id="discardBtnLabel" onclick="discardCall()">Descartar llamada</button>
+      <div class="kit-toolbar-left">
+        <span class="kit-badge">Uso interno · Equipo comercial</span>
+        <div class="exec-name-wrap" id="execNameWrap" style="display:none;">
+          <input type="text" id="execName" placeholder="Tu nombre">
+        </div>
+      </div>
+      <div class="kit-toolbar-right">
+        <div class="mode-toggle" id="contactModeToggle">
+          <button type="button" class="fc-btn active" data-mode="llamada">Llamada</button>
+          <button type="button" class="fc-btn" data-mode="terreno">Terreno</button>
+        </div>
+        <button class="discard-link" id="discardBtnLabel" onclick="discardCall()">Descartar llamada</button>
+      </div>
     </div>
 
     <div class="priority-box">
@@ -1037,29 +959,15 @@
     const email = getCFUserEmail();
     const name  = email ? USER_MAP[email] : null;
     if (name) {
-      document.getElementById('execName').value          = name;
-      document.getElementById('coverGreetingName').textContent = name;
-      document.getElementById('coverGreeting').style.display   = 'block';
-      document.getElementById('coverGeneric').style.display    = 'none';
+      document.getElementById('execName').value = name;
+    } else {
+      document.getElementById('execNameWrap').style.display = 'block';
     }
   })();
 
   /* ── ─────────────────────────────────────── ── */
 
   let sendStep = 1;
-
-  function startNewClient(){
-    document.getElementById('coverScreen').style.display = 'none';
-    document.getElementById('formScreen').style.display = 'block';
-    window.scrollTo(0, 0);
-    updateScript();
-    document.getElementById('pname').focus({ preventScroll: true });
-  }
-
-  function showCover(){
-    document.getElementById('formScreen').style.display = 'none';
-    document.getElementById('coverScreen').style.display = 'flex';
-  }
 
   function updateScript(){
     renderOpeningScript();
@@ -1488,7 +1396,7 @@
     advanceStep();
     if(sendStep > 4){
       updateSendUI();
-      setTimeout(() => { resetForm(); sendStep = 1; updateSendUI(); showCover(); }, 1000);
+      setTimeout(() => { resetForm(); sendStep = 1; updateSendUI(); window.scrollTo(0, 0); }, 1000);
     } else {
       updateSendUI();
     }

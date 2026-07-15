@@ -55,9 +55,9 @@
 <section class="ut-hero">
   <div class="ut-hero-content">
     <a href="/" class="ut-back">Volver al inicio</a>
-    <p class="ut-label">Equipo RiO</p>
-    <h1>Portal Interno</h1>
-    <p class="ut-hero-desc">
+    <p class="ut-label" id="portalLabel">Equipo RiO</p>
+    <h1 id="portalTitle">Portal Interno</h1>
+    <p class="ut-hero-desc" id="portalDesc">
       Accede a las herramientas, documentación y recursos internos que apoyan el trabajo comercial y operativo de RiO Impulso Digital.
     </p>
   </div>
@@ -125,5 +125,32 @@
 </footer>
 
 <script src="../assets/js/main.js?v=20260627" defer></script>
+
+<script>
+  const USER_MAP = {
+    'xikorivera@gmail.com':         'Pablo',
+    'albertoperezmatta@gmail.com':  'Alberto',
+    'brenda@rioimpulsodigital.com': 'Brenda'
+  };
+
+  function getCFUserEmail() {
+    const cookie = document.cookie.split('; ').find(r => r.startsWith('CF_Authorization='));
+    if (!cookie) return null;
+    try {
+      const payload = JSON.parse(atob(cookie.split('=')[1].split('.')[1]));
+      return payload.email || null;
+    } catch(e) { return null; }
+  }
+
+  (function initPortal() {
+    const email = getCFUserEmail();
+    const name  = email ? USER_MAP[email] : null;
+    if (name) {
+      document.getElementById('portalLabel').textContent = 'Bienvenido al Portal Interno';
+      document.getElementById('portalTitle').textContent = 'Hola, ' + name + '.';
+      document.getElementById('portalDesc').textContent  = 'Selecciona una herramienta para comenzar.';
+    }
+  })();
+</script>
 </body>
 </html>
