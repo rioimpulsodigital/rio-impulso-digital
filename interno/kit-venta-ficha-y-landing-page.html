@@ -908,6 +908,7 @@
         <div class="sale-success-card">
           <p class="sale-success-title">¡Excelente trabajo!</p>
           <p class="sale-success-msg">Venta realizada con éxito. No olvides recordarle al cliente que debe enviarnos sus fotos y logo (si tiene).</p>
+          <button class="start-btn" style="margin-top:20px;" onclick="nextProspect()">Siguiente prospecto →</button>
         </div>
       </div>
     </section>
@@ -1460,13 +1461,10 @@
     if(sendStep > 4){
       updateSendUI();
       document.getElementById('saleSuccess').style.display = 'block';
+      document.getElementById('saleSuccess').scrollIntoView({ behavior: 'smooth', block: 'center' });
       doSendToCRM()
         .then(() => flashStatus('Contacto registrado en CRM ✓'))
         .catch(err  => console.error('HubSpot CRM error:', err));
-      setTimeout(() => {
-        document.getElementById('saleSuccess').style.display = 'none';
-        resetForm(); sendStep = 1; updateSendUI(); window.scrollTo(0, 0);
-      }, 4000);
     } else {
       updateSendUI();
     }
@@ -1487,6 +1485,11 @@
     sendStep = 1;
     updateSendUI();
     updateScript();
+  }
+
+  function nextProspect(){
+    document.getElementById('saleSuccess').style.display = 'none';
+    resetForm(); sendStep = 1; updateSendUI(); window.scrollTo(0, 0);
   }
 
   function discardCall(){
