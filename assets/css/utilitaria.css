@@ -15,6 +15,7 @@
   background: var(--p-deep);
   position: relative; overflow: hidden;
   padding: 5.5rem 2.5rem 2.5rem;
+  min-height: 280px;
   border-bottom: 1px solid var(--bd-dark);
 }
 .ut-hero::before {
