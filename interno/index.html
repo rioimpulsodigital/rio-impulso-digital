@@ -1,182 +1,129 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Herramientas Internas | RiO Impulso Digital</title>
-<meta name="robots" content="noindex, nofollow" />
-<link rel="icon" href="../assets/branding/rio-favicon.png" />
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --white:#ffffff;
-    --ink:#241b2e;
-    --purple:#93009f;
-    --purple-soft:#f6e9f8;
-    --coral:#ff6b6b;
-    --coral-soft:#fff0ee;
-    --violet:#6b5b95;
-    --violet-soft:#f0eef7;
-    --line:#e7e1ec;
-    --gray:#6d6478;
-    --bg:#faf8fc;
-  }
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{
-    background:var(--bg);
-    color:var(--ink);
-    font-family:'DM Sans', sans-serif;
-    line-height:1.55;
-    -webkit-font-smoothing:antialiased;
-    min-height:100vh;
-  }
-  .page{max-width:860px;margin:0 auto;padding:0 28px 80px;}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Portal Interno | RiO Impulso Digital</title>
 
-  /* HEADER */
-  header.top{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:20px 28px;
-    background:var(--ink);
-    margin:0 -28px 44px;
-  }
-  header.top img{width:130px;}
-  .badge{
-    font-size:11px;letter-spacing:.08em;text-transform:uppercase;
-    color:rgba(255,255,255,.6);font-weight:600;
-    border:1px solid rgba(255,255,255,.25);border-radius:100px;
-    padding:6px 12px;
-  }
+  <link rel="icon" type="image/png" href="../assets/branding/rio-favicon.png">
 
-  /* HERO */
-  .hero{margin-bottom:48px;}
-  .eyebrow{
-    font-size:12px;letter-spacing:.12em;text-transform:uppercase;
-    color:var(--coral);font-weight:700;margin-bottom:10px;
-  }
-  h1{
-    font-family:'DM Serif Display', serif;
-    font-size:36px;font-weight:400;color:var(--ink);
-    margin:0 0 14px;line-height:1.18;
-  }
-  h1 span{color:var(--purple);}
-  .hero p{font-size:16px;color:var(--gray);max-width:560px;}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-  /* GRID DE HERRAMIENTAS */
-  .tools-grid{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:20px;
-  }
-  @media(max-width:580px){.tools-grid{grid-template-columns:1fr;}}
-
-  .tool-card{
-    background:var(--white);
-    border:1.5px solid var(--line);
-    border-radius:16px;
-    padding:28px 26px 24px;
-    display:flex;flex-direction:column;gap:10px;
-    text-decoration:none;color:inherit;
-    transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease;
-  }
-  .tool-card:hover{
-    border-color:var(--purple);
-    box-shadow:0 6px 24px rgba(147,0,159,.10);
-    transform:translateY(-2px);
-  }
-
-  .tool-icon{
-    width:44px;height:44px;border-radius:12px;
-    display:flex;align-items:center;justify-content:center;
-    font-size:22px;margin-bottom:4px;
-    flex-shrink:0;
-  }
-  .icon-coral{background:var(--coral-soft);}
-  .icon-violet{background:var(--violet-soft);}
-
-  .tool-tag{
-    font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-    color:var(--gray);
-  }
-  .tool-card h2{
-    font-family:'DM Serif Display', serif;font-weight:400;
-    font-size:20px;color:var(--ink);line-height:1.25;
-  }
-  .tool-card p{
-    font-size:14px;color:var(--gray);line-height:1.55;flex:1;
-  }
-  .tool-link{
-    display:inline-flex;align-items:center;gap:6px;
-    font-size:13.5px;font-weight:600;color:var(--purple);
-    margin-top:4px;
-  }
-  .tool-link svg{width:14px;height:14px;stroke:var(--purple);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
-
-  /* DIVIDER */
-  .section-label{
-    font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
-    color:var(--gray);margin-bottom:18px;
-    display:flex;align-items:center;gap:10px;
-  }
-  .section-label::after{content:'';flex:1;height:1px;background:var(--line);}
-
-  /* FOOTER */
-  footer{
-    margin-top:64px;padding-top:24px;border-top:1px solid var(--line);
-    display:flex;align-items:center;justify-content:space-between;
-    flex-wrap:wrap;gap:12px;
-  }
-  footer p{font-size:13px;color:var(--gray);}
-  footer a{color:var(--purple);text-decoration:none;font-weight:600;}
-</style>
+  <link rel="stylesheet" href="../assets/css/main.css?v=20260627">
+  <link rel="stylesheet" href="../assets/css/utilitaria.css?v=20260714">
 </head>
 <body>
-<div class="page">
 
-  <header class="top">
-    <img src="../assets/branding/rio-logo-horizontal.png" alt="RiO Impulso Digital" />
-    <span class="badge">Uso interno</span>
-  </header>
+<!-- ── NAV ──────────────────────────────────────── -->
+<nav class="nav" id="mainNav">
+  <a href="/" class="nav-logo" aria-label="RiO Impulso Digital">
+    <img
+      src="../assets/branding/rio-logo-horizontal-245w.webp"
+      srcset="../assets/branding/rio-logo-horizontal-245w.webp 1x,
+              ../assets/branding/rio-logo-horizontal-429w.webp 2x,
+              ../assets/branding/rio-logo-horizontal.webp 3x"
+      alt="RiO Impulso Digital"
+      width="245" height="60"
+      fetchpriority="high"
+      onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+    >
+    <span class="nav-logo-text">RiO <em>Impulso</em> Digital</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="/#servicios">Soluciones</a></li>
+    <li><a href="/#portfolio">Proyectos</a></li>
+    <li><a href="/#nosotros">Sobre mí</a></li>
+  </ul>
+  <a href="/#contacto" class="nav-cta">Hablemos →</a>
+  <button class="nav-hamburger" aria-label="Abrir menú" onclick="openDrawer()">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
 
-  <section class="hero">
-    <p class="eyebrow">Equipo comercial</p>
-    <h1>Herramientas de <span>venta</span></h1>
-    <p>Recursos para conocer los productos, preparar reuniones y acompañar al prospecto durante el proceso comercial.</p>
-  </section>
+<div class="nav-drawer" id="navDrawer">
+  <button class="nav-drawer-close" onclick="closeDrawer()" aria-label="Cerrar">✕</button>
+  <a href="/#servicios" onclick="closeDrawer()">Soluciones</a>
+  <a href="/#portfolio" onclick="closeDrawer()">Proyectos</a>
+  <a href="/#nosotros" onclick="closeDrawer()">Sobre mí</a>
+  <a href="/#contacto" onclick="closeDrawer()" style="color:var(--coral)">Hablemos →</a>
+</div>
 
-  <p class="section-label">Materiales disponibles</p>
+<!-- ── HERO MÍNIMO ───────────────────────────────── -->
+<section class="ut-hero">
+  <div class="ut-hero-content">
+    <a href="/" class="ut-back">Volver al inicio</a>
+    <p class="ut-label">Equipo RiO</p>
+    <h1>Portal Interno</h1>
+    <p class="ut-hero-desc">
+      Accede a las herramientas, documentación y recursos internos que apoyan el trabajo comercial y operativo de RiO Impulso Digital.
+    </p>
+  </div>
+</section>
 
-  <div class="tools-grid">
+<!-- ── HERRAMIENTAS ───────────────────────────────── -->
+<div class="ut-main">
+  <div class="ut-container">
 
-    <a class="tool-card" href="./kit-venta-ficha-y-landing-page.html">
-      <div class="tool-icon icon-coral">🎯</div>
-      <span class="tool-tag">Kit de venta</span>
-      <h2>Landing Page de Venta</h2>
-      <p>Guión paso a paso para la reunión comercial: preguntas de diagnóstico, argumentos por servicio y manejo de objeciones.</p>
-      <span class="tool-link">
-        Abrir
-        <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-      </span>
-    </a>
+    <p class="ut-block-title">Herramientas disponibles</p>
 
-    <a class="tool-card" href="./rio-guia-comercial.html">
-      <div class="tool-icon icon-violet">📖</div>
-      <span class="tool-tag">Referencia</span>
-      <h2>Guía Comercial</h2>
-      <p>Descripción completa de servicios, precios de referencia, perfiles de cliente ideal y posicionamiento frente a la competencia.</p>
-      <span class="tool-link">
-        Abrir
-        <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-      </span>
-    </a>
+    <div class="ut-cards">
+
+      <a class="ut-card" href="./kit-venta-ficha-y-landing-page.html">
+        <div class="ut-card-icon ut-card-icon--coral">🎯</div>
+        <span class="ut-card-tag">Kit de venta</span>
+        <h3>Landing Page de Venta</h3>
+        <p>Guión paso a paso para la reunión comercial: preguntas de diagnóstico, argumentos por servicio y manejo de objeciones.</p>
+        <span class="ut-card-link">
+          Abrir
+          <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </span>
+      </a>
+
+      <a class="ut-card" href="./rio-guia-comercial.html">
+        <div class="ut-card-icon ut-card-icon--violet">📖</div>
+        <span class="ut-card-tag">Referencia</span>
+        <h3>Guía Comercial</h3>
+        <p>Descripción completa de servicios, precios de referencia, perfiles de cliente ideal y posicionamiento frente a la competencia.</p>
+        <span class="ut-card-link">
+          Abrir
+          <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </span>
+      </a>
+
+    </div>
 
   </div>
-
-  <footer>
-    <p>RiO Impulso Digital · Documento de uso interno</p>
-    <a href="https://www.rioimpulsodigital.com">← Volver al sitio</a>
-  </footer>
-
 </div>
+
+<!-- ── FOOTER ────────────────────────────────────── -->
+<footer>
+  <div class="footer-row">
+    <div class="footer-col">
+      <div class="footer-brand">RiO <em>Impulso</em> Digital</div>
+      <div class="footer-tag">Tecnología • Integración • Automatización</div>
+    </div>
+    <div class="footer-col footer-col--center">
+      <picture>
+        <source media="(max-width: 900px)" srcset="../assets/branding/rio-logo-primary-48x48.webp">
+        <source srcset="../assets/branding/rio-logo-primary-84x84.webp">
+        <img src="../assets/branding/rio-logo-primary.png" alt="RiO Impulso Digital" class="footer-logo" width="48" height="48">
+      </picture>
+    </div>
+    <ul class="footer-links footer-col footer-col--right">
+      <li><a href="/#servicios">Soluciones</a></li>
+      <li><a href="/#portfolio">Proyectos</a></li>
+      <li><a href="/#nosotros">Sobre mí</a></li>
+      <li><a href="https://github.com/rioimpulsodigital/rio-impulso-digital" target="_blank" rel="noopener" class="footer-link-muted">GitHub ↗</a></li>
+    </ul>
+  </div>
+  <div class="footer-copy">
+    © 2026 RiO Impulso Digital · Brenda Rivera Obando · Todos los derechos reservados
+  </div>
+</footer>
+
+<script src="../assets/js/main.js?v=20260627" defer></script>
 </body>
 </html>

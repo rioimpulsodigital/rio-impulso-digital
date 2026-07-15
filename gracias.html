@@ -1,177 +1,136 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>¡Gracias! — RiO Impulso Digital</title>
-<link rel="icon" href="./assets/branding/rio-favicon.png" />
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --purple:#93009f;
-    --coral:#ff6b6b;
-    --secondary:#6b5b95;
-    --bg:#130019;
-    --bg-panel:#1c0526;
-    --bg-card:#210a2c;
-    --line:rgba(255,255,255,0.1);
-    --text:#f3ecf6;
-    --text-dim:#b8a8c4;
-    --text-faint:#8a7796;
-  }
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{
-    background:var(--bg);
-    color:var(--text);
-    font-family:'DM Sans', sans-serif;
-    line-height:1.6;
-    min-height:100vh;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    padding:32px 20px;
-  }
-  h1,h2{font-family:'Syne', sans-serif;font-weight:700;letter-spacing:-0.01em;}
-  .mono{font-family:'DM Mono', monospace;}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>¡Gracias! | RiO Impulso Digital</title>
 
-  .card{
-    width:100%;max-width:520px;
-    background:var(--bg-panel);
-    border:1px solid var(--line);
-    border-radius:16px;
-    padding:44px 36px 36px;
-    text-align:center;
-  }
+  <link rel="icon" type="image/png" href="./assets/branding/rio-favicon.png">
 
-  .brand{
-    font-family:'Syne', sans-serif;font-weight:800;font-size:14px;
-    color:var(--text-dim);margin-bottom:32px;
-  }
-  .brand span{color:var(--coral);}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-  .check-wrap{margin:0 auto 24px;width:72px;height:72px;}
-  .check-wrap svg{width:100%;height:100%;}
-  .check-circle{
-    stroke:var(--coral);stroke-width:3;fill:none;
-    stroke-dasharray:220;stroke-dashoffset:220;
-    animation:draw-circle .6s ease forwards;
-  }
-  .check-mark{
-    stroke:var(--coral);stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;
-    stroke-dasharray:40;stroke-dashoffset:40;
-    animation:draw-check .35s ease forwards .55s;
-  }
-  @keyframes draw-circle{to{stroke-dashoffset:0;}}
-  @keyframes draw-check{to{stroke-dashoffset:0;}}
-  @media (prefers-reduced-motion: reduce){
-    .check-circle, .check-mark{animation:none;stroke-dashoffset:0;}
-  }
-
-  h1{font-size:28px;color:var(--text);margin-bottom:10px;line-height:1.2;}
-  .subtitle{font-size:15px;color:var(--text-dim);margin-bottom:32px;}
-
-  .steps{text-align:left;margin-bottom:24px;}
-  .step{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--line);}
-  .step:last-child{border-bottom:none;}
-  .step .num{
-    font-family:'DM Mono',monospace;font-size:12px;color:var(--coral);
-    background:rgba(255,107,107,0.12);border:1px solid rgba(255,107,107,0.35);
-    width:22px;height:22px;border-radius:50%;flex-shrink:0;
-    display:flex;align-items:center;justify-content:center;margin-top:1px;
-  }
-  .step p{font-size:14px;color:var(--text-dim);}
-  .step b{color:var(--text);font-weight:600;}
-
-  .domain-note{
-    display:none;
-    text-align:left;font-size:13px;color:var(--text-dim);
-    background:rgba(107,91,149,0.18);border:1px solid rgba(107,91,149,0.4);
-    border-radius:10px;padding:14px 16px;margin-bottom:28px;
-  }
-  .domain-note.show{display:block;}
-  .domain-note b{color:var(--text);}
-
-  .cta{
-    display:inline-flex;align-items:center;gap:8px;justify-content:center;
-    width:100%;background:var(--coral);color:#1a0510;text-decoration:none;
-    font-family:'DM Sans',sans-serif;font-weight:700;font-size:15px;
-    padding:15px 22px;border-radius:100px;margin-bottom:28px;
-    transition:background .15s ease;
-  }
-  .cta:hover{background:#ff8080;}
-
-  footer{
-    border-top:1px solid var(--line);padding-top:20px;
-    font-size:12.5px;color:var(--text-faint);
-  }
-  footer a{color:var(--text-dim);text-decoration:none;}
-  footer a:hover{color:var(--coral);}
-  footer .row{margin-bottom:4px;}
-</style>
+  <link rel="stylesheet" href="./assets/css/main.css?v=20260627">
+  <link rel="stylesheet" href="./assets/css/utilitaria.css?v=20260714">
 </head>
 <body>
 
-<div class="card">
-  <div class="brand">RiO <span>Impulso</span> Digital</div>
-
-  <div class="check-wrap">
-    <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-      <circle class="check-circle" cx="40" cy="40" r="35"/>
-      <path class="check-mark" d="M24 41 L35 52 L57 28"/>
-    </svg>
-  </div>
-
-  <h1>¡Pago confirmado!</h1>
-  <p class="subtitle">Gracias por confiar en RiO Impulso Digital 🚀</p>
-
-  <div class="steps">
-    <div class="step">
-      <span class="num">1</span>
-      <p><b>Envíanos tus fotos y tu logo</b> por WhatsApp (si tienes) — con eso empezamos a armar tu página.</p>
-    </div>
-    <div class="step">
-      <span class="num">2</span>
-      <p><b>Nuestro equipo arma tu Landing Page</b> con el diseño y la información que ya nos compartiste en la llamada.</p>
-    </div>
-    <div class="step">
-      <span class="num">3</span>
-      <p><b>Tu página queda lista en 48 horas</b> desde que recibimos tus fotos y tu logo.</p>
-    </div>
-  </div>
-
-  <div class="domain-note" id="domainNote"></div>
-
-  <a class="cta" id="waButton" href="#" target="_blank" rel="noopener">
-    Enviar mis fotos y logo por WhatsApp →
+<!-- ── NAV ──────────────────────────────────────── -->
+<nav class="nav" id="mainNav">
+  <a href="/" class="nav-logo" aria-label="RiO Impulso Digital">
+    <img
+      src="./assets/branding/rio-logo-horizontal-245w.webp"
+      srcset="./assets/branding/rio-logo-horizontal-245w.webp 1x,
+              ./assets/branding/rio-logo-horizontal-429w.webp 2x,
+              ./assets/branding/rio-logo-horizontal.webp 3x"
+      alt="RiO Impulso Digital"
+      width="245" height="60"
+      fetchpriority="high"
+      onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+    >
+    <span class="nav-logo-text">RiO <em>Impulso</em> Digital</span>
   </a>
+  <ul class="nav-links">
+    <li><a href="/#servicios">Soluciones</a></li>
+    <li><a href="/#portfolio">Proyectos</a></li>
+    <li><a href="/#nosotros">Sobre mí</a></li>
+  </ul>
+  <a href="/#contacto" class="nav-cta">Hablemos →</a>
+  <button class="nav-hamburger" aria-label="Abrir menú" onclick="openDrawer()">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
 
-  <footer>
-    <div class="row">brenda@rioimpulsodigital.com</div>
-    <div class="row"><a href="https://www.rioimpulsodigital.com" target="_blank" rel="noopener">rioimpulsodigital.com</a></div>
-  </footer>
+<div class="nav-drawer" id="navDrawer">
+  <button class="nav-drawer-close" onclick="closeDrawer()" aria-label="Cerrar">✕</button>
+  <a href="/#servicios" onclick="closeDrawer()">Soluciones</a>
+  <a href="/#portfolio" onclick="closeDrawer()">Proyectos</a>
+  <a href="/#nosotros" onclick="closeDrawer()">Sobre mí</a>
+  <a href="/#contacto" onclick="closeDrawer()" style="color:var(--coral)">Hablemos →</a>
 </div>
 
-<script>
-  const params = new URLSearchParams(window.location.search);
-  const tipo = params.get('tipo'); // 'generico' | 'personalizado'
+<!-- ── HERO MÍNIMO ───────────────────────────────── -->
+<section class="ut-hero">
+  <div class="ut-hero-content">
+    <a href="/" class="ut-back">Volver al inicio</a>
+    <p class="ut-label">Solicitud recibida</p>
+    <h1>¡Gracias!</h1>
+    <p class="ut-hero-desc">
+      Hemos recibido correctamente tu información. Nuestro equipo la revisará y se pondrá en contacto contigo a la brevedad.
+    </p>
+  </div>
+</section>
 
-  const WHATSAPP_NUMBER = "543781410164"; // WhatsApp de RiO (Argentina), formato internacional sin "+"
-  const waMessage = "¡Hola! Ya realicé el pago de mi Landing Page 🚀 Te comparto mis fotos y mi logo.";
-  document.getElementById('waButton').href =
-    `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(waMessage)}`;
+<!-- ── ¿QUÉ SIGUE AHORA? ─────────────────────────── -->
+<div class="ut-main">
+  <div class="ut-container">
 
-  const note = document.getElementById('domainNote');
-  if(tipo === 'personalizado'){
-    note.innerHTML = '<b>Sobre tu dominio personalizado:</b> la dirección que elegiste queda sujeta a confirmar disponibilidad. Te avisamos por WhatsApp apenas la verifiquemos — si no está disponible, te proponemos alternativas.';
-    note.classList.add('show');
-  } else if(tipo !== 'generico'){
-    // Si no llega el parámetro (por ejemplo, la URL de redirección no quedó bien configurada en Mercado Pago),
-    // dejamos una nota neutral que cubre ambos casos sin asumir cuál eligió.
-    note.innerHTML = 'Si elegiste <b>dominio personalizado</b>, recuerda que la dirección exacta queda sujeta a confirmar disponibilidad — te avisamos por WhatsApp apenas la verifiquemos.';
-    note.classList.add('show');
-  }
-</script>
+    <p class="ut-block-title">¿Qué sigue ahora?</p>
 
+    <ul class="ut-list">
+      <li>Revisaremos la información enviada.</li>
+      <li>Analizaremos tus necesidades.</li>
+      <li>Nos comunicaremos contigo para coordinar los siguientes pasos.</li>
+      <li>Si es necesario, agendaremos una reunión para profundizar en tu proyecto.</li>
+    </ul>
+
+    <div class="ut-note">
+      Si tu consulta es urgente, también puedes comunicarte directamente con nosotros mediante nuestros canales habituales.
+    </div>
+
+  </div>
+</div>
+
+<!-- ── ACCIONES ───────────────────────────────────── -->
+<div class="ut-section ut-section--dark">
+  <div class="ut-container">
+    <div class="ut-status ut-status--dark">
+      <div class="ut-status-icon">
+        <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="40" cy="40" r="35" stroke="#ff6b6b" stroke-width="2.5" fill="none"/>
+          <path d="M24 41 L35 52 L57 28" stroke="#ff6b6b" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <p class="ut-status-title">Información recibida</p>
+      <p class="ut-status-desc">Nos pondremos en contacto contigo a la brevedad. Mientras tanto, podés explorar nuestros servicios o agendar una reunión.</p>
+    </div>
+
+    <div style="display:flex; gap:.75rem; justify-content:center; flex-wrap:wrap; margin-top:1.5rem;">
+      <a href="/" class="btn-ghost">Volver al inicio</a>
+      <a href="/#servicios" class="btn-ghost">Conocer nuestros servicios</a>
+      <a href="/agenda" class="btn-coral">Agendar una reunión →</a>
+    </div>
+  </div>
+</div>
+
+<!-- ── FOOTER ────────────────────────────────────── -->
+<footer>
+  <div class="footer-row">
+    <div class="footer-col">
+      <div class="footer-brand">RiO <em>Impulso</em> Digital</div>
+      <div class="footer-tag">Tecnología • Integración • Automatización</div>
+    </div>
+    <div class="footer-col footer-col--center">
+      <picture>
+        <source media="(max-width: 900px)" srcset="./assets/branding/rio-logo-primary-48x48.webp">
+        <source srcset="./assets/branding/rio-logo-primary-84x84.webp">
+        <img src="./assets/branding/rio-logo-primary.png" alt="RiO Impulso Digital" class="footer-logo" width="48" height="48">
+      </picture>
+    </div>
+    <ul class="footer-links footer-col footer-col--right">
+      <li><a href="/#servicios">Soluciones</a></li>
+      <li><a href="/#portfolio">Proyectos</a></li>
+      <li><a href="/#nosotros">Sobre mí</a></li>
+      <li><a href="https://github.com/rioimpulsodigital/rio-impulso-digital" target="_blank" rel="noopener" class="footer-link-muted">GitHub ↗</a></li>
+    </ul>
+  </div>
+  <div class="footer-copy">
+    © 2026 RiO Impulso Digital · Brenda Rivera Obando · Todos los derechos reservados
+  </div>
+</footer>
+
+<script src="./assets/js/main.js?v=20260627" defer></script>
 </body>
 </html>

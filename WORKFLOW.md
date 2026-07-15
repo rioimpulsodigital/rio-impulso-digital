@@ -123,47 +123,76 @@ Antes de cada comando, se especifica el entorno:
 ```
 rio-impulso-digital/
 ├── assets/
-│   ├── branding/          → logos y archivos de marca (no modificar)
+│   ├── branding/               → logos y archivos de marca (no modificar)
 │   ├── css/
-│   │   └── main.css       → estilos principales
+│   │   ├── main.css            → variables globales, reset, nav, footer, hero principal
+│   │   ├── utilitaria.css      → estándar Tipo C — componentes para páginas utilitarias
+│   │   └── landing-solucion.css → estilos específicos para páginas de solución (landing)
 │   ├── js/
-│   │   └── main.js        → scripts principales
-│   ├── img/               → imágenes del sitio (fotos, ilustraciones)
-│   └── docs/              → documentos descargables (PDF, etc.)
-├── index.html             → página principal
+│   │   └── main.js             → scripts principales (nav, scroll, FAQ)
+│   ├── img/                    → imágenes del sitio (fotos, ilustraciones)
+│   └── docs/                   → documentos descargables (PDF, etc.)
+├── interno/                    → Portal Interno (protegido por Cloudflare Access)
+│   ├── index.html              → índice del portal — estándar Tipo C
+│   ├── kit-venta-ficha-y-landing-page.html
+│   └── rio-guia-comercial.html
+├── index.html                  → página principal (landing corporativa)
+├── agenda.html                 → página de agendamiento — estándar Tipo C
+├── utilitaria-template.html    → plantilla oficial de Página Utilitaria (Tipo C)
 ├── .gitignore
-├── WORKFLOW.md            → este archivo
-└── README.md              → descripción pública del proyecto
+├── WORKFLOW.md                 → este archivo
+└── README.md                   → descripción pública del proyecto
 ```
 
-> Si se agregan nuevas páginas (ej. `case-studies/nutrabody.html`), crear la carpeta correspondiente en la raíz y mantener la misma estructura de assets.
+> Si se agregan nuevas páginas utilitarias (ej. `/gracias`, `/privacidad`), usar `utilitaria-template.html` como base y linkear `main.css` + `utilitaria.css`. Ajustar paths de assets según el nivel del directorio (`./assets/` desde la raíz, `../assets/` desde subdirectorios).
 
 ---
 
-## 5. Formato de informe de tarea o sesión
+## 5. Informe de Implementación (Tipo A)
 
-Cuando se pide **"crea el informe de la sesión"** o **"crea el informe de esta tarea"**, generar un informe con estas secciones:
+Cuando se completa una tarea de implementación, generar un **Informe Tipo A** y escribirlo directamente en el **cuerpo de la página de la tarea en Notion**.
 
-1. **Identificación** — ID o nombre de la tarea/sesión, fecha, archivos involucrados
-2. **Resumen Ejecutivo** — qué se hizo y para qué sirve (2-3 párrafos)
-3. **Contexto y Motivación** — por qué existía esta tarea, qué problema resuelve
-4. **Archivos Creados/Modificados** — tabla con ruta, tipo de cambio y propósito
-5. **Cambios Técnicos Relevantes** — decisiones de código que no son obvias
-6. **Verificación** — qué se revisó en el browser, resultado (✅ / ❌)
-7. **Decisiones Técnicas** — por qué se eligió cada enfoque no obvio
-8. **Casos Borde Considerados** — comportamiento en mobile, sin imagen, conexión lenta, etc.
-9. **Pendientes** — tabla con lo que quedó fuera del alcance de esta sesión
-10. **Próximos Pasos** — tabla con tareas siguientes y sus dependencias
-11. **Notas para Deploy** — algo específico a verificar al hacer push a GitHub Pages
+**Cómo escribirlo en Notion:** `notion-update-page` con `command: "insert_content"` y `position: {"type": "end"}` sobre la página de la tarea existente. Nunca en comentarios, subpáginas ni páginas separadas.
 
-**Título del informe:** `[FECHA] — Nombre descriptivo de la sesión`
+**Estructura del informe:**
 
-**Destino:** Subpágina en Notion dentro del proyecto activo, sección "Informes de Trabajo".
-
-**Pie de página:**
 ```
-*Informe generado por Claude Code — RiO Impulso Digital | [Fecha]*
+# Informe de Implementación — [ID]
+**Tipo A · Anthy · [YYYY-MM-DD]**
+
+---
+
+## 1. Cambios realizados
+
+### `ruta/archivo.html` — descripción del cambio
+
+**Eliminado:**
+- ...
+
+**Incorporado:**
+- ...
+
+[Secciones adicionales según la tarea: una por área de cambio relevante]
+
+---
+
+## N. Resultado
+
+| Antes | Después |
+|---|---|
+| ... | ... |
+
+---
+
+**Estado:** ✅ Completa.
 ```
+
+**Reglas:**
+- El encabezado siempre incluye `Tipo A · Anthy · [fecha]`
+- Secciones numeradas, una por área de cambio (archivo o componente)
+- Tabla "Resultado" comparando antes/después al final
+- Firmado como **Anthy**, nunca como "Claude Code" o "Codie"
+- El informe va en el cuerpo de la página de la tarea — no crear páginas separadas
 
 ---
 
@@ -188,4 +217,4 @@ La URL pública será: `https://brendario.github.io/rio-impulso-digital/`
 
 ---
 
-*Documento mantenido por Claude Code — RiO Impulso Digital | Mayo 2026*
+*Documento mantenido por Anthy (Claude Code) — RiO Impulso Digital | Julio 2026*
