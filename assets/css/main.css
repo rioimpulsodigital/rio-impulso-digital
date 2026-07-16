@@ -159,7 +159,7 @@ a { text-decoration: none; color: inherit; }
 .hero-content {
   position: relative; z-index: 2;
   max-width: 1280px; margin: 0 auto;
-  padding: 9rem 2.5rem 5rem;
+  padding: 6.5rem 2.5rem 5rem;
   width: 100%;
 }
 .hero-eyebrow {
@@ -175,7 +175,7 @@ a { text-decoration: none; color: inherit; }
 }
 .hero-h1 {
   font-family: var(--ff-head);
-  font-size: clamp(2.9rem, 7.6vw, 6.4rem);
+  font-size: clamp(2.5rem, 6.5vw, 5.6rem);
   font-weight: 800; line-height: .88;
   color: var(--white); letter-spacing: -.035em;
   margin-bottom: 1.5rem;
