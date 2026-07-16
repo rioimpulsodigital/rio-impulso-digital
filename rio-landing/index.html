@@ -4,16 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Landing Page para tu negocio | Rio Landing · RiO Impulso Digital</title>
-  <meta name="description" content="Conseguí más clientes con una Landing Page profesional diseñada para convertir. Plan Express $50.000 · Plan Premium $60.000. WhatsApp integrado, lista en días.">
+  <meta name="description" content="Consigue más clientes con una Landing Page profesional diseñada para convertir. Plan Express $50.000 · Plan Premium $60.000. WhatsApp integrado, lista en 48 hrs.">
 
-  <link rel="icon" type="image/png" href="../assets/branding/rio-favicon.png">
+  <link rel="icon" type="image/png" href="assets/branding/rio-favicon.png">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="../assets/css/main.css?v=20260627">
-  <link rel="stylesheet" href="../assets/css/landing-solucion.css?v=20260714">
+  <link rel="stylesheet" href="assets/css/main.css?v=20260627">
+  <link rel="stylesheet" href="assets/css/landing-solucion.css?v=20260714">
 
   <style>
     /* ── PRICING GRID ──────────────────────────── */
@@ -47,6 +47,11 @@
       text-transform: uppercase;
       display: inline-block;
       width: fit-content;
+    }
+    .rl-plan-badge--outline {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
     }
     .rl-plan-name {
       font-family: var(--ff-head);
@@ -229,6 +234,72 @@
       transform: translateY(-1px);
     }
 
+    /* ── HERO DOS COLUMNAS ────────────────────────── */
+    .fp-hero-content {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      align-items: center;
+      gap: 3rem;
+      max-width: 1020px;
+      text-align: left;
+    }
+    .fp-hero-content .fp-eyebrow { justify-content: flex-start; }
+    .fp-hero-content .fp-eyebrow::before { display: none; }
+    .fp-hero-content .fp-hero-desc { margin: 0 0 2rem; }
+    .fp-hero-image img {
+      width: auto;
+      max-width: 100%;
+      max-height: 380px;
+      object-fit: contain;
+      filter: drop-shadow(0 20px 40px rgba(147,0,159,.35));
+    }
+    @media (max-width: 860px) {
+      .fp-hero-content {
+        grid-template-columns: 1fr;
+        text-align: center;
+      }
+      .fp-hero-content .fp-eyebrow { justify-content: center; }
+      .fp-hero-content .fp-eyebrow::before { display: block; }
+      .fp-hero-image { display: none; }
+    }
+
+    /* ── BOTÓN FLOTANTE WHATSAPP ──────────────────── */
+    .wa-float {
+      position: fixed;
+      bottom: 1.75rem;
+      right: 1.75rem;
+      z-index: 300;
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      background: #25D366;
+      color: var(--white);
+      text-decoration: none;
+      padding: .75rem 1.25rem .75rem 1rem;
+      border-radius: 999px;
+      font-family: var(--ff-head);
+      font-size: .85rem;
+      font-weight: 700;
+      box-shadow: 0 4px 20px rgba(37,211,102,.35);
+      transition: transform .18s var(--ease), box-shadow .18s var(--ease);
+    }
+    .wa-float:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(37,211,102,.45);
+    }
+    .wa-float svg {
+      width: 20px; height: 20px; flex-shrink: 0; fill: var(--white);
+    }
+    @media (max-width: 640px) {
+      .wa-float span { display: none; }
+      .wa-float { padding: .9rem; }
+    }
+
+    /* ── HERO H1 LÍNEAS ───────────────────────────── */
+    .fp-hero h1 .l1 { display: block; }
+    .fp-hero h1 .l2 { display: block; color: var(--coral); }
+    .fp-hero h1 .l3 { display: block; -webkit-text-stroke: 1px rgba(255,255,255,.3); color: transparent; }
+
     /* ── RESPONSIVE ────────────────────────────── */
     @media (max-width: 640px) {
       .rl-pricing-grid   { grid-template-columns: 1fr; }
@@ -240,14 +311,26 @@
 </head>
 <body>
 
+<!-- ── WHATSAPP FLOTANTE ─────────────────────────── -->
+<a
+  href="https://wa.me/56985921512?text=Hola%21%20Me%20interesa%20una%20Landing%20Page%20%F0%9F%9A%80"
+  target="_blank"
+  rel="noopener"
+  class="wa-float"
+  aria-label="Contactar por WhatsApp"
+>
+  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+  <span>Hablemos</span>
+</a>
+
 <!-- ── NAV ──────────────────────────────────────── -->
 <nav class="nav" id="mainNav">
   <a href="#" class="nav-logo" aria-label="Rio Landing · RiO Impulso Digital">
     <img
-      src="../assets/branding/rio-logo-horizontal-245w.webp"
-      srcset="../assets/branding/rio-logo-horizontal-245w.webp 1x,
-              ../assets/branding/rio-logo-horizontal-429w.webp 2x,
-              ../assets/branding/rio-logo-horizontal.webp 3x"
+      src="assets/branding/rio-logo-horizontal-245w.webp"
+      srcset="assets/branding/rio-logo-horizontal-245w.webp 1x,
+              assets/branding/rio-logo-horizontal-429w.webp 2x,
+              assets/branding/rio-logo-horizontal.webp 3x"
       alt="RiO Impulso Digital"
       width="245" height="60"
       fetchpriority="high"
@@ -255,10 +338,6 @@
     >
     <span class="nav-logo-text">Rio<em>Landing</em></span>
   </a>
-  <ul class="nav-links">
-    <li><a href="#planes">Planes</a></li>
-    <li><a href="https://rio-impulso-digital.com" target="_blank" rel="noopener">RiO Impulso Digital ↗</a></li>
-  </ul>
   <a href="#planes" class="nav-cta">Ver planes →</a>
   <button class="nav-hamburger" aria-label="Abrir menú" onclick="openDrawer()">
     <span></span><span></span><span></span>
@@ -267,8 +346,6 @@
 
 <div class="nav-drawer" id="navDrawer">
   <button class="nav-drawer-close" onclick="closeDrawer()" aria-label="Cerrar">✕</button>
-  <a href="#planes" onclick="closeDrawer()">Planes</a>
-  <a href="https://rio-impulso-digital.com" target="_blank" rel="noopener" onclick="closeDrawer()">RiO Impulso Digital ↗</a>
   <a href="#planes" onclick="closeDrawer()" style="color:var(--coral)">Ver planes →</a>
 </div>
 
@@ -276,32 +353,47 @@
 <section class="fp-hero">
   <div class="fp-hero-orb"></div>
   <div class="fp-hero-content">
-    <p class="fp-eyebrow">Presencia digital · Conversión</p>
-    <h1>Más clientes con una página<br>diseñada para <em>convertir</em></h1>
-    <p class="fp-hero-desc">
-      No vendemos páginas web. Creamos la herramienta que conecta tu negocio con tus próximos clientes — lista en días, sin complicaciones.
-    </p>
-    <div class="fp-badges">
-      <span class="fp-badge">Lista en días</span>
-      <span class="fp-badge">WhatsApp integrado</span>
-      <span class="fp-badge">Sin contrato mensual</span>
+    <div class="fp-hero-text">
+      <p class="fp-eyebrow">Para emprendedores · Profesionales · Comercios locales</p>
+      <h1>
+        <span class="l1">Tu página en</span>
+        <span class="l2">48 horas</span>
+        <span class="l1">Con WhatsApp</span>
+        <span class="l3">integrado</span>
+      </h1>
+      <p class="fp-hero-desc">
+        Pago único, sin costos mensuales. Diseñada para conectar tu negocio con tus próximos clientes.
+      </p>
+      <div class="fp-badges">
+        <span class="fp-badge">Diseño responsive</span>
+        <span class="fp-badge">SSL incluido</span>
+        <span class="fp-badge">Pago único</span>
+      </div>
+    </div>
+    <div class="fp-hero-image">
+      <img
+        src="img/hero.webp"
+        alt="Mockup de landing page en celular"
+        width="380"
+        loading="eager"
+      >
     </div>
   </div>
 </section>
 
 <!-- ── EL PROBLEMA ───────────────────────────────── -->
-<section class="fp-section fp-section--dark">
+<section class="fp-section fp-section--light">
   <div class="fp-container">
 
     <p class="sec-label">El problema</p>
-    <h2 class="fp-title">¿Por qué tus redes no te<br>traen suficientes clientes?</h2>
+    <h2 class="fp-title">¿Por qué tus redes no te<br>traen suficientes <span class="hl">clientes</span>?</h2>
     <p class="fp-desc">Tener seguidores no es lo mismo que tener clientes. Estas son las situaciones más comunes:</p>
 
-    <ul class="fp-list fp-list--dark">
+    <ul class="fp-list">
       <li>Las redes generan visibilidad, pero pocas conversiones directas.</li>
       <li>Tus potenciales clientes no encuentran fácilmente cómo contactarte.</li>
       <li>Un sitio web tradicional distrae con demasiada información innecesaria.</li>
-      <li>Perdés oportunidades porque el contacto no es inmediato ni simple.</li>
+      <li>Se pierden oportunidades porque el contacto no es inmediato ni simple.</li>
     </ul>
 
     <div class="fp-callout fp-callout--purple">
@@ -312,46 +404,71 @@
 </section>
 
 <!-- ── LA SOLUCIÓN ───────────────────────────────── -->
-<section class="fp-section fp-section--light">
+<section class="fp-section fp-section--dark">
   <div class="fp-container">
 
     <p class="sec-label">La solución</p>
     <h2 class="fp-title">Una página con una sola <span class="hl">misión</span></h2>
     <p class="fp-desc">Convertir visitas en conversaciones. Todo el diseño está orientado a facilitar el contacto y aumentar tus oportunidades.</p>
 
-    <div class="fp-callout fp-callout--coral">
-      <strong>Diseño enfocado en la conversión:</strong> cada elemento está pensado para reducir la fricción y llevar al visitante a escribirte por WhatsApp.
+    <div class="fp-callout fp-callout--border">
+      A la gente que te encuentra no le queda dónde ver más de tu negocio ni cómo contactarte con confianza. Con tu página, cualquiera puede ver quién eres, qué ofreces, y escribirte o llamarte al instante — sin depender de que te encuentren en redes sociales.
     </div>
 
+    <p class="sec-label" style="margin-bottom: 1rem;">Qué incluye</p>
+    <ul class="fp-list fp-list--dark">
+      <li>Diseño profesional, adaptado al rubro y la identidad del negocio.</li>
+      <li>Hosting incluido sin costo mensual — la página vive en la infraestructura de RiO mientras tu plan esté activo.</li>
+      <li>Activación inmediata.</li>
+      <li>Soporte técnico incluido.</li>
+    </ul>
+
+  </div>
+</section>
+
+<!-- ── BENEFICIOS ────────────────────────────────── -->
+<section class="fp-section fp-section--white">
+  <div class="fp-container">
+
+    <p class="sec-label">Beneficios</p>
+    <h2 class="fp-title">Lo que ganas con tu landing</h2>
+    <p class="fp-desc">Una herramienta que trabaja para ti las 24 horas, los 7 días de la semana.</p>
+
     <ul class="fp-list">
-      <li>Diseño limpio y enfocado, sin distracciones que alejen al visitante.</li>
-      <li>Botón de WhatsApp siempre visible en toda la página.</li>
-      <li>Mensaje de contacto prediseñado para maximizar la conversión.</li>
-      <li>Tu servicio y propuesta de valor presentados de forma clara y directa.</li>
-      <li>Perfecta en cualquier dispositivo: celular, tablet y escritorio.</li>
-      <li>Preparada para potenciar campañas de publicidad en redes sociales.</li>
+      <li>Más consultas y oportunidades de negocio desde el primer día.</li>
+      <li>El botón de WhatsApp integrado reduce a cero el tiempo entre interés y contacto.</li>
+      <li>Imagen profesional que genera confianza desde el primer segundo.</li>
+      <li>Optimizada para potenciar campañas de publicidad digital.</li>
+      <li>Fácil de compartir: en redes, perfiles, tarjetas y correos.</li>
+      <li>Disponible las 24 horas sin que tengas que hacer nada.</li>
     </ul>
 
   </div>
 </section>
 
 <!-- ── PLANES ────────────────────────────────────── -->
-<section class="fp-section fp-section--white" id="planes">
+<section class="fp-section fp-section--dark" id="planes" style="scroll-margin-top: 5rem;">
   <div class="fp-container">
 
     <p class="sec-label">Planes</p>
-    <h2 class="fp-title">Elegí el plan que <span class="hl">mejor te queda</span></h2>
-    <p class="fp-desc">Dos opciones pensadas para distintos momentos y necesidades. Ambas con todo lo que necesitás para empezar.</p>
+    <h2 class="fp-title">Elige el plan que <span class="hl">mejor te queda</span></h2>
+    <p class="fp-desc">Dos opciones pensadas para distintos momentos y necesidades. Ambas con todo lo que necesitas para empezar.</p>
+    <p class="fp-desc" style="color:var(--coral); font-family:var(--ff-mono); font-size:.72rem; letter-spacing:.05em; margin-bottom:1.5rem;">Tomamos 3 proyectos por semana — asegura el tuyo.</p>
+
+    <div class="fp-callout fp-callout--border" style="margin-bottom:2rem;">
+      Un freelancer tradicional cobra entre $150.000 y $400.000. Una agencia, desde $500.000. <strong>Tu landing lista en 48 hrs por $50.000 — pago único, sin mensualidades.</strong>
+    </div>
 
     <div class="rl-pricing-grid">
 
       <!-- Landing Express -->
       <div class="rl-plan">
+        <span class="rl-plan-badge rl-plan-badge--outline">Popular</span>
         <p class="rl-plan-name">Landing Express</p>
         <p class="rl-plan-price">$50.000 <span>CLP · pago único</span></p>
         <hr class="rl-plan-divider">
         <ul class="rl-plan-features">
-          <li>Landing Page profesional lista en días</li>
+          <li>Landing Page profesional lista en 48 hrs.</li>
           <li>Subdominio en <strong>rio-landing.com</strong></li>
           <li>Diseño responsive (móvil y escritorio)</li>
           <li>Botón de WhatsApp integrado</li>
@@ -381,38 +498,20 @@
           <li>Configuración DNS completa</li>
           <li>Publicación en el dominio del cliente</li>
           <li>Implementación personalizada</li>
+          <li>+ $9.990 CLP/año por el registro del dominio (el hosting sigue siendo gratuito)</li>
         </ul>
         <a
-          href="https://rio-impulso-digital.com/agenda"
+          href="https://wa.me/56985921512?text=Hola%21%20Me%20interesa%20el%20plan%20Landing%20Premium%20%F0%9F%9A%80"
           target="_blank"
           rel="noopener"
-          class="rl-plan-cta rl-plan-cta--ghost"
+          class="rl-plan-cta rl-plan-cta--coral"
         >
-          Agendar una reunión →
+          Solicitar por WhatsApp →
         </a>
       </div>
 
     </div>
-  </div>
-</section>
-
-<!-- ── BENEFICIOS ────────────────────────────────── -->
-<section class="fp-section fp-section--dark">
-  <div class="fp-container">
-
-    <p class="sec-label">Beneficios</p>
-    <h2 class="fp-title">Lo que ganás con tu landing</h2>
-    <p class="fp-desc">Una herramienta que trabaja para vos las 24 horas, los 7 días de la semana.</p>
-
-    <ul class="fp-list fp-list--dark">
-      <li>Más consultas y oportunidades de negocio desde el primer día.</li>
-      <li>Contacto inmediato mediante WhatsApp con un solo click.</li>
-      <li>Imagen profesional que genera confianza desde el primer segundo.</li>
-      <li>Optimizada para potenciar campañas de publicidad digital.</li>
-      <li>Fácil de compartir: en redes, perfiles, tarjetas y correos.</li>
-      <li>Disponible las 24 horas sin que tengas que hacer nada.</li>
-    </ul>
-
+    <p style="text-align:center; font-size:.82rem; color:rgba(255,255,255,.4); margin-top:1.5rem;">Si el diseño no te convence, lo ajustamos hasta que quedes conforme.</p>
   </div>
 </section>
 
@@ -431,7 +530,7 @@
           ¿En cuánto tiempo está lista mi landing page?
           <svg class="rl-faq-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
-        <p class="rl-faq-a">En 3 a 5 días hábiles desde que confirmamos la información de tu negocio. El proceso es simple y lo coordinamos por WhatsApp.</p>
+        <p class="rl-faq-a">En 48 horas desde que recibimos tus fotos y tu logo (si tienes). El proceso es simple y lo coordinamos por WhatsApp.</p>
       </div>
 
       <div class="rl-faq-item">
@@ -439,7 +538,7 @@
           ¿Qué necesito para comenzar?
           <svg class="rl-faq-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
-        <p class="rl-faq-a">Solo los datos básicos de tu negocio: nombre, descripción del servicio, tu número de WhatsApp y logo si tenés. Nosotros nos encargamos del resto.</p>
+        <p class="rl-faq-a">Solo los datos básicos de tu negocio: nombre, descripción del servicio, tu número de WhatsApp y logo si tienes. Nosotros nos encargamos del resto.</p>
       </div>
 
       <div class="rl-faq-item">
@@ -474,6 +573,30 @@
         <p class="rl-faq-a">Con el plan Express tu landing queda publicada en un subdominio dentro de rio-landing.com (por ejemplo: tu-negocio.rio-landing.com). Con el plan Premium configuramos tu propio dominio (por ejemplo: tu-negocio.com) con todos los ajustes de DNS incluidos.</p>
       </div>
 
+      <div class="rl-faq-item">
+        <button class="rl-faq-q" onclick="toggleFaq(this)">
+          ¿Va a verse profesional en un subdominio?
+          <svg class="rl-faq-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <p class="rl-faq-a">Sí. Lo que ve tu cliente es tu negocio, no la plataforma. El subdominio es transparente para quien visita — la página se ve y funciona como cualquier sitio profesional.</p>
+      </div>
+
+      <div class="rl-faq-item">
+        <button class="rl-faq-q" onclick="toggleFaq(this)">
+          ¿Voy a aparecer en Google?
+          <svg class="rl-faq-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <p class="rl-faq-a">Una landing page puede ser indexada por Google, pero no es su función principal. Está diseñada para tráfico directo: links en redes, tarjetas de presentación y campañas de publicidad. Para posicionamiento orgánico en buscadores, eso es un servicio distinto.</p>
+      </div>
+
+      <div class="rl-faq-item">
+        <button class="rl-faq-q" onclick="toggleFaq(this)">
+          ¿El dominio personalizado tiene algún costo adicional?
+          <svg class="rl-faq-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <p class="rl-faq-a">Sí. El registro del dominio propio (por ejemplo: tu-negocio.com) tiene un costo de $9.990 CLP al año, renovable anualmente. Este costo es adicional al plan Premium y corresponde al dominio — el hosting sigue siendo gratuito de por vida.</p>
+      </div>
+
     </div>
   </div>
 </section>
@@ -484,24 +607,16 @@
 
     <p class="sec-label">¿Empezamos?</p>
     <h2 class="fp-title" style="color: var(--white);">¿Listo para conseguir<br>más clientes?</h2>
-    <p class="fp-desc" style="color: rgba(255,255,255,.5); margin: 0 auto;">Elegí tu plan y empezamos hoy.</p>
+    <p class="fp-desc" style="color: rgba(255,255,255,.5); margin: 0 auto;">Elige tu plan y empezamos hoy.</p>
 
     <div class="rl-close-ctas">
       <a
-        href="https://wa.me/56985921512?text=Hola%21%20Me%20interesa%20el%20plan%20Landing%20Express%20%F0%9F%9A%80"
+        href="https://wa.me/56985921512?text=Hola%21%20Me%20interesa%20una%20Landing%20Page%20%F0%9F%9A%80"
         target="_blank"
         rel="noopener"
         class="rl-btn-coral"
       >
-        Solicitar Landing Express →
-      </a>
-      <a
-        href="https://rio-impulso-digital.com/agenda"
-        target="_blank"
-        rel="noopener"
-        class="rl-btn-outline-white"
-      >
-        Agendar reunión — Premium
+        Solicitar por WhatsApp →
       </a>
     </div>
 
@@ -517,14 +632,14 @@
     </div>
     <div class="footer-col footer-col--center">
       <picture>
-        <source media="(max-width: 900px)" srcset="../assets/branding/rio-logo-primary-48x48.webp">
-        <source srcset="../assets/branding/rio-logo-primary-84x84.webp">
-        <img src="../assets/branding/rio-logo-primary.png" alt="RiO Impulso Digital" class="footer-logo" width="48" height="48">
+        <source media="(max-width: 900px)" srcset="assets/branding/rio-logo-primary-48x48.webp">
+        <source srcset="assets/branding/rio-logo-primary-84x84.webp">
+        <img src="assets/branding/rio-logo-primary.png" alt="RiO Impulso Digital" class="footer-logo" width="48" height="48">
       </picture>
     </div>
     <ul class="footer-links footer-col footer-col--right">
       <li><a href="#planes">Planes</a></li>
-      <li><a href="https://rio-impulso-digital.com" target="_blank" rel="noopener">RiO Impulso Digital ↗</a></li>
+      <li><a href="https://rioimpulsodigital.com" target="_blank" rel="noopener">RiO Impulso Digital ↗</a></li>
     </ul>
   </div>
   <div class="footer-copy">
@@ -532,7 +647,7 @@
   </div>
 </footer>
 
-<script src="../assets/js/main.js?v=20260627" defer></script>
+<script src="assets/js/main.js?v=20260627" defer></script>
 <script>
   function toggleFaq(btn) {
     const item = btn.closest('.rl-faq-item');
