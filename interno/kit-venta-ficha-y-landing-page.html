@@ -1406,6 +1406,14 @@
     hasFicha = true;
     document.querySelectorAll('#fichaToggle .fc-btn').forEach(b => b.classList.remove('active'));
     document.querySelector('#fichaToggle .fc-btn[data-has-ficha="si"]').classList.add('active');
+
+    const firstStep = document.querySelector('#sendSequence .send-step');
+    firstStep.classList.remove('done');
+    const firstBtn = firstStep.querySelector('.seq-btn');
+    firstBtn.disabled = false;
+    firstBtn.textContent = 'Enviar';
+    firstStep.querySelector('.ss-num').textContent = '1';
+
     applyFichaState();
     updateScript();
   }
