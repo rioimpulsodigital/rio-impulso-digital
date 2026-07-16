@@ -1069,6 +1069,12 @@
     document.getElementById('checkNoteText').innerHTML      = t.checkNote;
     document.getElementById('flowRecapTitle').textContent   = t.flowTitle;
     document.getElementById('flowStep1').textContent        = t.flowStep1;
+    if (contactMode === 'llamada') {
+      hasFicha = true;
+      document.querySelectorAll('#fichaToggle .fc-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector('#fichaToggle .fc-btn[data-has-ficha="si"]').classList.add('active');
+      applyFichaState();
+    }
     renderOpeningScript();
   }
 
