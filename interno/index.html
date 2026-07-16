@@ -14,6 +14,104 @@
 
   <link rel="stylesheet" href="../assets/css/main.css?v=20260627">
   <link rel="stylesheet" href="../assets/css/utilitaria.css?v=20260714">
+
+  <style>
+    /* ── SECCIONES DEL PORTAL ── */
+    .portal-section { margin-bottom: 72px; }
+
+    .portal-section-head {
+      display: flex; align-items: flex-start; gap: 14px;
+      margin-bottom: 28px; padding-bottom: 18px;
+      border-bottom: 1.5px solid var(--border);
+    }
+    .portal-section-emoji { font-size: 1.8rem; line-height: 1.1; flex-shrink: 0; }
+    .portal-section-title {
+      font-family: var(--ff-head); font-size: 1.3rem; font-weight: 800;
+      color: var(--ink); letter-spacing: -.02em; margin: 0 0 3px;
+    }
+    .portal-section-desc { font-size: .82rem; color: var(--muted); margin: 0; }
+
+    .portal-subsection { margin-bottom: 28px; }
+    .portal-subsection-label {
+      font-family: var(--ff-mono); font-size: .6rem; font-weight: 500;
+      text-transform: uppercase; letter-spacing: .09em; color: var(--sec);
+      margin: 0 0 12px;
+    }
+
+    /* ── TARJETAS PRÓXIMAMENTE ── */
+    .ut-card--soon { opacity: .4; pointer-events: none; cursor: default; }
+    .ut-card-soon-badge {
+      display: inline-flex; align-items: center;
+      border: 1px solid var(--border); border-radius: 100px; padding: 5px 14px;
+      font-family: var(--ff-mono); font-size: .6rem; font-weight: 500;
+      text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+      margin-top: 6px;
+    }
+
+    /* ── PORTAFOLIO ── */
+    .portal-portfolio-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 20px;
+    }
+    .portal-portfolio-card {
+      border: 1px solid var(--border); border-radius: var(--r-l);
+      overflow: hidden; background: var(--white);
+      transition: box-shadow .15s, transform .15s;
+    }
+    .portal-portfolio-card:not(.portal-portfolio-card--soon):hover {
+      box-shadow: 0 6px 24px rgba(0,0,0,.09); transform: translateY(-2px);
+    }
+    .portal-portfolio-card--soon { opacity: .4; pointer-events: none; }
+
+    .portal-portfolio-img {
+      width: 100%; aspect-ratio: 16/9; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #e8f4f8 0%, #b8dde8 100%);
+    }
+    .portal-portfolio-img img { width: 100%; height: 100%; object-fit: cover; }
+    .portal-portfolio-img-placeholder {
+      font-family: var(--ff-head); font-weight: 800; font-size: 1.1rem;
+      color: #4a8aa0; opacity: .55; letter-spacing: -.02em;
+    }
+    .portal-portfolio-img--empty {
+      background: linear-gradient(135deg, #f0f0f2 0%, #e0e0e4 100%);
+    }
+
+    .portal-portfolio-body { padding: 16px 18px 20px; }
+    .portal-portfolio-name {
+      font-family: var(--ff-head); font-size: 1rem; font-weight: 700;
+      color: var(--ink); letter-spacing: -.02em; margin: 0 0 14px;
+    }
+    .portal-portfolio-btns { display: flex; flex-direction: column; gap: 8px; }
+
+    .portfolio-btn {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      border-radius: 100px; padding: 8px 16px;
+      font-family: var(--ff-body); font-size: .78rem; font-weight: 600;
+      text-decoration: none; cursor: pointer;
+      transition: all .15s; border: 1.5px solid var(--border);
+      color: var(--ink); background: var(--white);
+    }
+    .portfolio-btn:hover { border-color: var(--p); color: var(--p); }
+    .portfolio-btn--primary {
+      background: var(--p); color: #fff; border-color: var(--p);
+    }
+    .portfolio-btn--primary:hover {
+      background: var(--p-dark); border-color: var(--p-dark); color: #fff;
+    }
+    .portfolio-btn--price {
+      border-color: #8fd19e; background: #f2fbf3; color: #2a8040;
+    }
+    .portfolio-btn--price:hover { background: #e5f7ea; border-color: #6bc47e; color: #2a8040; }
+
+    .portal-portfolio-soon-badge {
+      display: inline-block; font-family: var(--ff-mono); font-size: .6rem;
+      font-weight: 500; text-transform: uppercase; letter-spacing: .06em;
+      color: var(--muted); border: 1px solid var(--border);
+      border-radius: 100px; padding: 4px 12px;
+    }
+  </style>
 </head>
 <body>
 
@@ -55,7 +153,7 @@
   <a href="/#contacto" onclick="closeDrawer()" style="color:var(--coral)">Hablemos →</a>
 </div>
 
-<!-- ── HERO MÍNIMO ───────────────────────────────── -->
+<!-- ── HERO ───────────────────────────────────────── -->
 <section class="ut-hero">
   <div class="ut-hero-content">
     <a href="/" class="ut-back">Volver al inicio</a>
@@ -67,36 +165,243 @@
   </div>
 </section>
 
-<!-- ── HERRAMIENTAS ───────────────────────────────── -->
+<!-- ── CONTENIDO ─────────────────────────────────── -->
 <div class="ut-main">
   <div class="ut-container">
 
-    <p class="ut-block-title">Herramientas disponibles</p>
+    <!-- ── 🚀 COMERCIAL ─────────────────────────── -->
+    <div class="portal-section">
+      <div class="portal-section-head">
+        <span class="portal-section-emoji">🚀</span>
+        <div>
+          <h2 class="portal-section-title">Comercial</h2>
+          <p class="portal-section-desc">Todo lo necesario para vender.</p>
+        </div>
+      </div>
 
-    <div class="ut-cards">
+      <div class="portal-subsection">
+        <p class="portal-subsection-label">Herramientas</p>
+        <div class="ut-cards">
 
-      <a class="ut-card" href="./kit-venta-ficha-y-landing-page.html">
-        <div class="ut-card-icon ut-card-icon--coral">🎯</div>
-        <span class="ut-card-tag">Kit de venta</span>
-        <h3>Paquete Ficha Google y Landing Page</h3>
-        <p>Guión paso a paso para la reunión comercial: preguntas de diagnóstico, argumentos por servicio y manejo de objeciones.</p>
-        <span class="ut-card-link">
-          Abrir
-          <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-        </span>
-      </a>
+          <a class="ut-card" href="./kit-venta-ficha-y-landing-page.html">
+            <div class="ut-card-icon ut-card-icon--coral">🎯</div>
+            <span class="ut-card-tag">Herramienta</span>
+            <h3>Kit Comercial Ficha Google & Landing</h3>
+            <p>Guión paso a paso para la reunión: diagnóstico, propuesta de valor, manejo de objeciones y cierre.</p>
+            <span class="ut-card-link">Abrir <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+          </a>
 
-      <a class="ut-card" href="./rio-guia-comercial.html">
-        <div class="ut-card-icon ut-card-icon--violet">📖</div>
-        <span class="ut-card-tag">Referencia</span>
-        <h3>Guía Comercial</h3>
-        <p>Descripción completa de servicios, precios de referencia, perfiles de cliente ideal y posicionamiento frente a la competencia.</p>
-        <span class="ut-card-link">
-          Abrir
-          <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-        </span>
-      </a>
+          <a class="ut-card" href="/agenda">
+            <div class="ut-card-icon ut-card-icon--violet">📅</div>
+            <span class="ut-card-tag">Herramienta</span>
+            <h3>Agenda Comercial</h3>
+            <p>Calendario de reuniones. Comparte el link con prospectos para que agenden directamente.</p>
+            <span class="ut-card-link">Abrir <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+          </a>
 
+          <div class="ut-card ut-card--soon">
+            <div class="ut-card-icon">🧮</div>
+            <span class="ut-card-tag">Herramienta</span>
+            <h3>Calculadora de Presupuesto</h3>
+            <p>Genera propuestas de precio en segundos según el paquete y las necesidades del prospecto.</p>
+            <span class="ut-card-soon-badge">Próximamente</span>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="portal-subsection">
+        <p class="portal-subsection-label">Guías</p>
+        <div class="ut-cards">
+
+          <a class="ut-card" href="./rio-guia-comercial.html">
+            <div class="ut-card-icon ut-card-icon--coral">📖</div>
+            <span class="ut-card-tag">Guía</span>
+            <h3>Guía Comercial RiO</h3>
+            <p>Descripción completa de servicios, precios de referencia, perfiles de cliente ideal y posicionamiento.</p>
+            <span class="ut-card-link">Abrir <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+          </a>
+
+          <a class="ut-card" href="https://rio-landing.com" target="_blank" rel="noopener">
+            <div class="ut-card-icon ut-card-icon--violet">🚀</div>
+            <span class="ut-card-tag">Guía</span>
+            <h3>Landing Page</h3>
+            <p>Sitio de venta del servicio Landing Page. Referencia para mostrar al prospecto qué es lo que compra.</p>
+            <span class="ut-card-link">Abrir <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+          </a>
+
+          <div class="ut-card ut-card--soon">
+            <div class="ut-card-icon">🖥️</div>
+            <span class="ut-card-tag">Guía</span>
+            <h3>Página Web</h3>
+            <p>Soluciones web más completas para negocios que necesitan más que una landing básica.</p>
+            <span class="ut-card-soon-badge">Próximamente</span>
+          </div>
+
+          <div class="ut-card ut-card--soon">
+            <div class="ut-card-icon">⚡</div>
+            <span class="ut-card-tag">Guía</span>
+            <h3>Automatizaciones</h3>
+            <p>Integraciones, flujos automáticos y herramientas para negocios que quieren escalar.</p>
+            <span class="ut-card-soon-badge">Próximamente</span>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 🎨 MARKETING ──────────────────────────── -->
+    <div class="portal-section">
+      <div class="portal-section-head">
+        <span class="portal-section-emoji">🎨</span>
+        <div>
+          <h2 class="portal-section-title">Marketing</h2>
+          <p class="portal-section-desc">Todo el material listo para publicar.</p>
+        </div>
+      </div>
+
+      <div class="portal-subsection">
+        <p class="portal-subsection-label">Estados de WhatsApp e Historias de Instagram</p>
+        <div class="ut-cards">
+          <div class="ut-card ut-card--soon">
+            <div class="ut-card-icon">📱</div>
+            <span class="ut-card-tag">Marketing</span>
+            <h3>Estados de WhatsApp</h3>
+            <p>Piezas listas para publicar como estados. Vista previa y descarga directa.</p>
+            <span class="ut-card-soon-badge">Próximamente</span>
+          </div>
+          <div class="ut-card ut-card--soon">
+            <div class="ut-card-icon">📸</div>
+            <span class="ut-card-tag">Marketing</span>
+            <h3>Historias de Instagram</h3>
+            <p>Piezas en el mismo formato que los estados. Vista previa y descarga.</p>
+            <span class="ut-card-soon-badge">Próximamente</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="portal-subsection">
+        <p class="portal-subsection-label">Publicaciones</p>
+        <div class="ut-cards">
+
+          <div class="ut-card ut-card--soon">
+            <div class="ut-card-icon">🖼️</div>
+            <span class="ut-card-tag">Marketing</span>
+            <h3>Feed</h3>
+            <p>Publicaciones cuadradas para el feed de Instagram y Facebook.</p>
+            <span class="ut-card-soon-badge">Próximamente</span>
+          </div>
+
+          <div class="ut-card ut-card--soon">
+            <div class="ut-card-icon">📊</div>
+            <span class="ut-card-tag">Marketing</span>
+            <h3>Carruseles</h3>
+            <p>Slides informativos listos para publicar como carrusel en redes.</p>
+            <span class="ut-card-soon-badge">Próximamente</span>
+          </div>
+
+          <div class="ut-card ut-card--soon">
+            <div class="ut-card-icon">🎬</div>
+            <span class="ut-card-tag">Marketing</span>
+            <h3>Videos</h3>
+            <p>Reels y videos cortos para publicar en redes sociales.</p>
+            <span class="ut-card-soon-badge">Próximamente</span>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 🌐 PORTAFOLIO ─────────────────────────── -->
+    <div class="portal-section">
+      <div class="portal-section-head">
+        <span class="portal-section-emoji">🌐</span>
+        <div>
+          <h2 class="portal-section-title">Portafolio</h2>
+          <p class="portal-section-desc">No son casos de éxito para el cliente — son referencias reales para el ejecutivo.</p>
+        </div>
+      </div>
+
+      <div class="portal-portfolio-grid">
+
+        <div class="portal-portfolio-card">
+          <div class="portal-portfolio-img">
+            <img src="./img%20landing/aquaseco.jpg" alt="AquaSeco Landing Page">
+          </div>
+          <div class="portal-portfolio-body">
+            <h3 class="portal-portfolio-name">AquaSeco</h3>
+            <div class="portal-portfolio-btns">
+              <a href="https://aquaseco.rio-landing.com" class="portfolio-btn portfolio-btn--primary" target="_blank" rel="noopener">🌐 Ver Landing</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="portal-portfolio-card portal-portfolio-card--soon">
+          <div class="portal-portfolio-img portal-portfolio-img--empty">
+            <span class="portal-portfolio-img-placeholder" style="color:#aaa;">Próximamente</span>
+          </div>
+          <div class="portal-portfolio-body">
+            <h3 class="portal-portfolio-name" style="color:var(--muted);">Próximo proyecto</h3>
+            <span class="portal-portfolio-soon-badge">Próximamente</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── 📚 RECURSOS ───────────────────────────── -->
+    <div class="portal-section">
+      <div class="portal-section-head">
+        <span class="portal-section-emoji">📚</span>
+        <div>
+          <h2 class="portal-section-title">Recursos</h2>
+          <p class="portal-section-desc">Todo lo que ayuda a trabajar mejor.</p>
+        </div>
+      </div>
+
+      <div class="ut-cards">
+
+        <div class="ut-card ut-card--soon">
+          <div class="ut-card-icon">📄</div>
+          <span class="ut-card-tag">Recurso</span>
+          <h3>Manuales</h3>
+          <p>Documentos operativos del equipo: procesos, flujos y paso a paso de cada servicio.</p>
+          <span class="ut-card-soon-badge">Próximamente</span>
+        </div>
+
+        <div class="ut-card ut-card--soon">
+          <div class="ut-card-icon">🎨</div>
+          <span class="ut-card-tag">Recurso</span>
+          <h3>Branding</h3>
+          <p>Paleta de colores, tipografías y guía de identidad visual de RiO.</p>
+          <span class="ut-card-soon-badge">Próximamente</span>
+        </div>
+
+        <div class="ut-card ut-card--soon">
+          <div class="ut-card-icon">🖼️</div>
+          <span class="ut-card-tag">Recurso</span>
+          <h3>Logos</h3>
+          <p>Todos los logos de RiO en los formatos y variantes disponibles.</p>
+          <span class="ut-card-soon-badge">Próximamente</span>
+        </div>
+
+        <div class="ut-card ut-card--soon">
+          <div class="ut-card-icon">📋</div>
+          <span class="ut-card-tag">Recurso</span>
+          <h3>Plantillas</h3>
+          <p>Templates para propuestas, correos y documentos del equipo.</p>
+          <span class="ut-card-soon-badge">Próximamente</span>
+        </div>
+
+        <div class="ut-card ut-card--soon">
+          <div class="ut-card-icon">📁</div>
+          <span class="ut-card-tag">Recurso</span>
+          <h3>Documentación Interna</h3>
+          <p>Referencias técnicas, decisiones de arquitectura y flujos internos del equipo.</p>
+          <span class="ut-card-soon-badge">Próximamente</span>
+        </div>
+
+      </div>
     </div>
 
   </div>
@@ -134,6 +439,7 @@
   const USER_MAP = {
     'xikorivera@gmail.com':         'Pablo',
     'albertoperezmatta@gmail.com':  'Alberto',
+    'gabrielaaleroa@gmail.com':     'Gabriela',
     'brenda@rioimpulsodigital.com': 'Brenda'
   };
 
