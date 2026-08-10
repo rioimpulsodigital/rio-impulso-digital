@@ -1224,31 +1224,6 @@
     return lines.join('\n');
   }
 
-  function buildDesafioText(){
-    const name       = document.getElementById('pname').value       || '(sin nombre)';
-    const clientName = document.getElementById('pclientname').value || '—';
-    const exec       = document.getElementById('execName').value    || '(sin ejecutivo)';
-    const fecha      = new Date().toLocaleDateString('es-419');
-    const activeProduct = document.querySelector('.domain-choice-card.active');
-    const productLabel  = activeProduct ? getProductLabel(activeProduct.dataset.domain, false) : '(sin producto)';
-    const activeType    = document.querySelector('.type-card.active');
-
-    let lines = [
-      `Empresa: ${name}`,
-      `Contacto: ${clientName}`,
-      `WhatsApp: ${document.getElementById('pclientwa').value || '—'}`,
-      `Email: ${document.getElementById('pclientemail').value || '—'}`,
-      `Producto: ${productLabel}`,
-      `Ejecutivo: ${exec}`,
-      `Fecha: ${fecha}`,
-      `Ficha de Google previa: ${hasFicha ? 'Sí' : 'No'}`
-    ];
-
-    if(activeType){ lines.push(`Tipo de urgencia: ${activeType.dataset.type} — ${activeType.querySelector('.name').textContent}`); }
-
-    return lines.join('\n');
-  }
-
   function buildContactBlock(){
     const clientName = document.getElementById('pclientname').value || '—';
     const wa         = document.getElementById('pclientwa').value   || '—';
@@ -1271,7 +1246,6 @@
     let lines = [`Respuestas de Ficha de Google — ${name}`, `Ejecutivo: ${exec}`, ''];
     lines.push(...buildContactBlock());
     lines.push('');
-    lines.push(`Categoría principal (de Rubro): ${rubro}`);
     fichaFields.forEach(([id, label]) => { lines.push(`${label}: ${document.getElementById(id).value || '—'}`); });
 
     const activeProduct = document.querySelector('.domain-choice-card.active');
@@ -1358,7 +1332,7 @@
       { objectTypeId: '0-1', name: 'company',               value: document.getElementById('pname').value    || '—' },
       { objectTypeId: '0-1', name: 'producto_elegido',      value: productLabel },
       { objectTypeId: '0-1', name: 'ejecutivo_responsable', value: document.getElementById('execName').value || '—' },
-      { objectTypeId: '0-1', name: 'desafio',               value: buildDesafioText() },
+      { objectTypeId: '0-1', name: 'desafio',               value: document.getElementById('revealNotes').value || '—' },
       { objectTypeId: '0-1', name: 'respuestas_landing',    value: buildLandingAnswersText() }
     ];
 
@@ -1391,15 +1365,31 @@
     }
   }
 
-  function runCloseVenta(){
-    const execName = document.getElementById('execName').value || '';
-    document.getElementById('saleSuccessTitle').textContent = execName ? `¡Excelente trabajo, ${execName}!` : '¡Excelente trabajo!';
-    document.getElementById('saleSuccess').style.display = 'block';
-    document.getElementById('saleSuccess').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  async function runCloseVenta(){
+    const closeStep = document.querySelectorAll('#sendSequence .send-step')[1];
+    const closeBtn  = closeStep.querySelector('.seq-btn');
+    const originalText = closeBtn.textContent;
+    closeBtn.disabled = true;
+    closeBtn.textContent = 'Registrando...';
 
-    doCloseVenta()
-      .then(() => flashStatus('Venta registrada en CRM ✓'))
-      .catch(err => console.error('HubSpot CRM error:', err));
+    try {
+      await doCloseVenta();
+
+      closeStep.classList.add('done');
+      closeBtn.textContent = 'Registrada';
+      closeStep.querySelector('.ss-num').textContent = '✓';
+      flashStatus('✓ Venta registrada en CRM');
+
+      const execName = document.getElementById('execName').value || '';
+      document.getElementById('saleSuccessTitle').textContent = execName ? `¡Excelente trabajo, ${execName}!` : '¡Excelente trabajo!';
+      document.getElementById('saleSuccess').style.display = 'block';
+      document.getElementById('saleSuccess').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch(err) {
+      console.error('HubSpot CRM error:', err);
+      closeBtn.disabled = false;
+      closeBtn.textContent = originalText;
+      alert('⚠️ No se pudo registrar la venta en CRM. Revisa tu conexión e inténtalo nuevamente.');
+    }
   }
 
 
@@ -1415,12 +1405,18 @@
     document.querySelectorAll('#fichaToggle .fc-btn').forEach(b => b.classList.remove('active'));
     document.querySelector('#fichaToggle .fc-btn[data-has-ficha="si"]').classList.add('active');
 
-    const firstStep = document.querySelector('#sendSequence .send-step');
+    const [firstStep, closeStep] = document.querySelectorAll('#sendSequence .send-step');
     firstStep.classList.remove('done');
     const firstBtn = firstStep.querySelector('.seq-btn');
     firstBtn.disabled = false;
     firstBtn.textContent = 'Enviar';
     firstStep.querySelector('.ss-num').textContent = '1';
+
+    closeStep.classList.remove('done');
+    const closeBtn = closeStep.querySelector('.seq-btn');
+    closeBtn.disabled = false;
+    closeBtn.textContent = 'Cerrar venta';
+    closeStep.querySelector('.ss-num').textContent = '2';
 
     applyFichaState();
     updateScript();
