@@ -1418,12 +1418,14 @@
     closeBtn.textContent = 'Cerrar venta';
     closeStep.querySelector('.ss-num').textContent = '2';
 
+    document.getElementById('saleSuccess').style.display = 'none';
+    document.getElementById('saleSuccessTitle').textContent = '¡Excelente trabajo!';
+
     applyFichaState();
     updateScript();
   }
 
   function nextProspect(){
-    document.getElementById('saleSuccess').style.display = 'none';
     resetForm(); window.scrollTo(0, 0);
   }
 
