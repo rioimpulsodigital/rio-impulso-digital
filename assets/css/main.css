@@ -805,22 +805,21 @@ footer {
   position: absolute; bottom: 68px; right: 0;
   background: var(--white); border-radius: var(--r-m);
   box-shadow: 0 12px 32px rgba(0,0,0,.18);
-  padding: .5rem; display: flex; flex-direction: column; gap: .25rem;
+  padding: .5rem; display: flex; flex-direction: row; gap: .5rem;
   opacity: 0; visibility: hidden; transform: translateY(8px);
   transition: opacity .2s var(--ease), transform .2s var(--ease), visibility .2s;
-  min-width: 210px;
 }
 .wa-float.open .wa-float-menu {
   opacity: 1; visibility: visible; transform: translateY(0);
 }
 .wa-float-option {
-  display: flex; align-items: center; gap: .6rem;
-  padding: .6rem .75rem; border-radius: var(--r);
-  font-family: var(--ff-body); font-size: .85rem; color: var(--ink);
-  transition: background .2s;
+  display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; flex-shrink: 0; padding: 0;
+  border-radius: var(--r);
+  transition: background .2s, transform .2s;
 }
-.wa-float-option:hover { background: var(--off); }
-.wa-float-flag { width: 20px; height: 15px; border-radius: 2px; }
+.wa-float-option:hover { background: var(--off); transform: scale(1.08); }
+.wa-float-flag { width: 32px; height: 24px; max-width: none; border-radius: 3px; display: block; }
 @media (max-width: 640px) {
   .wa-float { right: 1rem; bottom: 1rem; }
   .wa-float-btn { width: 52px; height: 52px; }
