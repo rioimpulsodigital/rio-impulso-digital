@@ -148,3 +148,26 @@ document.querySelectorAll('.line-cta').forEach(btn => {
     }
   });
 });
+
+// WhatsApp flotante — selector de país
+const waFloat    = document.getElementById('waFloat');
+const waFloatBtn = document.getElementById('waFloatBtn');
+if (waFloat && waFloatBtn) {
+  waFloatBtn.addEventListener('click', () => {
+    const isOpen = waFloat.classList.toggle('open');
+    waFloatBtn.setAttribute('aria-expanded', String(isOpen));
+  });
+  document.addEventListener('click', (e) => {
+    if (!waFloat.contains(e.target)) {
+      waFloat.classList.remove('open');
+      waFloatBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+  waFloat.querySelectorAll('.wa-float-option').forEach(link => {
+    link.addEventListener('click', () => {
+      if (typeof gtag === 'function') {
+        gtag('event', 'contact_click', { contact_method: 'whatsapp_float', country: link.dataset.country });
+      }
+    });
+  });
+}
