@@ -111,6 +111,35 @@
       color: var(--muted); border: 1px solid var(--border);
       border-radius: 100px; padding: 4px 12px;
     }
+
+    /* ── SELECTOR DE MERCADO (solo ejecutivos multimercado — hoy, Brenda) ── */
+    .market-switcher-group {
+      display: inline-flex; align-items: center; gap: 2px;
+      border: 1.5px solid var(--border); border-radius: 100px; padding: 3px;
+      background: var(--white);
+    }
+    .market-switcher-btn {
+      font-family: var(--ff-mono); font-size: .68rem; font-weight: 700;
+      letter-spacing: .04em; border: none; background: transparent; color: var(--muted);
+      border-radius: 100px; padding: 5px 12px; cursor: pointer; transition: all .15s;
+    }
+    .market-switcher-btn:hover { color: var(--ink); }
+    .market-switcher-btn.active { background: var(--p); color: #fff; }
+    .market-switcher-btn:focus-visible {
+      outline: 2px solid var(--coral); outline-offset: 2px;
+    }
+    .nav-drawer .market-switcher-group { margin: 8px 0; }
+
+    /* ── AVISO DE ACCESO BLOQUEADO (sin mercado configurado) ── */
+    .portal-blocked {
+      border: 1.5px dashed var(--border); border-radius: var(--r-l);
+      padding: 28px 26px; background: var(--off);
+    }
+    .portal-blocked-title {
+      font-family: var(--ff-head); font-weight: 700; font-size: 1rem;
+      color: var(--ink); margin: 0 0 6px;
+    }
+    .portal-blocked-desc { font-size: .85rem; color: var(--muted); margin: 0; }
   </style>
 </head>
 <body>
@@ -170,7 +199,7 @@
   <div class="ut-container">
 
     <!-- ── 🚀 COMERCIAL ─────────────────────────── -->
-    <div class="portal-section">
+    <div class="portal-section" id="section-comercial">
       <div class="portal-section-head">
         <span class="portal-section-emoji">🚀</span>
         <div>
@@ -251,7 +280,7 @@
     </div>
 
     <!-- ── 🎨 MARKETING ──────────────────────────── -->
-    <div class="portal-section">
+    <div class="portal-section" id="section-marketing">
       <div class="portal-section-head">
         <span class="portal-section-emoji">🎨</span>
         <div>
@@ -260,46 +289,10 @@
         </div>
       </div>
 
-      <div class="portal-subsection">
+      <div class="portal-subsection" id="marketingResourcesSection">
         <p class="portal-subsection-label">Estados de WhatsApp e Historias de Instagram</p>
-        <div class="portal-portfolio-grid">
-
-          <div class="portal-portfolio-card">
-            <div class="portal-portfolio-img" style="aspect-ratio:9/8;">
-              <img src="./img%201080x1920/ficha-google.png" alt="Ficha Google" style="object-position:top;">
-            </div>
-            <div class="portal-portfolio-body">
-              <h3 class="portal-portfolio-name">Ficha Google</h3>
-              <div class="portal-portfolio-btns">
-                <a href="./img%201080x1920/ficha-google.png" class="portfolio-btn portfolio-btn--primary" target="_blank" rel="noopener">⬇ Descargar</a>
-              </div>
-            </div>
-          </div>
-
-          <div class="portal-portfolio-card">
-            <div class="portal-portfolio-img" style="aspect-ratio:9/8;">
-              <img src="./img%201080x1920/landingpage.png" alt="Landing Page" style="object-position:top;">
-            </div>
-            <div class="portal-portfolio-body">
-              <h3 class="portal-portfolio-name">Landing Page</h3>
-              <div class="portal-portfolio-btns">
-                <a href="./img%201080x1920/landingpage.png" class="portfolio-btn portfolio-btn--primary" target="_blank" rel="noopener">⬇ Descargar</a>
-              </div>
-            </div>
-          </div>
-
-          <div class="portal-portfolio-card">
-            <div class="portal-portfolio-img" style="aspect-ratio:9/8;">
-              <img src="./img%201080x1920/ficha-landing.png" alt="Promo Ficha Google + Landing Page" style="object-position:top;">
-            </div>
-            <div class="portal-portfolio-body">
-              <h3 class="portal-portfolio-name">Promo Ficha + Landing</h3>
-              <div class="portal-portfolio-btns">
-                <a href="./img%201080x1920/ficha-landing.png" class="portfolio-btn portfolio-btn--primary" target="_blank" rel="noopener">⬇ Descargar</a>
-              </div>
-            </div>
-          </div>
-
+        <div class="portal-portfolio-grid" id="marketingResourcesGrid">
+          <!-- Generado dinámicamente desde config/portal-resources.js según el mercado activo -->
         </div>
       </div>
 
@@ -492,37 +485,117 @@
   </div>
 </footer>
 
+<script src="./config/users.js" defer></script>
+<script src="./config/portal-resources.js" defer></script>
 <script src="../assets/js/main.js?v=20260627" defer></script>
 
 <script>
-  const USER_MAP = {
-    'xikorivera@gmail.com':         'Pablo',
-    'albertoperezmatta@gmail.com':  'Alberto',
-    'gabrielaaleroa@gmail.com':     'Gabriela',
-    'brenda@rioimpulsodigital.com': 'Brenda',
-    'jotaherre024@gmail.com':       'Julia',
-    'lorenaramirezfuentealba@gmail.com': 'Lorena',
-    'fjamis@gmail.com':             'Fuad',
-    'mchristian.reyes@gmail.com':   'Christian'
-  };
+  document.addEventListener('DOMContentLoaded', function () {
+    var executive = resolveExecutive();
+    var currentMarket = executive ? resolveActiveMarket(executive) : null;
 
-  function getCFUserEmail() {
-    const cookie = document.cookie.split('; ').find(r => r.startsWith('CF_Authorization='));
-    if (!cookie) return null;
-    try {
-      const payload = JSON.parse(atob(cookie.split('=')[1].split('.')[1]));
-      return payload.email || null;
-    } catch(e) { return null; }
+    renderGreeting(executive);
+    renderMarketSwitcher(executive, currentMarket);
+    applyAccessState(executive);
+    if (currentMarket) renderMarketingResources(currentMarket);
+  });
+
+  function renderGreeting(executive) {
+    if (!executive) return;
+    document.getElementById('portalDesc').innerHTML =
+      executive.name + ', RiO te da la bienvenida al Portal Interno.<br>Selecciona una herramienta para empezar.';
   }
 
-  (function initPortal() {
-    const email = getCFUserEmail();
-    const name  = email ? USER_MAP[email] : null;
-    if (name) {
-      document.getElementById('portalDesc').innerHTML =
-        name + ', RiO te da la bienvenida al Portal Interno.<br>Selecciona una herramienta para empezar.';
+  // Solo se agrega al DOM si allowedMarkets tiene más de un elemento (hoy, solo Brenda).
+  // Para el resto de ejecutivos el elemento no existe en absoluto — no solo está oculto.
+  function renderMarketSwitcher(executive, currentMarket) {
+    if (!executive || executive.allowedMarkets.length <= 1) return;
+
+    function buildGroup() {
+      var group = document.createElement('div');
+      group.className = 'market-switcher-group';
+      group.setAttribute('role', 'group');
+      group.setAttribute('aria-label', 'Mercado activo');
+      executive.allowedMarkets.forEach(function (market) {
+        var active = market === currentMarket;
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'market-switcher-btn' + (active ? ' active' : '');
+        btn.textContent = market;
+        btn.setAttribute('aria-pressed', String(active));
+        btn.addEventListener('click', function () {
+          setActiveMarket(executive, market);
+          window.location.reload();
+        });
+        group.appendChild(btn);
+      });
+      return group;
     }
-  })();
+
+    var navItem = document.createElement('li');
+    navItem.appendChild(buildGroup());
+    document.querySelector('.nav-links').appendChild(navItem);
+
+    var drawer = document.getElementById('navDrawer');
+    var drawerCta = drawer.querySelector('a[href="/#contacto"]');
+    drawer.insertBefore(buildGroup(), drawerCta);
+  }
+
+  // Comercial y Marketing quedan bloqueados para un correo autenticado que no existe
+  // en USER_MAP. Nunca se asigna Chile ni ningún otro mercado por defecto.
+  function applyAccessState(executive) {
+    if (executive) return;
+    var blockedHTML =
+      '<div class="portal-blocked">' +
+        '<p class="portal-blocked-title">Tu cuenta no tiene un mercado comercial asignado todavía.</p>' +
+        '<p class="portal-blocked-desc">Contacta a Brenda o al administrador para habilitarlo antes de usar esta sección.</p>' +
+      '</div>';
+    ['section-comercial', 'section-marketing'].forEach(function (id) {
+      var section = document.getElementById(id);
+      if (section) section.innerHTML = blockedHTML;
+    });
+    console.warn('[Portal RiO] Usuario autenticado sin mercado configurado en USER_MAP — Comercial y Marketing bloqueados.');
+  }
+
+  function renderMarketingResources(currentMarket) {
+    var grid = document.getElementById('marketingResourcesGrid');
+    if (!grid) return;
+
+    var items = MARKETING_RESOURCES
+      .filter(function (r) { return r.estado === 'activo' && (r.market === 'common' || r.market === currentMarket); })
+      .sort(function (a, b) { return a.orden - b.orden; });
+
+    if (items.length === 0) {
+      document.getElementById('marketingResourcesSection').innerHTML =
+        '<p class="portal-subsection-label">Estados de WhatsApp e Historias de Instagram</p>' +
+        '<div class="ut-cards">' +
+          '<div class="ut-card ut-card--soon">' +
+            '<div class="ut-card-icon">🖼️</div>' +
+            '<span class="ut-card-tag">Marketing</span>' +
+            '<h3>Estados e Historias</h3>' +
+            '<p>Materiales para este mercado en producción.</p>' +
+            '<span class="ut-card-soon-badge">Próximamente</span>' +
+          '</div>' +
+        '</div>';
+      return;
+    }
+
+    grid.innerHTML = items.map(function (r) {
+      return (
+        '<div class="portal-portfolio-card">' +
+          '<div class="portal-portfolio-img" style="aspect-ratio:9/8;">' +
+            '<img src="' + r.file + '" alt="' + r.alt + '" style="object-position:top;">' +
+          '</div>' +
+          '<div class="portal-portfolio-body">' +
+            '<h3 class="portal-portfolio-name">' + r.title + '</h3>' +
+            '<div class="portal-portfolio-btns">' +
+              '<a href="' + r.file + '" class="portfolio-btn portfolio-btn--primary" target="_blank" rel="noopener">⬇ Descargar</a>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+  }
 </script>
 
 </body>

@@ -422,6 +422,33 @@
   @media print {
     button.seq-btn, .send-sequence, button.discard-link, .kit-toolbar { display: none; }
   }
+
+  /* ── SELECTOR DE MERCADO (solo ejecutivos multimercado — hoy, Brenda) ── */
+  .market-switcher-group {
+    display: inline-flex; align-items: center; gap: 2px;
+    border: 1.5px solid var(--border); border-radius: 100px; padding: 3px;
+    background: var(--white);
+  }
+  .market-switcher-btn {
+    font-family: var(--ff-mono); font-size: .68rem; font-weight: 700;
+    letter-spacing: .04em; border: none; background: transparent; color: var(--muted);
+    border-radius: 100px; padding: 5px 12px; cursor: pointer; transition: all .15s;
+  }
+  .market-switcher-btn:hover { color: var(--ink); }
+  .market-switcher-btn.active { background: var(--p); color: #fff; }
+  .market-switcher-btn:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+  .nav-drawer .market-switcher-group { margin: 8px 0; }
+
+  /* ── AVISO DE ACCESO BLOQUEADO (sin mercado configurado) ── */
+  .portal-blocked {
+    border: 1.5px dashed var(--border); border-radius: var(--r-l);
+    padding: 28px 26px; background: var(--off); max-width: 640px; margin: 0 auto;
+  }
+  .portal-blocked-title {
+    font-family: var(--ff-head); font-weight: 700; font-size: 1rem;
+    color: var(--ink); margin: 0 0 6px;
+  }
+  .portal-blocked-desc { font-size: .85rem; color: var(--muted); margin: 0; }
 </style>
 </head>
 <body>
@@ -482,6 +509,7 @@
     <div class="kit-toolbar">
       <div class="kit-toolbar-left">
         <span class="kit-badge">Uso interno · Equipo comercial</span>
+        <span class="kit-badge" id="marketBadge" style="display:none;"></span>
         <input type="hidden" id="execName" value="">
       </div>
       <div class="kit-toolbar-right">
@@ -537,6 +565,26 @@
       </div>
     </div>
 
+    <!-- Datos de facturación — solo Argentina (Factura C, monotributo). Oculto por completo para CL. -->
+    <div class="prospect-box" id="arBillingFields" style="display:none;">
+      <div class="field">
+        <label>Nombre o razón social</label>
+        <input type="text" id="pclientbillingname" placeholder="Para la factura">
+      </div>
+      <div class="field">
+        <label>CUIT / CUIL / DNI</label>
+        <input type="text" id="pclientcuit" placeholder="Ej: 20-12345678-9">
+      </div>
+      <div class="field">
+        <label>Domicilio</label>
+        <input type="text" id="pclientaddress" placeholder="Para la factura">
+      </div>
+      <div class="field">
+        <label>Condición fiscal</label>
+        <input type="text" id="pclientfiscal" placeholder="Ej: Consumidor Final, Monotributo">
+      </div>
+    </div>
+
     <div class="ficha-check">
       <div>
         <div class="fc-label">¿Tiene ficha de Google activa?</div>
@@ -581,7 +629,7 @@
 
       <div class="obj-mini">
         <div class="oq">"No tengo dinero para esto ahora."</div>
-        <p class="oa">Arranca desde $50.000 CLP, sin gastos grandes de entrada, lista en 48 horas. No es una inversión grande ni un compromiso a largo plazo.</p>
+        <p class="oa">Arranca desde <span id="objPriceFrom">—</span>, sin gastos grandes de entrada, lista en 48 horas hábiles. No es una inversión grande ni un compromiso a largo plazo.</p>
       </div>
       <div class="obj-mini">
         <div class="oq">"Ya tengo Instagram / Facebook, no necesito nada más."</div>
@@ -769,54 +817,14 @@
         </ul>
       </div>
 
+      <p class="domain-note" id="promoValidityNote" style="margin-bottom:14px;"></p>
+
       <div class="price-grid" id="priceGridLanding">
-        <div class="price-card">
-          <div class="p-name">Landing Express</div>
-          <div class="p-amount">$50.000</div>
-          <div class="p-detail">CLP · pago único</div>
-          <div class="p-example">tunegocio.rio-landing.com</div>
-        </div>
-        <div class="price-card highlight">
-          <div class="p-name">Landing Premium</div>
-          <div class="p-amount">$60.000</div>
-          <div class="p-detail">CLP · pago único + renovación anual ~$10.000 CLP</div>
-          <div class="p-example">tunegocio.com</div>
-        </div>
+        <!-- Generado dinámicamente por renderPricing() desde config/markets.js -->
       </div>
 
       <div class="price-grid-5" id="priceGridFull" style="display:none;">
-        <div class="pg-row pg-row-solo">
-          <div class="price-card plan-inicial">
-            <span class="plan-tag">Plan Inicial</span>
-            <div class="p-name">Ficha de Google</div>
-            <div class="p-amount">$50.000</div>
-            <div class="p-detail">CLP · sola, sin landing</div>
-          </div>
-        </div>
-        <div class="pg-row pg-row-pair">
-          <div class="price-card">
-            <div class="p-name">Landing Express</div>
-            <div class="p-amount">$50.000</div>
-            <div class="p-detail">CLP · sola, sin ficha</div>
-          </div>
-          <div class="price-card">
-            <div class="p-name">Landing Premium</div>
-            <div class="p-amount">$60.000</div>
-            <div class="p-detail">CLP + renovación anual ~$10.000</div>
-          </div>
-        </div>
-        <div class="pg-row pg-row-pair">
-          <div class="price-card highlight">
-            <div class="p-name">Ficha Google + Landing Express</div>
-            <div class="p-amount">$90.000</div>
-            <div class="p-detail">CLP · pack, ahorra $10.000</div>
-          </div>
-          <div class="price-card highlight">
-            <div class="p-name">Ficha Google + Landing Premium</div>
-            <div class="p-amount">$100.000</div>
-            <div class="p-detail">CLP + renovación anual ~$10.000, pack ahorra $10.000</div>
-          </div>
-        </div>
+        <!-- Generado dinámicamente por renderPricing() desde config/markets.js -->
       </div>
 
       <div class="explain-box" id="packExplainBox" style="display:none;">
@@ -824,59 +832,27 @@
       </div>
 
       <div class="explain-box">
-        <b>Cómo explicar la diferencia, en una frase:</b> "Con el dominio genérico tu página funciona igual de bien, pero la dirección usa nuestro dominio de hosting — algo así como <i>tunegocio.rio-landing.com</i>. Con el dominio propio, tu página tiene su propia dirección, como <i>tunegocio.com</i>: se ve más profesional y es más fácil de recordar para tus clientes."
+        <b>Cómo explicar la diferencia, en una frase:</b> <span id="domainExplainText">"Con el dominio genérico tu página funciona igual de bien, pero la dirección usa nuestro dominio de hosting — algo así como <i>tunegocio.rio-landing.com</i>. Con el dominio propio, tu página tiene su propia dirección: se ve más profesional y es más fácil de recordar para tus clientes."</span>
       </div>
 
       <div class="check-note" style="border-style:solid;">
         <span class="tag">Decir siempre</span>
-        <span id="checkNoteText">El dominio propio tiene un costo de renovación anual aproximado de <b>$10.000 CLP</b>, aparte del pago único inicial. Además, <b>la dirección que el cliente pida es tentativa</b> — puede que ya esté registrada por otra persona. Nunca confirmes un dominio propio como definitivo en la llamada: siempre aclara que queda sujeto a verificar disponibilidad, y que si no está libre, se le proponen alternativas.</span>
+        <span id="checkNoteText">El dominio propio incluye el primer año sin costo adicional. Además, <b>la dirección que el cliente pida es tentativa</b> — puede que ya esté registrada por otra persona. Nunca confirmes un dominio propio como definitivo en la llamada: siempre aclara que queda sujeto a verificar disponibilidad, y que si no está libre, se le proponen alternativas.</span>
       </div>
 
       <p class="closing-line">"¿Cuál de estas opciones te sirve? En cuanto me digas, te mando ahora mismo el link de pago por WhatsApp. Apenas nos envíes tus datos y fotos, lo que corresponda queda listo en 48 horas — la verificación de la ficha, si aplica, depende de los tiempos de Google."</p>
 
       <div class="domain-choice-grid" id="domainChoiceGrid">
-        <div class="domain-choice-card" data-domain="generico">
-          <div class="dc-name">Eligió Landing Express</div>
-          <div class="dc-price">$50.000</div>
-        </div>
-        <div class="domain-choice-card" data-domain="personalizado">
-          <div class="dc-name">Eligió Landing Premium</div>
-          <div class="dc-price">$60.000</div>
-        </div>
+        <!-- Generado dinámicamente por renderPricing() desde config/markets.js -->
       </div>
 
       <div class="price-grid-5" id="domainChoiceGridFull" style="display:none;">
-        <div class="pg-row pg-row-solo">
-          <div class="domain-choice-card" data-domain="ficha">
-            <div class="dc-name">Solo Ficha (Plan Inicial)</div>
-            <div class="dc-price">$50.000</div>
-          </div>
-        </div>
-        <div class="pg-row pg-row-pair">
-          <div class="domain-choice-card" data-domain="generico">
-            <div class="dc-name">Solo Landing Express</div>
-            <div class="dc-price">$50.000</div>
-          </div>
-          <div class="domain-choice-card" data-domain="personalizado">
-            <div class="dc-name">Solo Landing Premium</div>
-            <div class="dc-price">$60.000</div>
-          </div>
-        </div>
-        <div class="pg-row pg-row-pair">
-          <div class="domain-choice-card" data-domain="ficha_generico">
-            <div class="dc-name">Ficha Google + Landing Express</div>
-            <div class="dc-price">$90.000</div>
-          </div>
-          <div class="domain-choice-card" data-domain="ficha_personalizado">
-            <div class="dc-name">Ficha Google + Landing Premium</div>
-            <div class="dc-price">$100.000</div>
-          </div>
-        </div>
+        <!-- Generado dinámicamente por renderPricing() desde config/markets.js -->
       </div>
 
       <div class="domain-desired-field">
         <label>Dominio propio deseado (si aplica)</label>
-        <input type="text" id="desiredDomain" placeholder="Ej: tiendadejuanito.com">
+        <input type="text" id="desiredDomain" placeholder="Ej: tiendadejuanito.cl">
       </div>
       <p class="domain-note">Recuerda: este dominio es tentativo hasta confirmar disponibilidad. Nunca prometas la dirección exacta como definitiva.</p>
 
@@ -954,44 +930,30 @@
   </div>
 </footer>
 
+<script src="./config/users.js"></script>
+<script src="./config/markets.js"></script>
 <script src="../assets/js/main.js?v=20260627" defer></script>
 
 <script>
-  /* ── IDENTIFICACIÓN POR CLOUDFLARE ACCESS ── */
-  const USER_MAP = {
-    'xikorivera@gmail.com':         'Pablo',
-    'albertoperezmatta@gmail.com':  'Alberto',
-    'gabrielaaleroa@gmail.com':     'Gabriela',
-    'brenda@rioimpulsodigital.com': 'Brenda',
-    'jotaherre024@gmail.com':       'Julia',
-    'lorenaramirezfuentealba@gmail.com': 'Lorena',
-    'fjamis@gmail.com':             'Fuad',
-    'mchristian.reyes@gmail.com':   'Christian'
-  };
+  /* ── IDENTIFICACIÓN, MERCADO Y BLOQUEO DE ACCESO ── */
+  var currentExecutive = null;
+  var currentMarket = null;
 
-  function getCFUserEmail() {
-    const cookie = document.cookie.split('; ').find(r => r.startsWith('CF_Authorization='));
-    if (!cookie) return null;
-    try {
-      const payload = JSON.parse(atob(cookie.split('=')[1].split('.')[1]));
-      return payload.email || null;
-    } catch(e) { return null; }
+  function blockKitAccess() {
+    document.getElementById('formScreen').innerHTML =
+      '<section class="ut-hero"><div class="ut-hero-content">' +
+        '<a href="/interno/" class="ut-back">Volver al portal</a>' +
+        '<p class="ut-label">Kit Comercial</p><h1>Acceso no disponible</h1>' +
+      '</div></section>' +
+      '<div class="form-page"><div class="portal-blocked">' +
+        '<p class="portal-blocked-title">Tu cuenta no tiene un mercado comercial asignado todavía.</p>' +
+        '<p class="portal-blocked-desc">Contacta a Brenda o al administrador para habilitarlo antes de usar el Kit Comercial.</p>' +
+      '</div></div>';
   }
-
-  (function initUser() {
-    const email = getCFUserEmail();
-    const name  = email ? USER_MAP[email] : null;
-    if (name) { document.getElementById('execName').value = name; }
-  })();
-
-  /* ── ─────────────────────────────────────── ── */
 
   function updateScript(){
     renderOpeningScript();
   }
-
-  document.getElementById('pname').addEventListener('input', updateScript);
-  document.getElementById('execName').addEventListener('input', updateScript);
 
   let hasFicha = true;
   let contactMode = 'llamada';
@@ -1011,7 +973,6 @@
       discardBtn: 'Descartar Lead',
       prepTitle: 'Antes de llamar',
       prepText: 'Busca el negocio en Google Maps para ver si tiene ficha activa, y marca la opción correspondiente abajo. <b>Si tiene ficha</b>, aprovecha para revisar sus fotos, reseñas y categoría — con eso ya llegas con más contexto a la llamada. <b>Si no tiene</b>, no hay nada que revisar ahí, directo al guion correspondiente. En cualquiera de los dos casos, clasifica mentalmente qué tipo de urgencia (A/B/C/D) le corresponde según su rubro — eso lo vas a confirmar recién en el paso 3.',
-      checkNote: 'El dominio propio tiene un costo de renovación anual aproximado de <b>$10.000 CLP</b>, aparte del pago único inicial. Además, <b>la dirección que el cliente pida es tentativa</b> — puede que ya esté registrada por otra persona. Nunca confirmes un dominio propio como definitivo en la llamada: siempre aclara que queda sujeto a verificar disponibilidad, y que si no está libre, se le proponen alternativas.',
       flowTitle: 'Orden de la llamada',
       flowStep1: 'Antes de llamar: revisa si el negocio tiene ficha de Google activa (buscándolo en Maps) y marca el check correspondiente arriba — eso decide qué guion y qué preguntas siguen.',
       discardConfirm: '¿Descartar este lead y limpiar todos los campos? No se envía nada y no se puede deshacer.'
@@ -1020,7 +981,6 @@
       discardBtn: 'Descartar Lead',
       prepTitle: 'Antes de la visita',
       prepText: 'Busca el negocio en Google Maps para ver si tiene ficha activa, y marca la opción correspondiente abajo. <b>Si tiene ficha</b>, aprovecha para revisar sus fotos, reseñas y categoría — con eso ya llegas con más contexto a la visita. <b>Si no tiene</b>, no hay nada que revisar ahí, directo al guion correspondiente. En cualquiera de los dos casos, clasifica mentalmente qué tipo de urgencia (A/B/C/D) le corresponde según su rubro — eso lo vas a confirmar recién en el paso 3.',
-      checkNote: 'El dominio propio tiene un costo de renovación anual aproximado de <b>$10.000 CLP</b>, aparte del pago único inicial. Además, <b>la dirección que el cliente pida es tentativa</b> — puede que ya esté registrada por otra persona. Nunca confirmes un dominio propio como definitivo en la visita: siempre aclara que queda sujeto a verificar disponibilidad, y que si no está libre, se le proponen alternativas.',
       flowTitle: 'Orden de la visita',
       flowStep1: 'Antes de visitar: revisa si el negocio tiene ficha de Google activa (buscándolo en Maps) y marca el check correspondiente arriba — eso decide qué guion y qué preguntas siguen.',
       discardConfirm: '¿Descartar este lead y limpiar todos los campos? No se envía nada y no se puede deshacer.'
@@ -1054,14 +1014,20 @@
       `No sigas directo con las preguntas. Primero confirma el interés real con algo simple: <b>"${THERMOS[fichaKey]}"</b> Lo que responda aquí te dice si continúas o cierras ${closingWord}.`;
   }
 
-  document.querySelectorAll('#contactModeToggle .fc-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#contactModeToggle .fc-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      contactMode = btn.dataset.mode;
-      applyContactMode();
+  function bindContactModeToggle(){
+    document.querySelectorAll('#contactModeToggle .fc-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#contactModeToggle .fc-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        contactMode = btn.dataset.mode;
+        applyContactMode();
+      });
     });
-  });
+  }
+
+  function buildCheckNoteText(){
+    return 'El dominio propio incluye el primer año sin costo adicional — desde el segundo año, tú realizás directamente la renovación; RiO te avisa cuándo vence, pero no la cobra ni la gestiona. Además, <b>la dirección que el cliente pida es tentativa</b> — puede que ya esté registrada por otra persona. Nunca confirmes un dominio propio como definitivo en la ' + (contactMode === 'terreno' ? 'visita' : 'llamada') + ': siempre aclara que queda sujeto a verificar disponibilidad, y que si no está libre, se le proponen alternativas.';
+  }
 
   function applyContactMode(){
     document.getElementById('f1Text').innerHTML = F1_TEXT[contactMode];
@@ -1071,7 +1037,7 @@
     document.getElementById('discardBtnLabel').textContent  = t.discardBtn;
     document.getElementById('prepTitle').textContent        = t.prepTitle;
     document.getElementById('prepText').innerHTML           = t.prepText;
-    document.getElementById('checkNoteText').innerHTML      = t.checkNote;
+    document.getElementById('checkNoteText').innerHTML      = buildCheckNoteText();
     document.getElementById('flowRecapTitle').textContent   = t.flowTitle;
     document.getElementById('flowStep1').textContent        = t.flowStep1;
     if (contactMode === 'llamada') {
@@ -1083,14 +1049,16 @@
     renderOpeningScript();
   }
 
-  document.querySelectorAll('#fichaToggle .fc-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#fichaToggle .fc-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      hasFicha = btn.dataset.hasFicha === 'si';
-      applyFichaState();
+  function bindFichaToggle(){
+    document.querySelectorAll('#fichaToggle .fc-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#fichaToggle .fc-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        hasFicha = btn.dataset.hasFicha === 'si';
+        applyFichaState();
+      });
     });
-  });
+  }
 
   function applyFichaState(){
     document.getElementById('fichaQuestionsSection').style.display = hasFicha ? 'none' : 'block';
@@ -1101,11 +1069,8 @@
     document.getElementById('domainChoiceGrid').style.display      = hasFicha ? 'grid' : 'none';
     document.getElementById('domainChoiceGridFull').style.display  = hasFicha ? 'none' : 'flex';
     document.querySelectorAll('.domain-choice-card').forEach(c => c.classList.remove('active'));
-    if(typeof updateSendUI === 'function') updateSendUI();
     renderOpeningScript();
   }
-
-  applyContactMode();
 
   const questions = {
     A: "¿Hay momentos donde se llenan o no dan abasto?",
@@ -1114,68 +1079,63 @@
     D: "No preguntes por urgencia — usá otro gancho (garantía, diferenciación, prueba social)."
   };
 
-  document.querySelectorAll('.type-card').forEach(card => {
-    card.addEventListener('click', () => {
-      document.querySelectorAll('.type-card').forEach(c => c.classList.remove('active'));
-      card.classList.add('active');
-      const type = card.dataset.type;
-      const box  = document.getElementById('revealBox');
-      document.getElementById('revealQuestion').textContent = questions[type];
-      box.classList.add('show');
+  function bindTypeCards(){
+    document.querySelectorAll('.type-card').forEach(card => {
+      card.addEventListener('click', () => {
+        document.querySelectorAll('.type-card').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        const type = card.dataset.type;
+        const box  = document.getElementById('revealBox');
+        document.getElementById('revealQuestion').textContent = questions[type];
+        box.classList.add('show');
+      });
     });
-  });
+  }
 
-  document.querySelectorAll('.domain-choice-card').forEach(card => {
-    card.addEventListener('click', () => {
-      document.querySelectorAll('.domain-choice-card').forEach(c => c.classList.remove('active'));
-      card.classList.add('active');
-      if(typeof updateSendUI === 'function') updateSendUI();
+  // Los .domain-choice-card se regeneran cada vez que renderPricing() corre (incl. al
+  // cambiar de mercado) — por eso los listeners se re-adjuntan cada vez, en vez de una
+  // sola vez al cargar la página.
+  function attachDomainChoiceListeners(){
+    document.querySelectorAll('.domain-choice-card').forEach(card => {
+      card.addEventListener('click', () => {
+        document.querySelectorAll('.domain-choice-card').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+      });
     });
-  });
-
-  const PRODUCTS = {
-    generico:            { landing:true,  ficha:false, personalizado:false, price:50000,  label:'Landing Express' },
-    personalizado:       { landing:true,  ficha:false, personalizado:true,  price:60000,  label:'Landing Premium' },
-    ficha:               { landing:false, ficha:true,  personalizado:false, price:50000,  label:'Ficha de Google — Plan Inicial' },
-    ficha_generico:      { landing:true,  ficha:true,  personalizado:false, price:90000,  label:'Ficha Google + Landing Express' },
-    ficha_personalizado: { landing:true,  ficha:true,  personalizado:true,  price:100000, label:'Ficha Google + Landing Premium' }
-  };
-
-  const PAYMENT_LINKS = {
-    generico:            'https://mpago.la/2tiWxC7',
-    personalizado:       'https://mpago.la/1BhuLBq',
-    ficha:               'https://mpago.la/2u2x2cK',
-    ficha_generico:      'https://mpago.la/33xENP1',
-    ficha_personalizado: 'https://mpago.la/2BbjWYG'
-  };
+  }
 
   const HUBSPOT_PORTAL_ID  = '51671122';
   const HUBSPOT_FORM_GUID  = 'cb4cb2df-ca0f-42ee-bf54-a0830e8ba6a5';
   const HUBSPOT_ENDPOINT   = `https://api.hsforms.com/submissions/v3/integration/submit/${HUBSPOT_PORTAL_ID}/${HUBSPOT_FORM_GUID}`;
 
   function normalizePhone(raw){ return raw.replace(/[^\d]/g, ''); }
-  function formatCLP(n){ return '$' + n.toLocaleString('es-CL'); }
 
   function getProductLabel(key, forClientMessage){
-    const p = PRODUCTS[key];
+    const config = MARKETS[currentMarket];
+    const p = config.products[key];
     if(!p) return key;
-    if(!p.personalizado){
-      return forClientMessage ? p.label : `${p.label} (${formatCLP(p.price)} CLP)`;
+    const isPremiumTier = (key === 'personalizado' || key === 'ficha_personalizado');
+    if(!isPremiumTier){
+      return forClientMessage ? p.label : `${p.label} (${config.formatPrice(getActivePrice(currentMarket, key))} ${config.currency})`;
     }
     const desired   = document.getElementById('desiredDomain').value.trim();
     const domainName = desired || '(a definir)';
     if(forClientMessage){
       return `${p.label} — dominio: ${domainName} (tentativo, sujeto a confirmar disponibilidad)`;
     }
-    return `${p.label} — ${domainName} (${formatCLP(p.price)} CLP + renovación anual ~$10.000 CLP, tentativo)`;
+    return `${p.label} — ${domainName} (${config.formatPrice(getActivePrice(currentMarket, key))} ${config.currency} + dominio incluido el 1er año, tentativo)`;
   }
 
   function buildPaymentMessage(productKey){
-    const p    = PRODUCTS[productKey];
+    const config = MARKETS[currentMarket];
+    const product = config.products[productKey];
+    const terms = getPaymentTerms(currentMarket, productKey);
     const biz  = document.getElementById('pname').value.trim()    || 'tu negocio';
     const exec = document.getElementById('execName').value.trim() || 'RiO Impulso Digital';
     const productLabel = getProductLabel(productKey, true);
-    const link = PAYMENT_LINKS[productKey];
+    const includesLanding = (productKey === 'generico' || productKey === 'personalizado' || productKey === 'ficha_generico' || productKey === 'ficha_personalizado');
+    const includesFicha   = (productKey === 'ficha' || productKey === 'ficha_generico' || productKey === 'ficha_personalizado');
+    const isPremiumTier   = (productKey === 'personalizado' || productKey === 'ficha_personalizado');
 
     let lines = [
       `¡Hola! Gracias por tu confianza en RiO Impulso Digital 🚀`,
@@ -1183,7 +1143,7 @@
       `Así queda tu pedido para ${biz}:`
     ];
 
-    if(p.landing){
+    if(includesLanding){
       lines.push(
         `✅ Diseño profesional`,
         `✅ Hosting gratuito de por vida`,
@@ -1193,33 +1153,56 @@
       );
     }
 
-    if(p.ficha){
+    if(includesFicha){
       lines.push(
         `✅ Creación o reclamo de tu perfil (ficha) en Google`,
         `✅ Configuración completa (categoría, horarios, teléfono, dirección o zona)`,
         `✅ Logo, foto de portada y fotos del negocio`,
         `✅ Optimización SEO local`
       );
-      if(!p.landing){ lines.push(`✅ ${productLabel}`); }
+      if(!includesLanding){ lines.push(`✅ ${productLabel}`); }
     }
 
     lines.push(``);
 
-    if(p.landing && p.ficha){
-      lines.push(`Tu landing estará lista en 48 horas después de que nos envíes tus fotos y tu logo (si tienes). La ficha de Google la dejamos configurada y enviada a verificación en el mismo plazo — la confirmación final de Google puede demorar más, eso depende de sus tiempos, no de nosotros.`);
-    } else if(p.ficha){
-      lines.push(`Dejamos tu ficha configurada y enviada a verificación en 48 horas después de que nos envíes tus fotos y tus datos. La confirmación final depende de los tiempos de Google, puede demorar un poco más.`);
+    if(includesLanding && includesFicha){
+      lines.push(`Tu landing estará lista en 48 horas hábiles después de que nos envíes tus fotos y tu logo (si tienes). La ficha de Google la dejamos configurada y enviada a verificación en 3 días hábiles — la confirmación final de Google puede demorar más, eso depende de sus tiempos, no de nosotros.`);
+    } else if(includesFicha){
+      lines.push(`Dejamos tu ficha configurada y enviada a verificación en 3 días hábiles después de que nos envíes tus fotos y tus datos. La confirmación final depende de los tiempos de Google, puede demorar un poco más.`);
     } else {
-      lines.push(`Tu página estará lista en 48 horas después de que nos envíes tus fotos y tu logo (si tienes).`);
+      lines.push(`Tu página estará lista en 48 horas hábiles después de que nos envíes tus fotos y tu logo (si tienes).`);
     }
 
-    if(p.personalizado){
+    if(isPremiumTier){
       lines.push(``);
-      lines.push(`Recordatorio: el dominio propio tiene una renovación anual aproximada de $10.000 CLP, aparte de este pago. Además, la dirección que elegiste queda sujeta a que esté disponible — te confirmamos apenas la verifiquemos, y si no lo está, te proponemos alternativas.`);
+      lines.push(`Recordatorio: el dominio propio incluye el primer año sin costo adicional — desde el segundo año vos hacés directamente la renovación, te avisamos cuándo vence. Además, la dirección que elegiste queda sujeta a que esté disponible — te confirmamos apenas la verifiquemos, y si no lo está, te proponemos alternativas.`);
     }
 
     lines.push(``);
-    lines.push(`Para confirmar y comenzar, puedes pagar aquí: ${link}`);
+
+    if(config.paymentMethod === 'mercadopago_link'){
+      if(terms.plan === '100'){
+        lines.push(`Para confirmar y comenzar, puedes pagar aquí: ${product.paymentLink}`);
+      } else {
+        lines.push(`Este link corresponde al primer 50% (${config.formatPrice(terms.initial)} ${config.currency} de ${config.formatPrice(terms.total)} ${config.currency} en total). El proyecto comienza en cuanto confirmemos ese pago y tengamos todos los materiales. El 50% restante (${config.formatPrice(terms.balance)} ${config.currency}) se paga antes de la publicación definitiva.`);
+        lines.push(`Puedes pagar el primer 50% aquí: ${product.paymentLink}`);
+      }
+    } else {
+      const amountLabel = terms.plan === '100' ? 'el total' : 'el anticipo (50%)';
+      lines.push(`Para comenzar, el monto a transferir es ${amountLabel}: ${config.formatPrice(terms.initial)} ${config.currency}.`);
+      if(terms.plan !== '100'){
+        lines.push(`El saldo de ${config.formatPrice(terms.balance)} ${config.currency} se transfiere antes de publicar la versión definitiva.`);
+      }
+      lines.push(``);
+      lines.push(`Datos para transferir:`);
+      lines.push(`Alias: ${config.transfer.alias}`);
+      lines.push(`CVU: ${config.transfer.cvu}`);
+      lines.push(`Titular: ${config.transfer.titular}`);
+      lines.push(``);
+      lines.push(`Por favor verificá que el nombre de la titular coincida antes de transferir, y envianos el comprobante apenas lo hagas.`);
+      lines.push(`El trabajo comienza en cuanto el pago esté acreditado y tengamos toda la información y los materiales completos.`);
+    }
+
     lines.push(``);
     lines.push(`Cualquier duda, escríbeme.`);
     lines.push(`— ${exec}, RiO Impulso Digital`);
@@ -1232,7 +1215,16 @@
     const wa         = document.getElementById('pclientwa').value   || '—';
     const email      = document.getElementById('pclientemail').value || '—';
     const dir        = !hasFicha ? (document.getElementById('f2').value || '—') : '— (no se pidió, el negocio ya tenía ficha)';
-    return [`Contacto: ${clientName}`, `WhatsApp: ${wa}`, `Email: ${email}`, `Dirección / zona de servicio: ${dir}`];
+    let lines = [`Contacto: ${clientName}`, `WhatsApp: ${wa}`, `Email: ${email}`, `Dirección / zona de servicio: ${dir}`];
+    if(currentMarket === 'AR'){
+      lines.push(
+        `Facturación — Nombre/razón social: ${document.getElementById('pclientbillingname').value || '—'}`,
+        `Facturación — CUIT/CUIL/DNI: ${document.getElementById('pclientcuit').value || '—'}`,
+        `Facturación — Domicilio: ${document.getElementById('pclientaddress').value || '—'}`,
+        `Facturación — Condición fiscal: ${document.getElementById('pclientfiscal').value || '—'}`
+      );
+    }
+    return lines;
   }
 
   function buildFichaAnswersText(){
@@ -1298,17 +1290,26 @@
   }
 
   function doSendPaymentLink(){
+    if(!currentExecutive || !currentMarket){ alert('No hay mercado autorizado para esta cuenta. Contactá a Brenda.'); return false; }
     const selected = document.querySelector('.domain-choice-card.active');
     if(!selected){ alert('Primero selecciona qué producto eligió el cliente.'); return false; }
-    const link = PAYMENT_LINKS[selected.dataset.domain];
-    if(!link || link.startsWith('PENDIENTE')){ alert('Este producto todavía no tiene link de pago cargado en el sistema. Avisale a Brenda antes de seguir — no se puede enviar un link que no existe.'); return false; }
+    const productKey = selected.dataset.domain;
+
+    if(MARKETS[currentMarket].paymentMethod === 'mercadopago_link'){
+      const conflict = getPaymentLinkConflict(productKey);
+      if(conflict){
+        alert('⚠️ El enlace de pago de este producto no cobra el monto correcto en este momento. Avisale a Brenda antes de continuar — no se puede enviar un link con el monto equivocado.');
+        return false;
+      }
+    }
+
     const rawPhone = document.getElementById('pclientwa').value.trim();
     const phone    = normalizePhone(rawPhone);
     if(!phone){ alert('Falta el WhatsApp del cliente. Completalo en el campo "WhatsApp del cliente" arriba de todo.'); return false; }
-    const text = buildPaymentMessage(selected.dataset.domain);
+    const text = buildPaymentMessage(productKey);
     if(navigator.clipboard){ navigator.clipboard.writeText(text).catch(()=>{}); }
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
-    flashStatus('Abriendo WhatsApp del cliente...');
+    flashStatus(MARKETS[currentMarket].paymentMethod === 'bank_transfer' ? 'Abriendo WhatsApp del cliente (datos de transferencia)...' : 'Abriendo WhatsApp del cliente...');
     return true;
   }
 
@@ -1324,6 +1325,13 @@
   }
 
   async function doCloseVenta(){
+    if(!currentExecutive || !currentMarket){
+      throw new Error('No hay mercado autorizado para registrar esta venta.');
+    }
+    if(currentExecutive.allowedMarkets.indexOf(currentMarket) === -1){
+      throw new Error('El mercado activo no está autorizado para este usuario.');
+    }
+
     const activeProduct = document.querySelector('.domain-choice-card.active');
     const productLabel  = activeProduct ? getProductLabel(activeProduct.dataset.domain, false) : '—';
     const clientName    = (document.getElementById('pclientname').value || '').trim();
@@ -1331,6 +1339,10 @@
     const firstname     = nameParts[0] || '';
     const lastname      = nameParts.slice(1).join(' ') || '';
 
+    // mercado_comercial NO se envía (decisión de Brenda, 22 ago 2026 — reemplaza la
+    // autorización de RIO-91): no se confirmó que la propiedad exista en HubSpot, y
+    // enviar un campo inexistente podría rechazar el registro completo. El mercado se
+    // identifica igual por país + teléfono, ya presentes en company/hs_whatsapp_phone_number.
     const fields = [
       { objectTypeId: '0-1', name: 'company',               value: document.getElementById('pname').value    || '—' },
       { objectTypeId: '0-1', name: 'producto_elegido',      value: productLabel },
@@ -1397,7 +1409,7 @@
 
 
   function resetForm(){
-    ['pname','pclientname','pclientwa','pclientemail','desiredDomain'].forEach(id => { document.getElementById(id).value = ''; });
+    ['pname','pclientname','pclientwa','pclientemail','desiredDomain','pclientbillingname','pclientcuit','pclientaddress','pclientfiscal'].forEach(id => { document.getElementById(id).value = ''; });
     document.querySelectorAll('.qcard textarea').forEach(ta => ta.value = '');
     document.getElementById('revealNotes').value = '';
     document.querySelectorAll('.type-card').forEach(c => c.classList.remove('active'));
@@ -1438,7 +1450,187 @@
     document.getElementById('pname').focus();
   }
 
-  applyFichaState();
+  /* ── PRECIOS Y SELECCIÓN DE PRODUCTO — generados desde config/markets.js ── */
+
+  const LANDING_ONLY_KEYS = ['generico', 'personalizado'];
+  const ALL_PRODUCT_KEYS  = ['ficha', 'generico', 'personalizado', 'ficha_generico', 'ficha_personalizado'];
+  const DOMAIN_CHOICE_LABELS = {
+    ficha: 'Solo Ficha (Plan Inicial)',
+    generico: 'Solo Landing Express',
+    personalizado: 'Solo Landing Premium',
+    ficha_generico: 'Ficha Google + Landing Express',
+    ficha_personalizado: 'Ficha Google + Landing Premium'
+  };
+  const DOMAIN_CHOICE_LABELS_SIMPLE = {
+    generico: 'Eligió Landing Express',
+    personalizado: 'Eligió Landing Premium'
+  };
+
+  function buildPriceCardHTML(key, opts){
+    opts = opts || {};
+    const config = MARKETS[currentMarket];
+    const product = config.products[key];
+    const price = getActivePrice(currentMarket, key);
+    const isPremiumTier = (key === 'personalizado' || key === 'ficha_personalizado');
+    const paymentNote = product.paymentPlan === '100' ? 'pago único' : '50% al inicio + 50% antes de publicar';
+    const detail = config.currency + ' · ' + paymentNote + (isPremiumTier ? ' · dominio propio incluido el 1er año' : '');
+    const showExample = (key !== 'ficha');
+    const example = isPremiumTier ? config.domainExample : 'tunegocio.rio-landing.com';
+    const cls = 'price-card' + (opts.highlight ? ' highlight' : '') + (opts.extraClass ? ' ' + opts.extraClass : '');
+    return (
+      '<div class="' + cls + '">' +
+        (opts.planTag ? '<span class="plan-tag">' + opts.planTag + '</span>' : '') +
+        '<div class="p-name">' + product.label + '</div>' +
+        '<div class="p-amount">' + config.formatPrice(price) + '</div>' +
+        '<div class="p-detail">' + detail + '</div>' +
+        (showExample ? '<div class="p-example">' + example + '</div>' : '') +
+      '</div>'
+    );
+  }
+
+  function buildDomainChoiceCardHTML(key, name){
+    const config = MARKETS[currentMarket];
+    const price = getActivePrice(currentMarket, key);
+    return (
+      '<div class="domain-choice-card" data-domain="' + key + '">' +
+        '<div class="dc-name">' + name + '</div>' +
+        '<div class="dc-price">' + config.formatPrice(price) + '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderPricing(){
+    const config = MARKETS[currentMarket];
+    const previousSelection = document.querySelector('.domain-choice-card.active');
+    const previousKey = previousSelection ? previousSelection.dataset.domain : null;
+
+    document.getElementById('priceGridLanding').innerHTML = LANDING_ONLY_KEYS
+      .map(key => buildPriceCardHTML(key, { highlight: key === 'personalizado' }))
+      .join('');
+
+    document.getElementById('priceGridFull').innerHTML =
+      '<div class="pg-row pg-row-solo">' + buildPriceCardHTML('ficha', { extraClass: 'plan-inicial', planTag: 'Plan Inicial' }) + '</div>' +
+      '<div class="pg-row pg-row-pair">' + buildPriceCardHTML('generico') + buildPriceCardHTML('personalizado') + '</div>' +
+      '<div class="pg-row pg-row-pair">' + buildPriceCardHTML('ficha_generico', { highlight: true }) + buildPriceCardHTML('ficha_personalizado', { highlight: true }) + '</div>';
+
+    document.getElementById('domainChoiceGrid').innerHTML = LANDING_ONLY_KEYS
+      .map(key => buildDomainChoiceCardHTML(key, DOMAIN_CHOICE_LABELS_SIMPLE[key]))
+      .join('');
+
+    document.getElementById('domainChoiceGridFull').innerHTML =
+      '<div class="pg-row pg-row-solo">' + buildDomainChoiceCardHTML('ficha', DOMAIN_CHOICE_LABELS.ficha) + '</div>' +
+      '<div class="pg-row pg-row-pair">' + buildDomainChoiceCardHTML('generico', DOMAIN_CHOICE_LABELS.generico) + buildDomainChoiceCardHTML('personalizado', DOMAIN_CHOICE_LABELS.personalizado) + '</div>' +
+      '<div class="pg-row pg-row-pair">' + buildDomainChoiceCardHTML('ficha_generico', DOMAIN_CHOICE_LABELS.ficha_generico) + buildDomainChoiceCardHTML('ficha_personalizado', DOMAIN_CHOICE_LABELS.ficha_personalizado) + '</div>';
+
+    attachDomainChoiceListeners();
+    if(previousKey){
+      document.querySelectorAll('.domain-choice-card[data-domain="' + previousKey + '"]').forEach(c => c.classList.add('active'));
+    }
+
+    // Textos auxiliares dependientes del mercado
+    const objPriceEl = document.getElementById('objPriceFrom');
+    if(objPriceEl){ objPriceEl.textContent = config.formatPrice(getActivePrice(currentMarket, 'ficha')) + ' ' + config.currency; }
+
+    const promoNote = document.getElementById('promoValidityNote');
+    if(promoNote){
+      promoNote.textContent = isPromoActive()
+        ? 'Precio de lanzamiento vigente hasta el 30/09/2026 inclusive. Desde el 01/10/2026 rige el precio regular.'
+        : 'La promoción de lanzamiento venció el 30/09/2026 — se muestra el precio regular.';
+    }
+
+    const domainExplainEl = document.getElementById('domainExplainText');
+    if(domainExplainEl){
+      domainExplainEl.innerHTML = '"Con el dominio genérico tu página funciona igual de bien, pero la dirección usa nuestro dominio de hosting — algo así como <i>tunegocio.rio-landing.com</i>. Con el dominio propio, tu página tiene su propia dirección, como <i>' + config.domainExample + '</i>: se ve más profesional y es más fácil de recordar para tus clientes."';
+    }
+
+    const domainInput = document.getElementById('desiredDomain');
+    if(domainInput){ domainInput.placeholder = 'Ej: tiendadejuanito' + config.domainExample.replace('tunegocio', ''); }
+
+    const checkNoteEl = document.getElementById('checkNoteText');
+    if(checkNoteEl){ checkNoteEl.innerHTML = buildCheckNoteText(); }
+  }
+
+  /* ── MERCADO — visibilidad de campos de facturación AR y selector Brenda ── */
+
+  function applyArgentinaBillingVisibility(){
+    const block = document.getElementById('arBillingFields');
+    if(block){ block.style.display = (currentMarket === 'AR') ? 'grid' : 'none'; }
+    const badge = document.getElementById('marketBadge');
+    if(badge){
+      badge.style.display = 'inline-flex';
+      badge.textContent = 'Mercado: ' + currentMarket;
+    }
+  }
+
+  function renderMarketSwitcher(){
+    if(!currentExecutive || currentExecutive.allowedMarkets.length <= 1) return;
+
+    function buildGroup(){
+      const group = document.createElement('div');
+      group.className = 'market-switcher-group';
+      group.setAttribute('role', 'group');
+      group.setAttribute('aria-label', 'Mercado activo');
+      currentExecutive.allowedMarkets.forEach(market => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'market-switcher-btn' + (market === currentMarket ? ' active' : '');
+        btn.textContent = market;
+        btn.setAttribute('aria-pressed', String(market === currentMarket));
+        btn.addEventListener('click', () => switchMarket(market));
+        group.appendChild(btn);
+      });
+      return group;
+    }
+
+    const navItem = document.createElement('li');
+    navItem.appendChild(buildGroup());
+    document.querySelector('.nav-links').appendChild(navItem);
+
+    const drawer = document.getElementById('navDrawer');
+    const drawerCta = drawer.querySelector('a[href="/#contacto"]');
+    drawer.insertBefore(buildGroup(), drawerCta);
+  }
+
+  function switchMarket(market){
+    if(market === currentMarket) return;
+    setActiveMarket(currentExecutive, market);
+    currentMarket = market;
+    document.querySelectorAll('.market-switcher-btn').forEach(btn => {
+      const active = btn.textContent === market;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
+    renderPricing();
+    applyArgentinaBillingVisibility();
+    renderOpeningScript();
+  }
+
+  /* ── ARRANQUE ── */
+
+  function initKitInteractivity(){
+    document.getElementById('pname').addEventListener('input', updateScript);
+    document.getElementById('execName').addEventListener('input', updateScript);
+    bindContactModeToggle();
+    bindFichaToggle();
+    bindTypeCards();
+    applyContactMode();
+    applyFichaState();
+  }
+
+  (function initUser(){
+    currentExecutive = resolveExecutive();
+    if(!currentExecutive){
+      blockKitAccess();
+      console.warn('[Kit RiO] Usuario autenticado sin mercado configurado en USER_MAP — Kit bloqueado.');
+      return;
+    }
+    currentMarket = resolveActiveMarket(currentExecutive);
+    document.getElementById('execName').value = currentExecutive.name;
+    renderMarketSwitcher();
+    applyArgentinaBillingVisibility();
+    renderPricing();
+    initKitInteractivity();
+  })();
 </script>
 </body>
 </html>
