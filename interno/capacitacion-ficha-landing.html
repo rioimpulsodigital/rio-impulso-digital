@@ -310,7 +310,7 @@
 
       <div class="training-toolbar">
         <div>
-          <span class="training-progress-label" id="progressLabel">Módulo 0 de 13</span>
+          <span class="training-progress-label" id="progressLabel">Módulo 0 de 14</span>
           <div class="training-progress-track"><div class="training-progress-fill" id="progressFill" style="width:0%;"></div></div>
         </div>
         <span class="kit-badge" id="marketBadge" style="font-family:var(--ff-mono);font-size:.62rem;letter-spacing:.07em;text-transform:uppercase;color:var(--sec);border:1px solid var(--sec);border-radius:100px;padding:5px 12px;"></span>
@@ -414,19 +414,22 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // ── Definición de los 13 módulos ──
+  // Nota: el número del módulo (n, orden que ve el usuario) no siempre coincide con
+  // el número en el nombre de la función renderModuleN — las funciones conservan el
+  // nombre que tenían cuando se crearon; reordenar acá no exige renombrarlas.
   var MODULES = [
     { n: 1, title: 'Así te encuentra un cliente', sub: 'Búsqueda local simulada', render: renderModule1 },
     { n: 2, title: 'Qué es una Ficha de Google', sub: 'Explorá cada elemento', render: renderModule2 },
     { n: 3, title: 'La oportunidad que falta', sub: 'Ficha sin página propia', render: renderModule3 },
     { n: 4, title: 'Qué es una Landing Page', sub: 'Una presentación ordenada', render: renderModule4 },
-    { n: 5, title: 'El ecosistema completo', sub: 'Redes + Google + Landing + WhatsApp', render: renderModule5 },
-    { n: 6, title: 'Comparar escenarios', sub: 'Qué resuelve cada combinación', render: renderModule6 },
-    { n: 7, title: 'Reconocer la urgencia real', sub: 'Se descubre, no se inventa', render: renderModule7 },
-    { n: 8, title: 'Posibles objeciones', sub: 'La mejor respuesta natural', render: renderModule8 },
-    { n: 9, title: 'Los cinco productos de RiO', sub: 'Alcance, condiciones y precio vigente', render: renderModule9 },
-    { n: 10, title: 'Express versus Premium', sub: 'Una sola diferencia real', render: renderModule10 },
-    { n: 11, title: 'Elegir la solución', sub: '6 casos para diagnosticar', render: renderModule11 },
-    { n: 12, title: 'Las preguntas de la Landing', sub: 'Qué preguntamos y para qué sirve cada respuesta', render: renderModule12 },
+    { n: 5, title: 'Las preguntas de la Landing', sub: 'Qué preguntamos y para qué sirve cada respuesta', render: renderModule12 },
+    { n: 6, title: 'El ecosistema completo', sub: 'Redes + Google + Landing + WhatsApp', render: renderModule5 },
+    { n: 7, title: 'Comparar escenarios', sub: 'Qué resuelve cada combinación', render: renderModule6 },
+    { n: 8, title: 'Reconocer la urgencia real', sub: 'Se descubre, no se inventa', render: renderModule7 },
+    { n: 9, title: 'Posibles objeciones', sub: 'La mejor respuesta natural', render: renderModule8 },
+    { n: 10, title: 'Los cinco productos de RiO', sub: 'Alcance, condiciones y precio vigente', render: renderModule9 },
+    { n: 11, title: 'Express versus Premium', sub: 'Una sola diferencia real', render: renderModule10 },
+    { n: 12, title: 'Elegir la solución', sub: '6 casos para diagnosticar', render: renderModule11 },
     { n: 13, title: 'Después de la conversación', sub: 'El paso obligatorio por el Portal', render: renderModule13 },
     { n: 14, title: 'Autoevaluación final', sub: 'Repaso de cierre', render: renderModule14 }
   ];
@@ -1017,7 +1020,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // Se inicializa acá, al final, para que todas las funciones y datos de los
-  // módulos (ej. PRODUCT_DETAILS/PRODUCT_ORDER del módulo 9) ya existan antes
+  // módulos (ej. PRODUCT_DETAILS/PRODUCT_ORDER del módulo "Los cinco productos") ya existan antes
   // de que buildModuleScreens() los use — evita depender del orden de hoisting de `var`.
   buildModuleScreens();
   buildModuleIndex();
