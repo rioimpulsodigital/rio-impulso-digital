@@ -426,8 +426,9 @@ document.addEventListener('DOMContentLoaded', function () {
     { n: 9, title: 'Los cinco productos de RiO', sub: 'Alcance, condiciones y precio vigente', render: renderModule9 },
     { n: 10, title: 'Express versus Premium', sub: 'Una sola diferencia real', render: renderModule10 },
     { n: 11, title: 'Elegir la solución', sub: '6 casos para diagnosticar', render: renderModule11 },
-    { n: 12, title: 'Después de la conversación', sub: 'El paso obligatorio por el Portal', render: renderModule12 },
-    { n: 13, title: 'Autoevaluación final', sub: 'Repaso de cierre', render: renderModule13 }
+    { n: 12, title: 'Las preguntas de la Landing', sub: 'Qué preguntamos y para qué sirve cada respuesta', render: renderModule12 },
+    { n: 13, title: 'Después de la conversación', sub: 'El paso obligatorio por el Portal', render: renderModule13 },
+    { n: 14, title: 'Autoevaluación final', sub: 'Repaso de cierre', render: renderModule14 }
   ];
 
   var TOTAL = MODULES.length;
@@ -886,9 +887,42 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // ══════════════════════════════════════════════════════════════
-  // MÓDULO 12 — Después de la conversación
+  // MÓDULO 12 — Las preguntas de la Landing
   // ══════════════════════════════════════════════════════════════
   function renderModule12(el) {
+    el.innerHTML =
+      '<p style="font-size:.88rem;color:var(--ink);margin-bottom:14px;">Estas son las mismas 7 preguntas que ya vas a usar en el Kit real (Paso 1). La idea no es solo leerlas para que el cliente responda — es entender <b>para qué sirve</b> cada respuesta a la hora de armar su Landing. Tocá cada una:</p>' +
+      '<div id="landingQList"></div>' +
+      '<div class="reveal-panel" id="lqReveal"><div class="label">Para qué sirve esta respuesta</div><p id="lqRevealText"></p></div>';
+
+    var list = document.getElementById('landingQList');
+    TRAINING_CONTENT.landingQuestions.forEach(function (q) {
+      var block = document.createElement('button');
+      block.type = 'button';
+      block.className = 'type-card';
+      block.style.marginBottom = '10px';
+      block.innerHTML = '<div class="name"><span style="color:var(--sec);font-family:var(--ff-mono);margin-right:6px;">' + q.n + '</span>' + q.question + '</div>';
+      block.addEventListener('click', function () {
+        list.querySelectorAll('.type-card').forEach(function (b) { b.classList.remove('active'); });
+        block.classList.add('active');
+        var panel = document.getElementById('lqReveal');
+        panel.classList.add('show');
+        document.getElementById('lqRevealText').textContent = q.purpose;
+        panel.scrollIntoView({ behavior: (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'), block: 'nearest' });
+      });
+      list.appendChild(block);
+    });
+
+    var note = document.createElement('div');
+    note.className = 'rule-box';
+    note.innerHTML = '<span class="tag">Importante</span><p>Estas preguntas son sobre la Landing. Si el negocio no tiene Ficha de Google, además hay 4 preguntas más (F1 a F4) que ya viste en el módulo 2 y que también aparecen en el Kit.</p>';
+    el.appendChild(note);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MÓDULO 13 — Después de la conversación
+  // ══════════════════════════════════════════════════════════════
+  function renderModule13(el) {
     el.innerHTML =
       '<div class="callout-quote">El cliente nunca entra al Portal — entrás vos, siempre, apenas termina la conversación.</div>' +
       '<ol style="padding-left:22px;font-size:.88rem;color:var(--ink);line-height:1.9;">' +
@@ -898,9 +932,9 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // ══════════════════════════════════════════════════════════════
-  // MÓDULO 13 — Autoevaluación final
+  // MÓDULO 14 — Autoevaluación final
   // ══════════════════════════════════════════════════════════════
-  function renderModule13(el) {
+  function renderModule14(el) {
     var quiz = TRAINING_CONTENT.finalQuiz;
     var answered = new Array(quiz.length).fill(false);
     var correctCount = 0;

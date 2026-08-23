@@ -12,6 +12,48 @@
 
 var TRAINING_CONTENT = {
 
+  // ── Las 7 preguntas base de la Landing (módulo 12) ──────────────────
+  // Texto idéntico al Paso 1 del Kit real (kit-venta-ficha-y-landing-page.html,
+  // ids q1-q7) — no son preguntas nuevas, es la misma información con la
+  // explicación de para qué sirve cada respuesta al momento de producir la Landing.
+  landingQuestions: [
+    {
+      n: '01',
+      question: '¿Qué vendes, para quién es principalmente y cuál es el rubro? (incluye el rango de precio)',
+      purpose: 'Define el mensaje central de la Landing: qué se ofrece y a quién le habla. El rango de precio ayuda a calibrar el tono del copy — no es lo mismo un negocio premium que uno accesible.'
+    },
+    {
+      n: '02',
+      question: '¿Qué te hace diferente de los negocios similares en tu zona?',
+      purpose: 'Es el diferencial que se destaca en la Landing — el motivo por el que alguien lo elegiría a él y no al de al lado. Sin esta respuesta, la página queda genérica.'
+    },
+    {
+      n: '03',
+      question: '¿Qué objeción te dicen más seguido para no comprar o entrar?',
+      purpose: 'Permite anticipar esa objeción directamente en el copy de la Landing, en vez de esperar a que el visitante se vaya sin resolverla.'
+    },
+    {
+      n: '04',
+      question: '¿Qué necesitas que haga la persona que vea la página? (llamar, reservar, escribir, comprar)',
+      purpose: 'Define el botón principal (CTA) de la Landing. Sin esta respuesta no se sabe qué acción debe destacar la página por sobre las demás.'
+    },
+    {
+      n: '05',
+      question: '¿Tienes fotos buenas del lugar, producto o trabajo terminado que podamos usar?',
+      purpose: 'Determina si hay material real y propio del negocio para usar en el diseño, o si va a hacer falta trabajar con imágenes genéricas — afecta directamente cuánto se parece la página al negocio real.'
+    },
+    {
+      n: '06',
+      question: '¿Puedes conseguir 2-3 clientes de confianza que dejen una reseña en Google esta semana?',
+      purpose: 'Alimenta la prueba social de la Landing y de la propia Ficha. No es obligatorio tenerlas ya — se pregunta para saber si se pueden conseguir a tiempo.'
+    },
+    {
+      n: '07',
+      question: '¿Hay algún color que identifiques con tu marca o que te gustaría que usemos en el diseño? (si no tienes uno definido, dilo — no hay problema)',
+      purpose: 'Guía la paleta de diseño de la Landing para que se sienta parte de la marca del negocio, no una plantilla genérica. Si no tiene colores definidos, el equipo de diseño propone una paleta.'
+    }
+  ],
+
   // ── Negocio protagonista (módulos 1-6) ──────────────────────────────
   protagonist: {
     name: 'Ferretería El Tornillo',
