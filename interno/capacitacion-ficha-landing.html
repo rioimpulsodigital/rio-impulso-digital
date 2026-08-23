@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow">
+<title>Capacitación Ficha & Landing | RiO Impulso Digital</title>
+<link rel="icon" type="image/png" href="../assets/branding/rio-favicon.png" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="../assets/css/main.css?v=20260716">
+<link rel="stylesheet" href="../assets/css/utilitaria.css?v=20260714">
+
+<style>
+  /* ── SELECTOR DE MERCADO (idéntico al Portal — solo ejecutivos multimercado) ── */
+  .market-switcher-group {
+    display: inline-flex; align-items: center; gap: 2px;
+    border: 1.5px solid var(--border); border-radius: 100px; padding: 3px;
+    background: var(--white);
+  }
+  .market-switcher-btn {
+    font-family: var(--ff-mono); font-size: .68rem; font-weight: 700;
+    letter-spacing: .04em; border: none; background: transparent; color: var(--muted);
+    border-radius: 100px; padding: 5px 12px; cursor: pointer; transition: all .15s;
+  }
+  .market-switcher-btn:hover { color: var(--ink); }
+  .market-switcher-btn.active { background: var(--p); color: #fff; }
+  .market-switcher-btn:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+  .nav-drawer .market-switcher-group { margin: 8px 0; }
+
+  /* ── AVISO DE ACCESO BLOQUEADO ── */
+  .portal-blocked {
+    border: 1.5px dashed var(--border); border-radius: var(--r-l);
+    padding: 28px 26px; background: var(--off); max-width: 640px; margin: 40px auto;
+  }
+  .portal-blocked-title { font-family: var(--ff-head); font-weight: 700; font-size: 1rem; color: var(--ink); margin: 0 0 6px; }
+  .portal-blocked-desc { font-size: .85rem; color: var(--muted); margin: 0; }
+
+  /* ── TOOLBAR DE PROGRESO ── */
+  .training-toolbar {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+    gap: 12px; padding: 14px 0; margin-bottom: 24px; border-bottom: 1px solid var(--border);
+  }
+  .training-progress-label {
+    font-family: var(--ff-mono); font-size: .68rem; color: var(--sec); font-weight: 600;
+    letter-spacing: .04em;
+  }
+  .training-progress-track {
+    width: 100%; height: 6px; border-radius: 100px; background: var(--off);
+    margin-top: 6px; overflow: hidden;
+  }
+  .training-progress-fill {
+    height: 100%; background: var(--p); border-radius: 100px; transition: width .25s;
+  }
+  @media (prefers-reduced-motion: reduce) { .training-progress-fill { transition: none; } }
+
+  /* ── ÍNDICE DE MÓDULOS (portada) ── */
+  .module-index { display: grid; gap: 12px; grid-template-columns: 1fr; }
+  @media (min-width: 640px) { .module-index { grid-template-columns: 1fr 1fr; } }
+  .module-index-item {
+    display: flex; align-items: center; gap: 14px;
+    border: 1.5px solid var(--border); border-radius: var(--r-m);
+    padding: 14px 16px; text-align: left; background: var(--white);
+    cursor: pointer; transition: border-color .15s, background .15s;
+    font-family: var(--ff-body); width: 100%;
+  }
+  .module-index-item:hover, .module-index-item:focus-visible { border-color: var(--p); background: var(--purple-soft, #f6e9f8); }
+  .module-index-item:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+  .module-index-num {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    background: var(--off); color: var(--sec); font-family: var(--ff-mono); font-weight: 700;
+    display: flex; align-items: center; justify-content: center; font-size: .82rem;
+  }
+  .module-index-item.done .module-index-num { background: #2f8f45; color: #fff; }
+  .module-index-title { font-weight: 700; font-size: .9rem; color: var(--ink); margin: 0 0 2px; }
+  .module-index-sub { font-size: .76rem; color: var(--muted); margin: 0; }
+  .module-index-check { margin-left: auto; color: #2f8f45; font-weight: 700; flex-shrink: 0; }
+
+  /* ── PANTALLA DE MÓDULO ── */
+  .module-screen { display: none; }
+  .module-screen.active { display: block; }
+  .module-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; }
+  .module-num { font-family: var(--ff-head); font-size: 1.5rem; color: var(--coral); flex-shrink: 0; }
+  .module-head h2 { font-family: var(--ff-head); font-weight: 700; font-size: 1.2rem; margin: 0; color: var(--ink); letter-spacing: -.02em; }
+  .module-head .sub { font-size: .84rem; color: var(--muted); margin-top: 2px; }
+
+  .qcard { border: 1px solid #e7e1ec; border-radius: var(--r-m); padding: 16px 18px; margin-bottom: 12px; background: var(--white); }
+  .qcard-label { font-size: .9rem; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+
+  .reveal-panel {
+    border-radius: var(--r-m); padding: 16px 18px; margin-top: 10px;
+    background: #fff0ee; border: 1px solid #ffd6d0; display: none;
+  }
+  .reveal-panel.show { display: block; }
+  .reveal-panel .label { font-family: var(--ff-mono); font-size: .62rem; font-weight: 500; text-transform: uppercase; letter-spacing: .06em; color: var(--coral); margin-bottom: 6px; }
+  .reveal-panel p { margin: 0; font-size: .88rem; color: var(--ink); line-height: 1.5; }
+
+  .rule-box { margin-top: 14px; border: 2px solid var(--coral); border-radius: var(--r-m); padding: 14px 18px; background: var(--white); }
+  .rule-box .tag { font-family: var(--ff-mono); font-size: .62rem; font-weight: 700; color: #fff; background: var(--coral); padding: 3px 10px; border-radius: 100px; text-transform: uppercase; letter-spacing: .05em; }
+  .rule-box p { margin: 10px 0 0; font-size: .88rem; color: var(--ink); }
+
+  .type-card {
+    border: 2px solid #e7e1ec; border-radius: var(--r-m); padding: 14px 16px;
+    cursor: pointer; transition: border-color .15s, background .15s; text-align: left;
+    background: var(--white); width: 100%; font-family: var(--ff-body);
+  }
+  .type-card:hover { border-color: var(--sec); }
+  .type-card:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+  .type-card.active { border-color: var(--p); background: #f6e9f8; }
+  .type-card.correct { border-color: #2f8f45; background: #f2fbf3; }
+  .type-card.incorrect { border-color: var(--coral); background: #fff0ee; }
+  .type-card .name { font-weight: 700; font-size: .88rem; color: var(--ink); }
+  .type-card .desc { font-size: .8rem; color: var(--muted); margin-top: 3px; }
+  .type-grid { display: grid; gap: 12px; grid-template-columns: 1fr; margin-bottom: 6px; }
+  @media (min-width: 640px) { .type-grid--2 { grid-template-columns: 1fr 1fr; } }
+
+  .status-icon { font-weight: 700; margin-right: 6px; }
+  .status-icon--ok { color: #2f8f45; }
+  .status-icon--retry { color: var(--coral); }
+
+  /* ── BÚSQUEDA SIMULADA ── */
+  .search-box { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  .search-box input {
+    flex: 1; min-width: 200px; border: 1.5px solid var(--border); border-radius: 100px;
+    padding: 10px 18px; font-family: var(--ff-body); font-size: .9rem; color: var(--ink);
+  }
+  .search-box input:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+  .search-btn {
+    background: var(--p); color: #fff; border: none; border-radius: 100px;
+    padding: 10px 22px; font-family: var(--ff-body); font-weight: 600; font-size: .88rem;
+    cursor: pointer; transition: background .15s;
+  }
+  .search-btn:hover { background: var(--p-dark); }
+  .search-btn:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+
+  .result-card {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    border: 1.5px solid var(--border); border-radius: var(--r-m); padding: 14px 16px; margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .result-card--protagonist { border-color: var(--p); background: #f6e9f8; }
+  .result-name { font-weight: 700; font-size: .9rem; color: var(--ink); }
+  .result-meta { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+  .result-badge {
+    font-family: var(--ff-mono); font-size: .6rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .05em; padding: 4px 10px; border-radius: 100px; border: 1px solid var(--border); color: var(--muted);
+  }
+  .result-badge--yes { border-color: #8fd19e; background: #f2fbf3; color: #2a8040; }
+
+  /* ── FICHA SIMULADA ── */
+  .ficha-mock {
+    border: 1.5px solid var(--border); border-radius: var(--r-l); padding: 20px 22px;
+    background: var(--white); margin-bottom: 18px;
+  }
+  .ficha-mock-name { font-family: var(--ff-head); font-size: 1.1rem; font-weight: 800; color: var(--ink); margin-bottom: 4px; }
+  .ficha-mock-meta { font-size: .82rem; color: var(--muted); }
+  .ficha-mock-status { color: #2a8040; font-weight: 600; }
+  .element-grid { display: grid; gap: 10px; grid-template-columns: repeat(2, 1fr); margin-top: 16px; }
+  @media (min-width: 640px) { .element-grid { grid-template-columns: repeat(3, 1fr); } }
+  .element-btn {
+    border: 1.5px solid var(--border); border-radius: var(--r-m); padding: 10px 8px;
+    background: var(--white); cursor: pointer; font-family: var(--ff-body); font-size: .78rem;
+    font-weight: 600; color: var(--ink); text-align: center; transition: all .15s;
+  }
+  .element-btn:hover { border-color: var(--p); color: var(--p); }
+  .element-btn:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+  .element-btn.seen { border-color: #8fd19e; background: #f2fbf3; color: #2a8040; }
+
+  /* ── MOCKUP DE LANDING ── */
+  .landing-mock {
+    border: 1.5px solid var(--border); border-radius: var(--r-l); overflow: hidden; margin-bottom: 16px;
+  }
+  .landing-mock-hero {
+    background: linear-gradient(135deg, #93009f 0%, #6b5b95 100%); color: #fff;
+    padding: 32px 24px; text-align: center;
+  }
+  .landing-mock-hero h3 { font-family: var(--ff-head); font-size: 1.3rem; margin: 0 0 8px; }
+  .landing-mock-hero p { font-size: .85rem; opacity: .9; margin: 0 0 16px; }
+  .landing-mock-hero button {
+    background: #fff; color: var(--p); border: none; border-radius: 100px;
+    padding: 10px 22px; font-weight: 700; font-size: .85rem; cursor: default;
+  }
+  .landing-mock-body { padding: 18px 22px; font-size: .82rem; color: var(--muted); }
+
+  /* ── ECOSISTEMA ── */
+  .ecosystem-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); margin-bottom: 6px; }
+  @media (min-width: 640px) { .ecosystem-grid { grid-template-columns: repeat(4, 1fr); } }
+  .ecosystem-node {
+    border: 1.5px solid var(--border); border-radius: var(--r-m); padding: 16px 12px;
+    text-align: center; background: var(--white); cursor: pointer; font-family: var(--ff-body);
+    transition: all .15s;
+  }
+  .ecosystem-node:hover, .ecosystem-node:focus-visible { border-color: var(--p); background: #f6e9f8; }
+  .ecosystem-node:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+  .ecosystem-node .icon { font-size: 1.6rem; margin-bottom: 6px; }
+  .ecosystem-node .name { font-weight: 700; font-size: .8rem; color: var(--ink); }
+  .ecosystem-arrow { text-align: center; color: var(--muted); font-size: .9rem; margin: -2px 0; }
+
+  /* ── TABLA COMPARATIVA ── */
+  .compare-table-wrap { overflow-x: auto; }
+  .compare-table { width: 100%; border-collapse: collapse; font-size: .82rem; min-width: 560px; }
+  .compare-table th, .compare-table td { border: 1px solid var(--border); padding: 10px 12px; text-align: center; }
+  .compare-table th { background: var(--off); font-family: var(--ff-mono); font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--sec); }
+  .compare-table td:first-child, .compare-table th:first-child { text-align: left; font-weight: 600; color: var(--ink); }
+  .mark-yes { color: #2a8040; font-weight: 700; }
+  .mark-no { color: var(--muted); }
+
+  /* ── PRODUCTO / PRECIO ── */
+  .includes-box { background: var(--white); border: 1px solid var(--border); border-radius: var(--r-m); padding: 18px 20px; margin-bottom: 16px; }
+  .includes-box .inc-label { font-family: var(--ff-mono); font-size: .62rem; font-weight: 500; text-transform: uppercase; letter-spacing: .05em; color: var(--p); margin-bottom: 10px; }
+  .includes-box ul { margin: 8px 0; padding-left: 20px; }
+  .includes-box li { font-size: .85rem; color: var(--ink); margin-bottom: 5px; }
+  .includes-box .meta-row { font-size: .8rem; color: var(--muted); margin-top: 8px; }
+  .price-block { border-radius: var(--r-m); padding: 14px 16px; margin-top: 12px; background: var(--off); }
+  .price-block .price-now { font-family: var(--ff-head); font-size: 1.4rem; font-weight: 800; color: var(--p); }
+  .price-block .price-regular-strike { font-size: .82rem; color: var(--muted); text-decoration: line-through; margin-left: 8px; }
+  .promo-badge {
+    display: inline-block; font-family: var(--ff-mono); font-size: .6rem; font-weight: 700;
+    color: #fff; background: var(--coral); padding: 3px 10px; border-radius: 100px;
+    text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px;
+  }
+  .price-block .savings { font-size: .78rem; color: #2a8040; font-weight: 600; margin-top: 4px; }
+  .price-block .validity { font-size: .74rem; color: var(--muted); margin-top: 4px; }
+
+  /* ── NAV ANTERIOR / SIGUIENTE ── */
+  .training-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 32px; padding-top: 18px; border-top: 1px solid var(--border);
+  }
+  .training-nav-btn {
+    background: var(--white); color: var(--ink); border: 1.5px solid var(--border); border-radius: 100px;
+    padding: 9px 20px; font-family: var(--ff-body); font-weight: 600; font-size: .85rem; cursor: pointer;
+  }
+  .training-nav-btn:hover:not(:disabled) { border-color: var(--p); color: var(--p); }
+  .training-nav-btn:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+  .training-nav-btn:disabled { opacity: .35; cursor: not-allowed; }
+  .training-nav-btn--primary { background: var(--p); color: #fff; border-color: var(--p); }
+  .training-nav-btn--primary:hover { background: var(--p-dark); border-color: var(--p-dark); color: #fff; }
+
+  .callout-quote {
+    border-left: 3px solid var(--p); background: #f6e9f8; border-radius: 0 var(--r-m) var(--r-m) 0;
+    padding: 16px 20px; margin: 16px 0; font-size: .9rem; color: var(--ink); font-style: italic;
+  }
+
+  .quiz-summary { text-align: center; padding: 24px; }
+  .quiz-summary .big { font-family: var(--ff-head); font-size: 1.6rem; color: var(--p); font-weight: 800; }
+
+  @media print { .training-nav, .nav, .nav-drawer { display: none; } }
+</style>
+</head>
+<body>
+
+<!-- ── NAV ──────────────────────────────────────── -->
+<nav class="nav" id="mainNav">
+  <a href="/" class="nav-logo" aria-label="RiO Impulso Digital">
+    <img
+      src="../assets/branding/rio-logo-horizontal-245w.webp"
+      srcset="../assets/branding/rio-logo-horizontal-245w.webp 1x,
+              ../assets/branding/rio-logo-horizontal-429w.webp 2x,
+              ../assets/branding/rio-logo-horizontal.webp 3x"
+      alt="RiO Impulso Digital"
+      width="245" height="60"
+      fetchpriority="high"
+      onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+    >
+    <span class="nav-logo-text">RiO <em>Impulso</em> Digital</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="/#servicios">Soluciones</a></li>
+    <li><a href="/#portfolio">Proyectos</a></li>
+    <li><a href="/#nosotros">Sobre mí</a></li>
+    <li><a href="/agenda">Agendar Asesoría</a></li>
+    <li><a href="/interno/">Portal</a></li>
+  </ul>
+  <a href="/#contacto" class="nav-cta">Hablemos →</a>
+  <button class="nav-hamburger" aria-label="Abrir menú" onclick="openDrawer()">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<div class="nav-drawer" id="navDrawer">
+  <button class="nav-drawer-close" onclick="closeDrawer()" aria-label="Cerrar">✕</button>
+  <a href="/#servicios" onclick="closeDrawer()">Soluciones</a>
+  <a href="/#portfolio" onclick="closeDrawer()">Proyectos</a>
+  <a href="/#nosotros" onclick="closeDrawer()">Sobre mí</a>
+  <a href="/agenda" onclick="closeDrawer()">Agendar Asesoría</a>
+  <a href="/interno/" onclick="closeDrawer()">Portal</a>
+  <a href="/#contacto" onclick="closeDrawer()" style="color:var(--coral)">Hablemos →</a>
+</div>
+
+<!-- HERO -->
+<section class="ut-hero">
+  <div class="ut-hero-content">
+    <a href="/interno/" class="ut-back">Volver al portal</a>
+    <p class="ut-label">Capacitación</p>
+    <h1>Capacitación Ficha &amp; Landing</h1>
+    <p class="ut-hero-desc">Aprendé o repasá cómo detectar, explicar y vender Ficha de Google y Landing — a tu ritmo, todas las veces que quieras.</p>
+  </div>
+</section>
+
+<div class="ut-main">
+  <div class="ut-container" style="max-width:860px;">
+
+    <div id="blockedScreen" style="display:none;"></div>
+
+    <div id="trainingApp" style="display:none;">
+
+      <div class="training-toolbar">
+        <div>
+          <span class="training-progress-label" id="progressLabel">Módulo 0 de 13</span>
+          <div class="training-progress-track"><div class="training-progress-fill" id="progressFill" style="width:0%;"></div></div>
+        </div>
+        <span class="kit-badge" id="marketBadge" style="font-family:var(--ff-mono);font-size:.62rem;letter-spacing:.07em;text-transform:uppercase;color:var(--sec);border:1px solid var(--sec);border-radius:100px;padding:5px 12px;"></span>
+      </div>
+
+      <!-- ── PORTADA / ÍNDICE ── -->
+      <section class="module-screen" id="screen-0" data-screen="0">
+        <div class="module-head">
+          <div>
+            <h2 tabindex="-1">Índice de módulos</h2>
+            <div class="sub">Podés hacerla completa una vez, y repasar cualquier módulo cuando quieras — sin límite de repeticiones.</div>
+          </div>
+        </div>
+        <div class="module-index" id="moduleIndexList"></div>
+      </section>
+
+      <!-- Los 13 módulos se generan dinámicamente en #modulesContainer -->
+      <div id="modulesContainer"></div>
+
+      <div class="training-nav" id="trainingNav">
+        <button class="training-nav-btn" id="btnPrev" type="button">← Anterior</button>
+        <button class="training-nav-btn training-nav-btn--primary" id="btnNext" type="button">Siguiente →</button>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<!-- ── FOOTER ────────────────────────────────────── -->
+<footer>
+  <div class="footer-row">
+    <div class="footer-col">
+      <div class="footer-brand">RiO <em>Impulso</em> Digital</div>
+      <div class="footer-tag">Tecnología · Integración · Automatización</div>
+    </div>
+    <div class="footer-col footer-col--center">
+      <picture>
+        <source media="(max-width: 900px)" srcset="../assets/branding/rio-logo-primary-48x48.webp">
+        <source srcset="../assets/branding/rio-logo-primary-84x84.webp">
+        <img src="../assets/branding/rio-logo-primary.png" alt="RiO Impulso Digital" class="footer-logo" width="48" height="48">
+      </picture>
+    </div>
+    <ul class="footer-links footer-col footer-col--right">
+      <li><a href="/#servicios">Soluciones</a></li>
+      <li><a href="/#portfolio">Proyectos</a></li>
+      <li><a href="/#nosotros">Sobre mí</a></li>
+      <li><a href="https://github.com/rioimpulsodigital/rio-impulso-digital" target="_blank" rel="noopener" class="footer-link-muted">GitHub ↗</a></li>
+    </ul>
+  </div>
+  <div class="footer-copy">
+    © 2026 RiO Impulso Digital · Brenda Rivera Obando · Todos los derechos reservados
+  </div>
+</footer>
+
+<script src="./config/users.js" defer></script>
+<script src="./config/markets.js" defer></script>
+<script src="./config/capacitacion-contenido.js" defer></script>
+<script src="../assets/js/main.js?v=20260627" defer></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+  // Override de fecha solo para pruebas — nunca se expone en la interfaz.
+  // Ej: capacitacion-ficha-landing.html?debugDate=2026-10-01
+  var DEBUG_DATE = new URLSearchParams(window.location.search).get('debugDate') || undefined;
+
+  var executive = resolveExecutive();
+  if (!executive) {
+    document.getElementById('blockedScreen').style.display = 'block';
+    document.getElementById('blockedScreen').innerHTML =
+      '<div class="portal-blocked">' +
+        '<p class="portal-blocked-title">Tu cuenta no tiene un mercado comercial asignado todavía.</p>' +
+        '<p class="portal-blocked-desc">Contacta a Brenda o al administrador para habilitarlo antes de usar esta sección.</p>' +
+      '</div>';
+    console.warn('[Capacitación RiO] Usuario autenticado sin mercado configurado en USER_MAP — acceso bloqueado.');
+    return;
+  }
+
+  var currentMarket = resolveActiveMarket(executive);
+  document.getElementById('trainingApp').style.display = 'block';
+  renderMarketSwitcher(executive, currentMarket);
+
+  var badge = document.getElementById('marketBadge');
+  badge.textContent = MARKETS[currentMarket].country + ' (' + currentMarket + ')';
+
+  // ── Progreso local (solo conveniencia de navegación — nunca controla el acceso) ──
+  var PROGRESS_KEY = 'rio_training_progress_v1';
+  var progress = loadProgress();
+  function loadProgress() {
+    try {
+      var raw = window.localStorage.getItem(PROGRESS_KEY);
+      return raw ? JSON.parse(raw) : { completed: [], lastScreen: 0 };
+    } catch (e) { return { completed: [], lastScreen: 0 }; }
+  }
+  function saveProgress() {
+    try { window.localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); } catch (e) { /* no disponible */ }
+  }
+  function markCompleted(n) {
+    if (progress.completed.indexOf(n) === -1) { progress.completed.push(n); saveProgress(); }
+  }
+
+  // ── Definición de los 13 módulos ──
+  var MODULES = [
+    { n: 1, title: 'Así te encuentra un cliente', sub: 'Búsqueda local simulada', render: renderModule1 },
+    { n: 2, title: 'Qué es una Ficha de Google', sub: 'Explorá cada elemento', render: renderModule2 },
+    { n: 3, title: 'La oportunidad que falta', sub: 'Ficha sin página propia', render: renderModule3 },
+    { n: 4, title: 'Qué es una Landing Page', sub: 'Una presentación ordenada', render: renderModule4 },
+    { n: 5, title: 'El ecosistema completo', sub: 'Redes + Google + Landing + WhatsApp', render: renderModule5 },
+    { n: 6, title: 'Comparar escenarios', sub: 'Qué resuelve cada combinación', render: renderModule6 },
+    { n: 7, title: 'Reconocer la urgencia real', sub: 'Se descubre, no se inventa', render: renderModule7 },
+    { n: 8, title: 'Conversaciones reales', sub: 'La mejor respuesta natural', render: renderModule8 },
+    { n: 9, title: 'Los cinco productos de RiO', sub: 'Alcance, condiciones y precio vigente', render: renderModule9 },
+    { n: 10, title: 'Express versus Premium', sub: 'Una sola diferencia real', render: renderModule10 },
+    { n: 11, title: 'Elegir la solución', sub: '6 casos para diagnosticar', render: renderModule11 },
+    { n: 12, title: 'Después de la conversación', sub: 'El paso obligatorio por el Portal', render: renderModule12 },
+    { n: 13, title: 'Autoevaluación final', sub: 'Repaso de cierre', render: renderModule13 }
+  ];
+
+  var TOTAL = MODULES.length;
+  var currentScreen = 0; // 0 = portada, 1..13 = módulos
+
+  function clampScreen(n) { return Math.max(0, Math.min(TOTAL, n)); }
+
+  function buildModuleScreens() {
+    var container = document.getElementById('modulesContainer');
+    MODULES.forEach(function (mod) {
+      var section = document.createElement('section');
+      section.className = 'module-screen';
+      section.id = 'screen-' + mod.n;
+      section.setAttribute('data-screen', String(mod.n));
+      section.innerHTML =
+        '<div class="module-head">' +
+          '<span class="module-num">' + mod.n + '</span>' +
+          '<div><h2 tabindex="-1">' + mod.title + '</h2><div class="sub">' + mod.sub + '</div></div>' +
+        '</div>' +
+        '<div class="module-body" id="modBody-' + mod.n + '"></div>';
+      container.appendChild(section);
+      mod.render(document.getElementById('modBody-' + mod.n), currentMarket, DEBUG_DATE);
+    });
+  }
+
+  function buildModuleIndex() {
+    var list = document.getElementById('moduleIndexList');
+    list.innerHTML = '';
+    MODULES.forEach(function (mod) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'module-index-item' + (progress.completed.indexOf(mod.n) !== -1 ? ' done' : '');
+      btn.innerHTML =
+        '<span class="module-index-num">' + mod.n + '</span>' +
+        '<span><span class="module-index-title">' + mod.title + '</span><br><span class="module-index-sub">' + mod.sub + '</span></span>' +
+        (progress.completed.indexOf(mod.n) !== -1 ? '<span class="module-index-check" aria-label="Completado">✓</span>' : '');
+      btn.addEventListener('click', function () { goToScreen(mod.n); });
+      list.appendChild(btn);
+    });
+  }
+
+  function goToScreen(n) {
+    n = clampScreen(n);
+    currentScreen = n;
+    progress.lastScreen = n;
+    saveProgress();
+
+    document.querySelectorAll('.module-screen').forEach(function (el) { el.classList.remove('active'); });
+    var target = document.getElementById('screen-' + n);
+    if (target) {
+      target.classList.add('active');
+      var heading = target.querySelector('h2');
+      if (heading) heading.focus();
+    }
+
+    document.getElementById('progressLabel').textContent = 'Módulo ' + n + ' de ' + TOTAL;
+    document.getElementById('progressFill').style.width = Math.round((n / TOTAL) * 100) + '%';
+
+    document.getElementById('btnPrev').disabled = (n === 0);
+    var nextBtn = document.getElementById('btnNext');
+    if (n === TOTAL) {
+      nextBtn.textContent = 'Volver al índice';
+      nextBtn.onclick = function () { markCompleted(TOTAL); goToScreen(0); buildModuleIndex(); };
+    } else if (n === 0) {
+      nextBtn.textContent = 'Comenzar →';
+      nextBtn.onclick = function () { goToScreen(1); };
+    } else {
+      nextBtn.textContent = 'Siguiente →';
+      nextBtn.onclick = function () { markCompleted(n); goToScreen(n + 1); buildModuleIndex(); };
+    }
+    window.scrollTo({ top: 0, behavior: (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth') });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MÓDULO 1 — Búsqueda simulada
+  // ══════════════════════════════════════════════════════════════
+  function renderModule1(el) {
+    el.innerHTML =
+      '<div class="search-box">' +
+        '<input type="text" id="trainSearchInput" value="ferretería cerca de mí" aria-label="Buscar">' +
+        '<button type="button" class="search-btn" id="trainSearchBtn">Buscar</button>' +
+      '</div>' +
+      '<div id="trainSearchResults"></div>';
+
+    document.getElementById('trainSearchBtn').addEventListener('click', function () {
+      var wrap = document.getElementById('trainSearchResults');
+      wrap.innerHTML = '<p style="font-size:.82rem;color:var(--muted);margin-bottom:12px;">Así es como aparecen hoy los negocios de "ferretería" en tu zona:</p>' +
+        TRAINING_CONTENT.searchResults.map(function (r) {
+          return '<div class="result-card' + (r.protagonist ? ' result-card--protagonist' : '') + '">' +
+            '<div><div class="result-name">' + r.name + '</div><div class="result-meta">★ ' + r.rating.toFixed(1) + '</div></div>' +
+            '<span class="result-badge' + (r.hasWebsite ? ' result-badge--yes' : '') + '">' + (r.hasWebsite ? 'Con sitio web' : 'Sin sitio web') + '</span>' +
+          '</div>';
+        }).join('') +
+        '<div class="callout-quote">Fijate: no todos tienen sitio web propio, aunque todos tengan Ficha. En el próximo módulo vamos a explorar la Ficha de <b>' + TRAINING_CONTENT.protagonist.name + '</b>.</div>';
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MÓDULO 2 — Exploración de Ficha
+  // ══════════════════════════════════════════════════════════════
+  function renderModule2(el) {
+    var biz = TRAINING_CONTENT.protagonist;
+    el.innerHTML =
+      '<div class="ficha-mock">' +
+        '<div class="ficha-mock-name">' + biz.name + '</div>' +
+        '<div class="ficha-mock-meta">★ ' + biz.rating.toFixed(1) + ' (' + biz.reviewCount + ' reseñas) · <span class="ficha-mock-status">Abierto ahora</span></div>' +
+        '<div class="element-grid" id="elementGrid"></div>' +
+      '</div>' +
+      '<div class="reveal-panel" id="elementReveal"><div class="label">Elemento de la Ficha</div><p id="elementRevealText"></p></div>';
+
+    var grid = document.getElementById('elementGrid');
+    TRAINING_CONTENT.fichaElements.forEach(function (elm) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'element-btn';
+      btn.textContent = elm.label;
+      btn.addEventListener('click', function () {
+        btn.classList.add('seen');
+        var panel = document.getElementById('elementReveal');
+        panel.classList.add('show');
+        document.getElementById('elementRevealText').textContent = elm.explain;
+      });
+      grid.appendChild(btn);
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MÓDULO 3 — La oportunidad que falta
+  // ══════════════════════════════════════════════════════════════
+  function renderModule3(el) {
+    var opts = [
+      { text: 'Necesita un lugar propio donde presentar ordenadamente su negocio y sus productos.', correct: true },
+      { text: 'Necesita conseguir más reseñas antes que nada.', correct: false },
+      { text: 'Necesita eliminar su Ficha y empezar de nuevo.', correct: false }
+    ];
+    el.innerHTML =
+      '<p style="font-size:.9rem;color:var(--ink);margin-bottom:14px;">' + TRAINING_CONTENT.protagonist.name + ' tiene Ficha de Google activa — <b>sí aparece</b> cuando lo buscan. Pero mirá bien: no tiene ningún enlace a un sitio web.</p>' +
+      '<div class="qcard"><div class="qcard-label">¿Qué le falta a este negocio?</div>' +
+      '<div class="type-grid" id="m3options"></div></div>' +
+      '<div class="reveal-panel" id="m3reveal"><div class="label">Por qué</div><p id="m3revealText"></p></div>';
+
+    var wrap = document.getElementById('m3options');
+    opts.forEach(function (opt) {
+      var btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'type-card';
+      btn.innerHTML = '<div class="name">' + opt.text + '</div>';
+      btn.addEventListener('click', function () {
+        wrap.querySelectorAll('.type-card').forEach(function (b) { b.classList.remove('correct', 'incorrect'); });
+        btn.classList.add(opt.correct ? 'correct' : 'incorrect');
+        var panel = document.getElementById('m3reveal'); panel.classList.add('show');
+        document.getElementById('m3revealText').innerHTML = opt.correct
+          ? (icon(true) + 'Correcto — tiene Ficha, así que <b>sí aparece</b> en Google. Lo que le falta es un lugar propio para presentarse con calma. Nunca digas que "no aparece en Google" si tiene Ficha activa.')
+          : (icon(false) + 'Repasemos: el problema no es ese. Volvé a mirar qué tiene y qué no tiene este negocio.');
+      });
+      wrap.appendChild(btn);
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MÓDULO 4 — Qué es una Landing Page
+  // ══════════════════════════════════════════════════════════════
+  function renderModule4(el) {
+    el.innerHTML =
+      '<p style="font-size:.9rem;color:var(--ink);margin-bottom:16px;">Una Landing es una página web de una sola sección continua, pensada para un objetivo concreto: que quien la visite entienda rápido qué ofrece el negocio y sepa cómo contactarlo.</p>' +
+      '<div class="landing-mock">' +
+        '<div class="landing-mock-hero">' +
+          '<h3>' + TRAINING_CONTENT.protagonist.name + '</h3>' +
+          '<p>Todo para tu obra, cerca tuyo.</p>' +
+          '<button type="button" tabindex="-1" aria-hidden="true">Escribinos por WhatsApp</button>' +
+        '</div>' +
+        '<div class="landing-mock-body">Mockup ilustrativo — presentación, productos destacados y botón de contacto directo, todo en una sola página.</div>' +
+      '</div>' +
+      '<div class="rule-box"><span class="tag">Importante</span><p>No es un sitio institucional con muchas páginas — es una presentación clara y directa, con un solo objetivo: que te contacten.</p></div>';
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MÓDULO 5 — Ecosistema completo
+  // ══════════════════════════════════════════════════════════════
+  function renderModule5(el) {
+    var icons = { redes: '📱', google: '🔍', landing: '🖥️', whatsapp: '💬' };
+    el.innerHTML =
+      '<p style="font-size:.9rem;color:var(--ink);margin-bottom:14px;">Ninguna de estas herramientas reemplaza a la otra. Tocá cada una para ver qué rol cumple:</p>' +
+      '<div class="ecosystem-grid" id="ecoGrid"></div>' +
+      '<div class="reveal-panel" id="ecoReveal"><div class="label" id="ecoRevealLabel"></div><p id="ecoRevealText"></p></div>' +
+      '<div class="callout-quote">Cuando falta una pieza, no es que las otras estén mal — es que hay un tramo del camino sin cubrir.</div>';
+
+    var grid = document.getElementById('ecoGrid');
+    TRAINING_CONTENT.ecosystemNodes.forEach(function (node) {
+      var btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'ecosystem-node';
+      btn.innerHTML = '<div class="icon" aria-hidden="true">' + icons[node.id] + '</div><div class="name">' + node.label + '</div>';
+      btn.addEventListener('click', function () {
+        document.getElementById('ecoReveal').classList.add('show');
+        document.getElementById('ecoRevealLabel').textContent = node.label;
+        document.getElementById('ecoRevealText').textContent = node.explain;
+      });
+      grid.appendChild(btn);
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MÓDULO 6 — Comparar escenarios
+  // ══════════════════════════════════════════════════════════════
+  function renderModule6(el) {
+    var data = TRAINING_CONTENT.scenarioComparison;
+    var html = '<div class="compare-table-wrap"><table class="compare-table"><thead><tr><th>Escenario</th>';
+    data.columns.forEach(function (c) { html += '<th>' + c + '</th>'; });
+    html += '</tr></thead><tbody>';
+    data.rows.forEach(function (row) {
+      html += '<tr><td>' + row.label + '</td>';
+      row.marks.forEach(function (m) { html += '<td>' + (m ? '<span class="mark-yes">✓</span>' : '<span class="mark-no">—</span>') + '</td>'; });
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>' +
+      '<p style="font-size:.82rem;color:var(--muted);margin-top:12px;">Ningún escenario es "malo" — cada uno cubre algunas partes del camino. El objetivo es identificar cuál le falta a cada negocio, no vender siempre el pack completo.</p>';
+    el.innerHTML = html;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MÓDULO 7 — Urgencia real
+  // ══════════════════════════════════════════════════════════════
+  function renderModule7(el) {
+    var types = [
+      { key: 'A', name: 'A — Capacidad limitada' },
+      { key: 'B', name: 'B — Empeora con el tiempo' },
+      { key: 'C', name: 'C — Estacional / por fecha' },
+      { key: 'D', name: 'D — Sin urgencia real' }
+    ];
+    el.innerHTML = '<div class="callout-quote">La urgencia se descubre haciendo preguntas. No se fabrica para presionar al prospecto.</div>' +
+      '<div id="urgencyCases"></div>';
+
+    var wrap = document.getElementById('urgencyCases');
+    TRAINING_CONTENT.urgencyCases.forEach(function (c, idx) {
+      var caseId = 'urgCase' + idx;
+      var block = document.createElement('div');
+      block.className = 'qcard';
+      block.innerHTML =
+        '<div class="qcard-label">' + c.business + '</div>' +
+        '<p style="font-size:.85rem;color:var(--muted);margin-bottom:10px;">' + c.situation + '</p>' +
+        '<p style="font-size:.85rem;color:var(--ink);font-weight:600;margin-bottom:10px;">Pregunta clave: "' + c.question + '"</p>' +
+        '<div class="type-grid type-grid--2" id="' + caseId + 'opts"></div>' +
+        '<div class="reveal-panel" id="' + caseId + 'reveal"><div class="label">Por qué</div><p id="' + caseId + 'revealText"></p></div>';
+      wrap.appendChild(block);
+
+      var optsEl = block.querySelector('#' + caseId + 'opts');
+      types.forEach(function (t) {
+        var btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'type-card';
+        btn.innerHTML = '<div class="name">' + t.name + '</div>';
+        btn.addEventListener('click', function () {
+          optsEl.querySelectorAll('.type-card').forEach(function (b) { b.classList.remove('correct', 'incorrect'); });
+          var ok = t.key === c.correctType;
+          btn.classList.add(ok ? 'correct' : 'incorrect');
+          block.querySelector('.reveal-panel').classList.add('show');
+          block.querySelector('.reveal-panel p').innerHTML = ok
+            ? icon(true) + c.explain
+            : icon(false) + 'Repasemos: no es ese tipo. Volvé a leer la situación — ' + c.explain;
+        });
+        optsEl.appendChild(btn);
+      });
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MÓDULO 8 — Conversaciones reales
+  // ══════════════════════════════════════════════════════════════
+  function renderModule8(el) {
+    el.innerHTML = '<div id="convCases"></div>';
+    var wrap = document.getElementById('convCases');
+    TRAINING_CONTENT.conversations.forEach(function (c, idx) {
+      var caseId = 'conv' + idx;
+      var block = document.createElement('div');
+      block.className = 'qcard';
+      block.innerHTML =
+        '<div class="qcard-label">' + c.prompt + '</div>' +
+        '<div class="type-grid" id="' + caseId + 'opts"></div>' +
+        '<div class="reveal-panel" id="' + caseId + 'reveal"><div class="label">Por qué</div><p id="' + caseId + 'revealText"></p></div>';
+      wrap.appendChild(block);
+
+      var optsEl = block.querySelector('#' + caseId + 'opts');
+      // Orden aleatorio simple entre las 2 opciones para no acostumbrar a "la primera es la correcta"
+      var options = c.options.slice();
+      if (idx % 2 === 1) options.reverse();
+      options.forEach(function (opt) {
+        var btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'type-card';
+        btn.innerHTML = '<div class="name">' + opt.text + '</div>';
+        btn.addEventListener('click', function () {
+          optsEl.querySelectorAll('.type-card').forEach(function (b) { b.classList.remove('correct', 'incorrect'); });
+          btn.classList.add(opt.correct ? 'correct' : 'incorrect');
+          block.querySelector('.reveal-panel').classList.add('show');
+          block.querySelector('.reveal-panel p').innerHTML = opt.correct
+            ? icon(true) + c.feedbackCorrect
+            : icon(false) + c.feedbackWrong + (opt.why ? ' ' + opt.why : '');
+        });
+        optsEl.appendChild(btn);
+      });
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MÓDULO 9 — Los cinco productos (con precio dinámico)
+  // ══════════════════════════════════════════════════════════════
+  var PRODUCT_DETAILS = {
+    ficha: {
+      label: 'Ficha de Google', solves: 'El negocio no tiene un perfil propio y verificado en Google ni en Maps.',
+      includes: ['Creación o reclamo del perfil', 'Configuración de categoría, horarios, teléfono y ubicación o zona', 'Incorporación de fotos y materiales entregados por el cliente', 'Carga inicial de productos o servicios', 'Acompañamiento durante la verificación'],
+      notIncludes: 'Página web propia, gestión mensual de publicaciones o reseñas.',
+      timeline: 'Configuración inicial en 3 días hábiles desde el pago y la información completa.',
+      reviews: 'Una ronda de ajustes.', support: 'Soporte 15 días corridos por errores atribuibles al trabajo.'
+    },
+    generico: {
+      label: 'Landing Express', solves: 'El negocio no tiene un lugar propio para presentarse ordenadamente, sin necesitar dominio propio.',
+      includes: ['Diseño responsive de una sola sección continua', 'Presentación del negocio, productos o servicios', 'Botón de contacto directo por WhatsApp', 'Hosting sin mensualidad'],
+      notIncludes: 'Dominio propio (usa subdominio de RiO), múltiples páginas, tienda en línea.',
+      timeline: 'Primera versión funcional en 48 horas hábiles desde el pago inicial y los materiales completos.',
+      reviews: 'Dos rondas de ajustes.', support: 'Soporte 15 días corridos por errores atribuibles al desarrollo.'
+    },
+    personalizado: {
+      label: 'Landing Premium', solves: 'Igual que Landing Express, para negocios que además quieren una dirección propia.',
+      includes: ['Mismo diseño, desarrollo y plazo que Express', 'Dominio propio incluido el primer año, sujeto a disponibilidad', 'Hosting sin mensualidad'],
+      notIncludes: 'Más secciones, funciones o diseño adicional por ser Premium — la única diferencia es el dominio.',
+      timeline: 'Primera versión funcional en 48 horas hábiles.',
+      reviews: 'Dos rondas de ajustes.', support: 'Soporte 15 días corridos por errores atribuibles al desarrollo.'
+    },
+    ficha_generico: {
+      label: 'Ficha de Google + Landing Express', solves: 'El negocio no tiene ni Ficha ni presencia propia — resuelve ambas cosas juntas, con descuento respecto de contratarlas por separado.',
+      includes: ['Todo lo de Ficha de Google', 'Todo lo de Landing Express'],
+      notIncludes: 'Dominio propio (queda para la variante Premium del pack).',
+      timeline: 'Landing en 48 horas hábiles y Ficha en 3 días hábiles — procesos en paralelo, no uno detrás del otro.',
+      reviews: 'Dos rondas para la Landing, una para la Ficha.', support: 'Soporte 15 días corridos por errores atribuibles al trabajo.'
+    },
+    ficha_personalizado: {
+      label: 'Ficha de Google + Landing Premium', solves: 'Igual que el pack anterior, con Landing Premium (dominio propio incluido el primer año).',
+      includes: ['Todo lo de Ficha de Google', 'Todo lo de Landing Premium'],
+      notIncludes: 'Nada adicional por ser Premium más allá del dominio propio.',
+      timeline: 'Landing en 48 horas hábiles y Ficha en 3 días hábiles — procesos en paralelo.',
+      reviews: 'Dos rondas para la Landing, una para la Ficha.', support: 'Soporte 15 días corridos por errores atribuibles al trabajo.'
+    }
+  };
+  var PRODUCT_ORDER = ['ficha', 'generico', 'personalizado', 'ficha_generico', 'ficha_personalizado'];
+
+  function formatDatePretty(iso) {
+    var months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    var parts = iso.split('-');
+    return parseInt(parts[2], 10) + ' de ' + months[parseInt(parts[1], 10) - 1] + ' de ' + parts[0];
+  }
+
+  function renderPriceBlock(market, productKey, debugDate) {
+    var fmt = MARKETS[market].formatPrice;
+    var active = isPromoActive(debugDate);
+    var product = MARKETS[market].products[productKey];
+    var promoPrice = product.promo;
+    var regularPrice = product.regular;
+
+    if (active) {
+      var savings = regularPrice - promoPrice;
+      return '<div class="price-block">' +
+        '<span class="promo-badge">Precio de lanzamiento</span><br>' +
+        '<span class="price-now">' + fmt(promoPrice) + ' ' + MARKETS[market].currency + '</span>' +
+        '<span class="price-regular-strike">' + fmt(regularPrice) + ' ' + MARKETS[market].currency + '</span>' +
+        '<div class="savings">Ahorro de ' + fmt(savings) + ' ' + MARKETS[market].currency + ' respecto del precio regular</div>' +
+        '<div class="validity">Es una oportunidad comercial por tiempo limitado — vigente hasta el ' + formatDatePretty(PROMO_END_DATE) + ' inclusive.</div>' +
+      '</div>';
+    }
+    return '<div class="price-block">' +
+      '<span class="price-now">' + fmt(regularPrice) + ' ' + MARKETS[market].currency + '</span>' +
+      '<div class="validity">Precio vigente.</div>' +
+    '</div>';
+  }
+
+  function renderModule9(el, market, debugDate) {
+    var html = '';
+    PRODUCT_ORDER.forEach(function (key) {
+      var d = PRODUCT_DETAILS[key];
+      html += '<div class="includes-box">' +
+        '<div class="inc-label">' + d.label + '</div>' +
+        '<p style="font-size:.85rem;color:var(--ink);margin-bottom:10px;"><b>Resuelve:</b> ' + d.solves + '</p>' +
+        '<ul>' + d.includes.map(function (i) { return '<li>' + i + '</li>'; }).join('') + '</ul>' +
+        '<p class="meta-row"><b>No incluye:</b> ' + d.notIncludes + '</p>' +
+        '<p class="meta-row"><b>Plazo:</b> ' + d.timeline + '</p>' +
+        '<p class="meta-row"><b>Revisiones:</b> ' + d.reviews + '</p>' +
+        '<p class="meta-row"><b>Soporte:</b> ' + d.support + '</p>' +
+        renderPriceBlock(market, key, debugDate) +
+      '</div>';
+    });
+    html += '<p style="font-size:.78rem;color:var(--muted);">No se garantiza primera posición en Google, aprobación de Google, ni una cantidad determinada de visitas o clientes.</p>';
+    el.innerHTML = html;
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MÓDULO 10 — Express vs. Premium
+  // ══════════════════════════════════════════════════════════════
+  function renderModule10(el, market, debugDate) {
+    var m = MARKETS[market];
+    el.innerHTML =
+      '<table class="compare-table" style="width:100%;">' +
+        '<tr><th></th><th>Landing Express</th><th>Landing Premium</th></tr>' +
+        '<tr><td>Diseño y desarrollo</td><td>Igual</td><td>Igual</td></tr>' +
+        '<tr><td>Plazo de primera versión</td><td>48 horas hábiles</td><td>48 horas hábiles</td></tr>' +
+        '<tr><td>Revisiones</td><td>2 rondas</td><td>2 rondas</td></tr>' +
+        '<tr><td>Hosting</td><td>Sin mensualidad</td><td>Sin mensualidad</td></tr>' +
+        '<tr><td>Dirección web</td><td>Subdominio <code>tunegocio.rio-landing.com</code></td><td>Dominio propio <code>' + m.domainExample + '</code>, incluido el primer año</td></tr>' +
+        '<tr><td>Desde el 2º año</td><td>No aplica</td><td>El cliente renueva su dominio directamente</td></tr>' +
+      '</table>' +
+      '<div class="rule-box"><span class="tag">Clave</span><p>Premium no significa más funciones, mejor diseño ni nada adicional por el nombre — significa que el negocio tiene su propia dirección web en vez de compartir la de RiO.</p></div>';
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MÓDULO 11 — Elegir la solución (diagnóstico)
+  // ══════════════════════════════════════════════════════════════
+  function renderModule11(el) {
+    var options = [
+      { key: 'ficha', label: 'Ficha de Google' },
+      { key: 'generico', label: 'Landing Express' },
+      { key: 'personalizado', label: 'Landing Premium' },
+      { key: 'ficha_generico', label: 'Ficha + Landing Express' },
+      { key: 'ficha_personalizado', label: 'Ficha + Landing Premium' },
+      { key: 'none', label: 'Ninguno — no corresponde ofrecer nada hoy' }
+    ];
+    el.innerHTML = '<div id="diagCases"></div>';
+    var wrap = document.getElementById('diagCases');
+    TRAINING_CONTENT.diagnosisCases.forEach(function (c, idx) {
+      var caseId = 'diag' + idx;
+      var block = document.createElement('div');
+      block.className = 'qcard';
+      block.innerHTML =
+        '<div class="qcard-label">Caso ' + (idx + 1) + ' de 6 — ' + c.business + '</div>' +
+        '<p style="font-size:.85rem;color:var(--muted);margin-bottom:10px;">' + c.situation + '</p>' +
+        '<div class="type-grid" id="' + caseId + 'opts"></div>' +
+        '<div class="reveal-panel" id="' + caseId + 'reveal"><div class="label">Por qué</div><p id="' + caseId + 'revealText"></p></div>';
+      wrap.appendChild(block);
+
+      var optsEl = block.querySelector('#' + caseId + 'opts');
+      options.forEach(function (opt) {
+        var btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'type-card';
+        btn.innerHTML = '<div class="name">' + opt.label + '</div>';
+        btn.addEventListener('click', function () {
+          optsEl.querySelectorAll('.type-card').forEach(function (b) { b.classList.remove('correct', 'incorrect'); });
+          var ok = opt.key === c.correctProduct;
+          btn.classList.add(ok ? 'correct' : 'incorrect');
+          block.querySelector('.reveal-panel').classList.add('show');
+          block.querySelector('.reveal-panel p').innerHTML = ok ? icon(true) + c.explain : icon(false) + 'Repasemos: ' + c.explain;
+        });
+        optsEl.appendChild(btn);
+      });
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MÓDULO 12 — Después de la conversación
+  // ══════════════════════════════════════════════════════════════
+  function renderModule12(el) {
+    el.innerHTML =
+      '<div class="callout-quote">El cliente nunca entra al Portal — entrás vos, siempre, apenas termina la conversación.</div>' +
+      '<ol style="padding-left:22px;font-size:.88rem;color:var(--ink);line-height:1.9;">' +
+        TRAINING_CONTENT.postConversationSteps.map(function (s) { return '<li>' + s + '</li>'; }).join('') +
+      '</ol>' +
+      '<div class="rule-box"><span class="tag">Frase clave</span><p>Registrar correctamente en el Portal la información obtenida durante la conversación, seleccionar la solución acordada y generar desde allí el mensaje de cierre y pago.</p></div>';
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // MÓDULO 13 — Autoevaluación final
+  // ══════════════════════════════════════════════════════════════
+  function renderModule13(el) {
+    var quiz = TRAINING_CONTENT.finalQuiz;
+    var answered = new Array(quiz.length).fill(false);
+    var correctCount = 0;
+
+    var html = '<div id="quizQuestions"></div>' +
+      '<div class="qcard"><div class="qcard-label">Antes de terminar, confirmá que entendés la secuencia obligatoria:</div>' +
+      TRAINING_CONTENT.postConversationSteps.slice(3).map(function (s, i) {
+        return '<label style="display:flex;gap:8px;align-items:flex-start;font-size:.85rem;color:var(--ink);margin-bottom:8px;"><input type="checkbox">' + s + '</label>';
+      }).join('') + '</div>' +
+      '<div class="quiz-summary" id="quizSummary" style="display:none;"></div>' +
+      '<div style="text-align:center;margin-top:12px;"><button type="button" class="training-nav-btn training-nav-btn--primary" id="quizFinishBtn">Ver mi repaso</button></div>';
+    el.innerHTML = html;
+
+    var wrap = document.getElementById('quizQuestions');
+    quiz.forEach(function (q, idx) {
+      var block = document.createElement('div');
+      block.className = 'qcard';
+      block.innerHTML = '<div class="qcard-label">' + (idx + 1) + '. ' + q.question + '</div>' +
+        '<div class="type-grid" id="quiz' + idx + 'opts"></div>' +
+        '<div class="reveal-panel" id="quiz' + idx + 'reveal"><p id="quiz' + idx + 'revealText"></p></div>';
+      wrap.appendChild(block);
+
+      var optsEl = block.querySelector('#quiz' + idx + 'opts');
+      q.options.forEach(function (optText, optIdx) {
+        var btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'type-card';
+        btn.innerHTML = '<div class="name">' + optText + '</div>';
+        btn.addEventListener('click', function () {
+          if (answered[idx]) return; // no recontar la misma pregunta al reintentar el detalle visual
+          optsEl.querySelectorAll('.type-card').forEach(function (b) { b.classList.remove('correct', 'incorrect'); });
+          var ok = optIdx === q.correctIndex;
+          btn.classList.add(ok ? 'correct' : 'incorrect');
+          block.querySelector('.reveal-panel').classList.add('show');
+          block.querySelector('.reveal-panel p').innerHTML = ok ? icon(true) + 'Correcto.' : (icon(false) + 'La respuesta correcta era: "' + q.options[q.correctIndex] + '"');
+          answered[idx] = true;
+          if (ok) correctCount++;
+        });
+        optsEl.appendChild(btn);
+      });
+    });
+
+    document.getElementById('quizFinishBtn').addEventListener('click', function () {
+      var summary = document.getElementById('quizSummary');
+      summary.style.display = 'block';
+      summary.innerHTML = '<p class="big">' + correctCount + ' / ' + quiz.length + '</p>' +
+        '<p style="font-size:.85rem;color:var(--muted);">Repasaste correctamente ' + correctCount + ' de ' + quiz.length + ' puntos. Esto es autoevaluación personal — no queda guardado en ningún sistema ni afecta tu desempeño registrado.</p>';
+    });
+  }
+
+  function icon(ok) {
+    return ok ? '<span class="status-icon status-icon--ok">✓ Correcto —</span> ' : '<span class="status-icon status-icon--retry">↻ Repasemos esto —</span> ';
+  }
+
+  // ── Selector de mercado — idéntico al patrón ya usado en interno/index.html ──
+  function renderMarketSwitcher(exec, market) {
+    if (!exec || exec.allowedMarkets.length <= 1) return;
+    function buildGroup() {
+      var group = document.createElement('div');
+      group.className = 'market-switcher-group';
+      group.setAttribute('role', 'group');
+      group.setAttribute('aria-label', 'Mercado activo');
+      exec.allowedMarkets.forEach(function (mkt) {
+        var active = mkt === market;
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'market-switcher-btn' + (active ? ' active' : '');
+        btn.textContent = mkt;
+        btn.setAttribute('aria-pressed', String(active));
+        btn.addEventListener('click', function () { setActiveMarket(exec, mkt); window.location.reload(); });
+        group.appendChild(btn);
+      });
+      return group;
+    }
+    var navItem = document.createElement('li');
+    navItem.appendChild(buildGroup());
+    document.querySelector('.nav-links').appendChild(navItem);
+    var drawer = document.getElementById('navDrawer');
+    var drawerCta = drawer.querySelector('a[href="/#contacto"]');
+    drawer.insertBefore(buildGroup(), drawerCta);
+  }
+
+  // Se inicializa acá, al final, para que todas las funciones y datos de los
+  // módulos (ej. PRODUCT_DETAILS/PRODUCT_ORDER del módulo 9) ya existan antes
+  // de que buildModuleScreens() los use — evita depender del orden de hoisting de `var`.
+  buildModuleScreens();
+  buildModuleIndex();
+  goToScreen(clampScreen(progress.lastScreen || 0));
+
+  document.getElementById('btnPrev').addEventListener('click', function () { goToScreen(currentScreen - 1); });
+  // btnNext NO lleva un segundo addEventListener acá — goToScreen() ya le asigna
+  // un .onclick contextual (Comenzar / Siguiente / Volver al índice) cada vez que
+  // se navega. Agregar otro listener aquí duplicaría el avance por cada clic.
+
+});
+</script>
+
+</body>
+</html>
