@@ -193,8 +193,8 @@ var TRAINING_CONTENT = {
     {
       business: 'Veterinaria Los Amigos',
       situation: 'Ya tiene Ficha de Google activa y ya tiene un sitio web propio funcionando.',
-      correctProduct: 'none',
-      explain: 'Ya resolvió lo que ofrecen los cinco productos de RiO. No corresponde forzar una venta de ninguno de los cinco — se diagnostica primero, y si no hay una necesidad real hoy, se cierra cordialmente. Sí podés ofrecerle, si el ejecutivo lo considera útil, un diagnóstico gratuito de cómo está su página actual — no es un producto de los cinco, es una forma de dejar la puerta abierta sin presionar. No todas las conversaciones terminan en venta.'
+      correctProduct: 'diagnostico',
+      explain: 'Ya resolvió lo que ofrecen los cinco productos de RiO, así que no corresponde forzar la venta de ninguno de ellos. Pero eso no significa que no haya nada para hacer: puede que le falte mejorar el SEO, o que Google no esté valorando bien su Ficha o su sitio. Lo correcto es agendar un diagnóstico para que hable directamente con Brenda — no se resuelve en la llamada, se agenda para revisarlo con calma. No todas las conversaciones terminan en venta de uno de los cinco productos, pero tampoco todas terminan en un simple "no hay nada para ofrecer".'
     }
   ],
 
@@ -287,7 +287,7 @@ var TRAINING_CONTENT = {
       question: 'Un negocio ya tiene Ficha de Google y ya tiene sitio web propio funcionando. ¿Qué corresponde hacer?',
       options: [
         'Ofrecerle igual un pack para asegurar la venta.',
-        'Diagnosticar si tiene alguna necesidad real antes de ofrecer algo — puede que hoy no le corresponda ningún producto.',
+        'No forzar ninguno de los cinco productos, y agendar un diagnóstico con Brenda por si hay algo para mejorar (SEO, cómo lo valora Google).',
         'Insistir en que su sitio actual seguro está mal hecho.'
       ],
       correctIndex: 1
