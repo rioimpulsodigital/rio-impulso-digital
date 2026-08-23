@@ -694,15 +694,20 @@ document.addEventListener('DOMContentLoaded', function () {
   // ══════════════════════════════════════════════════════════════
   // MÓDULO 8 — Conversaciones reales
   // ══════════════════════════════════════════════════════════════
-  function renderModule8(el) {
+  function renderModule8(el, market, debugDate) {
     el.innerHTML = '<div id="convCases"></div>';
     var wrap = document.getElementById('convCases');
+    // Precio de entrada — misma fuente y mismo producto de referencia (Ficha) que usa
+    // el Kit real en su objeción equivalente (objPriceFrom, kit-venta-ficha-y-landing-page.html).
+    var entryPrice = MARKETS[market].formatPrice(getActivePrice(market, 'ficha', debugDate)) + ' ' + MARKETS[market].currency;
+
     TRAINING_CONTENT.conversations.forEach(function (c, idx) {
       var caseId = 'conv' + idx;
       var block = document.createElement('div');
       block.className = 'qcard';
       block.innerHTML =
         '<div class="qcard-label">' + c.prompt + '</div>' +
+        (c.context ? '<p style="font-size:.78rem;color:var(--muted);margin:-4px 0 10px;">' + c.context + '</p>' : '') +
         '<div class="type-grid" id="' + caseId + 'opts"></div>' +
         '<div class="reveal-panel" id="' + caseId + 'reveal"><div class="label">Por qué</div><p id="' + caseId + 'revealText"></p></div>';
       wrap.appendChild(block);
@@ -712,9 +717,10 @@ document.addEventListener('DOMContentLoaded', function () {
       var options = c.options.slice();
       if (idx % 2 === 1) options.reverse();
       options.forEach(function (opt) {
+        var optText = c.dynamicPrice ? opt.text.replace('{PRICE}', entryPrice) : opt.text;
         var btn = document.createElement('button');
         btn.type = 'button'; btn.className = 'type-card';
-        btn.innerHTML = '<div class="name">' + opt.text + '</div>';
+        btn.innerHTML = '<div class="name">' + optText + '</div>';
         btn.addEventListener('click', function () {
           optsEl.querySelectorAll('.type-card').forEach(function (b) { b.classList.remove('correct', 'incorrect'); });
           btn.classList.add(opt.correct ? 'correct' : 'incorrect');

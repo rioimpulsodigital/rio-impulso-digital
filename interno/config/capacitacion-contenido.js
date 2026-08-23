@@ -118,12 +118,14 @@ var TRAINING_CONTENT = {
     },
     {
       prompt: '"No tengo dinero para esto ahora."',
+      context: 'Esta objeción aparece al principio de la conversación (Paso 0), antes de que el cliente conozca el precio. Muchas veces "no tengo plata" es en realidad "pensé que esto era caro".',
+      dynamicPrice: true, // el texto de la opción correcta reemplaza {PRICE} por getActivePrice(market, 'ficha') — igual que el Kit
       options: [
-        { text: 'Entiendo, es una decisión importante. ¿Te sirve si te llamo en un par de semanas para retomarlo?', correct: true },
-        { text: 'Tranquilo, no es una inversión grande, cualquiera puede pagarlo.', correct: false, why: 'Minimiza la situación económica del cliente — está explícitamente prohibido usar frases como "no es una inversión grande".' }
+        { text: 'Arranca desde {PRICE}, sin gastos grandes de entrada, lista en 48 horas hábiles. No es una inversión grande ni un compromiso a largo plazo.', correct: true },
+        { text: 'Entiendo, te dejo tranquilo entonces — cualquier cosa me escribís.', correct: false, why: 'El cliente todavía no conoce el precio real. Cerrar la conversación sin mostrárselo pierde la oportunidad de resolver una objeción que muchas veces es solo una suposición.' }
       ],
-      feedbackCorrect: 'Correcto — se respeta el momento del cliente sin minimizar su situación, y se agenda un seguimiento concreto.',
-      feedbackWrong: 'Repasemos esto: nunca se minimiza la situación económica de un prospecto. Se respeta la respuesta y se agenda un seguimiento real.'
+      feedbackCorrect: 'Correcto — es la primera vez que el cliente conoce el valor real. No es minimizar su situación: es mostrarle un dato que no tenía. El precio de entrada es accesible.',
+      feedbackWrong: 'Repasemos: en este punto de la conversación el cliente todavía no sabe cuánto cuesta. Mostrarle el precio de entrada resuelve la objeción real, que muchas veces es una suposición sobre el costo.'
     },
     {
       prompt: '"Mandame información por WhatsApp."',
@@ -252,13 +254,13 @@ var TRAINING_CONTENT = {
     },
     {
       type: 'mcq',
-      question: 'El cliente dice: "no tengo plata ahora". ¿Cuál es la mejor respuesta?',
+      question: 'Al principio de la llamada, antes de decir ningún precio, el cliente dice: "no tengo plata para esto ahora". ¿Cuál es la mejor respuesta?',
       options: [
-        'Decirle que no es una inversión grande y que cualquiera puede pagarlo.',
-        'Respetar su respuesta y proponer un seguimiento en una fecha concreta.',
-        'Insistir explicando de nuevo los beneficios hasta que cambie de opinión.'
+        'Mostrarle el precio de entrada — todavía no lo conoce, y muchas veces "no tengo plata" es en realidad "pensé que era caro".',
+        'Dejarlo tranquilo y cerrar la conversación sin mostrarle el precio.',
+        'Insistir explicando de nuevo los beneficios hasta que cambie de opinión, sin mencionar el precio.'
       ],
-      correctIndex: 1
+      correctIndex: 0
     },
     {
       type: 'mcq',
