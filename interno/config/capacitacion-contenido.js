@@ -174,9 +174,9 @@ var TRAINING_CONTENT = {
     },
     {
       business: 'Estudio de Uñas Brillo',
-      situation: 'Muy activa en Instagram, con buena cantidad de seguidores, pero no tiene Ficha de Google y casi no la encuentran cuando alguien busca "manicura cerca de mí".',
-      correctProduct: 'ficha',
-      explain: 'El problema puntual es no aparecer en búsquedas locales — eso lo resuelve la Ficha. No hace falta ofrecerle una Landing todavía; primero se diagnostica qué falta exactamente.'
+      situation: 'Muy activa en Instagram, con buena cantidad de seguidores, pero no tiene Ficha de Google, casi no la encuentran cuando alguien busca "manicura cerca de mí", y tampoco tiene una página propia.',
+      correctProduct: 'ficha_generico',
+      explain: 'La Ficha es la prioridad — es lo primero que resuelve que no aparezca en búsquedas locales. Pero como tampoco tiene una página propia, el diagnóstico completo muestra que el pack (Ficha + Landing) es la recomendación real, no solo la pieza más obvia. Diagnosticar significa revisar todo lo que falta, no quedarse en el primer hueco que se nota.'
     },
     {
       business: 'Barbería Central',
