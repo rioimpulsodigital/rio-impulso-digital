@@ -194,7 +194,7 @@ var TRAINING_CONTENT = {
       business: 'Veterinaria Los Amigos',
       situation: 'Ya tiene Ficha de Google activa y ya tiene un sitio web propio funcionando.',
       correctProduct: 'none',
-      explain: 'Ya resolvió lo que ofrecen los cinco productos de RiO. No corresponde forzar una venta — se diagnostica primero, y si no hay una necesidad real hoy, se cierra cordialmente. No todas las conversaciones terminan en venta.'
+      explain: 'Ya resolvió lo que ofrecen los cinco productos de RiO. No corresponde forzar una venta de ninguno de los cinco — se diagnostica primero, y si no hay una necesidad real hoy, se cierra cordialmente. Sí podés ofrecerle, si el ejecutivo lo considera útil, un diagnóstico gratuito de cómo está su página actual — no es un producto de los cinco, es una forma de dejar la puerta abierta sin presionar. No todas las conversaciones terminan en venta.'
     }
   ],
 
