@@ -183,7 +183,7 @@ var TRAINING_CONTENT = {
     {
       prompt: '"No tengo tiempo ahora."',
       options: [
-        { text: 'Sin problema. ¿Te llamo mañana a las once?', correct: true },
+        { text: 'No hay problema, ¿te puedo llamar mañana martes o el miércoles?', correct: true },
         { text: 'Bueno, te llamo después.', correct: false, why: '"Después" no es un horario — un seguimiento sin fecha concreta casi nunca se retoma.' }
       ],
       feedbackCorrect: 'Correcto — un horario concreto convierte una postergación en un seguimiento real.',
