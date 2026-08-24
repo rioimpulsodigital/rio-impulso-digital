@@ -89,6 +89,7 @@
 
   .qcard { border: 1px solid #e7e1ec; border-radius: var(--r-m); padding: 16px 18px; margin-bottom: 12px; background: var(--white); }
   .qcard-label { font-size: .9rem; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+  .qcard-hint { font-size: .74rem; color: var(--sec); font-style: italic; margin: 0 0 10px; }
 
   .reveal-panel {
     border-radius: var(--r-m); padding: 16px 18px; margin-top: 10px;
@@ -556,6 +557,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // ══════════════════════════════════════════════════════════════
   function renderModule1(el) {
     el.innerHTML =
+      '<p class="qcard-hint" style="margin-bottom:12px;">Hacé clic en <b>Buscar</b> para ver los resultados de esta búsqueda simulada.</p>' +
       '<div class="search-box">' +
         '<input type="text" id="trainSearchInput" value="ferretería cerca de mí" aria-label="Buscar">' +
         '<button type="button" class="search-btn" id="trainSearchBtn">Buscar</button>' +
@@ -580,7 +582,7 @@ document.addEventListener('DOMContentLoaded', function () {
         '</button>';
       }).join('');
 
-      wrap.innerHTML = '<p style="font-size:.82rem;color:var(--muted);margin-bottom:12px;">Así es como aparecen hoy los negocios de "ferretería" en tu zona:</p>' +
+      wrap.innerHTML = '<p style="font-size:.82rem;color:var(--muted);margin-bottom:12px;">Así es como aparecen hoy los negocios de "ferretería" en tu zona. Tocá una tarjeta o un pin del mapa para ubicarla:</p>' +
         '<div class="search-results-layout">' +
           '<div id="resultsList">' + listHTML + '</div>' +
           '<div class="map-mock" id="mapMock"><span class="map-mock-label">Mapa ilustrativo</span>' + pinsHTML + '</div>' +
@@ -611,6 +613,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var biz = TRAINING_CONTENT.protagonist;
     el.innerHTML =
       '<p style="font-size:.9rem;color:var(--ink);margin-bottom:16px;">Una <b>Ficha de Google</b> (también llamada Perfil de Empresa en Google) es el perfil gratuito que Google muestra en el buscador y en Google Maps cuando alguien busca un negocio por nombre o por categoría cerca de su ubicación. La crea o reclama el propio negocio — no hay que pagarle nada a Google para tenerla — y funciona, en la práctica, como su carta de presentación en Google.</p>' +
+      '<p class="qcard-hint">Tocá cada elemento de la ficha para descubrir qué es:</p>' +
       '<div class="ficha-mock">' +
         '<div class="ficha-mock-name">' + biz.name + '</div>' +
         '<div class="ficha-mock-meta">★ ' + biz.rating.toFixed(1) + ' (' + biz.reviewCount + ' reseñas) · <span class="ficha-mock-status">Abierto ahora</span></div>' +
@@ -646,6 +649,7 @@ document.addEventListener('DOMContentLoaded', function () {
     el.innerHTML =
       '<p style="font-size:.9rem;color:var(--ink);margin-bottom:14px;">' + TRAINING_CONTENT.protagonist.name + ' tiene Ficha de Google activa — <b>sí aparece</b> cuando lo buscan. Pero mirá bien: no tiene ningún enlace a un sitio web.</p>' +
       '<div class="qcard"><div class="qcard-label">¿Qué le falta a este negocio?</div>' +
+      '<p class="qcard-hint">Elegí la alternativa que creas correcta:</p>' +
       '<div class="type-grid" id="m3options"></div></div>' +
       '<div class="reveal-panel" id="m3reveal"><div class="label">Por qué</div><p id="m3revealText"></p></div>';
 
@@ -748,6 +752,7 @@ document.addEventListener('DOMContentLoaded', function () {
         '<div class="qcard-label">' + c.business + '</div>' +
         '<p style="font-size:.85rem;color:var(--muted);margin-bottom:10px;">' + c.situation + '</p>' +
         '<p style="font-size:.85rem;color:var(--ink);font-weight:600;margin-bottom:10px;">Pregunta clave: "' + c.question + '"</p>' +
+        '<p class="qcard-hint">Elegí el tipo de urgencia que corresponde:</p>' +
         '<div class="type-grid type-grid--2" id="' + caseId + 'opts"></div>' +
         '<div class="reveal-panel" id="' + caseId + 'reveal"><div class="label">Por qué</div><p id="' + caseId + 'revealText"></p></div>';
       wrap.appendChild(block);
@@ -788,6 +793,7 @@ document.addEventListener('DOMContentLoaded', function () {
       block.innerHTML =
         '<div class="qcard-label">' + c.prompt + '</div>' +
         (c.context ? '<p style="font-size:.78rem;color:var(--muted);margin:-4px 0 10px;">' + c.context + '</p>' : '') +
+        '<p class="qcard-hint">Elegí la respuesta que consideres más adecuada:</p>' +
         '<div class="type-grid" id="' + caseId + 'opts"></div>' +
         '<div class="reveal-panel" id="' + caseId + 'reveal"><div class="label">Por qué</div><p id="' + caseId + 'revealText"></p></div>';
       wrap.appendChild(block);
@@ -944,6 +950,7 @@ document.addEventListener('DOMContentLoaded', function () {
       block.innerHTML =
         '<div class="qcard-label">Caso ' + (idx + 1) + ' de 6 — ' + c.business + '</div>' +
         '<p style="font-size:.85rem;color:var(--muted);margin-bottom:10px;">' + c.situation + '</p>' +
+        '<p class="qcard-hint">Elegí qué le recomendarías:</p>' +
         '<div class="type-grid" id="' + caseId + 'opts"></div>' +
         '<div class="reveal-panel" id="' + caseId + 'reveal"><div class="label">Por qué</div><p id="' + caseId + 'revealText"></p></div>';
       wrap.appendChild(block);
@@ -1030,7 +1037,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var correctCount = 0;
 
     var html = '<div id="quizQuestions"></div>' +
-      '<div class="qcard"><div class="qcard-label">Antes de terminar, confirmá que entendés la secuencia obligatoria:</div>' +
+      '<div class="qcard"><div class="qcard-label">Antes de terminar, marcá cada paso para confirmar que entendés la secuencia obligatoria:</div>' +
       TRAINING_CONTENT.postConversationSteps.slice(3).map(function (s, i) {
         return '<label style="display:flex;gap:8px;align-items:flex-start;font-size:.85rem;color:var(--ink);margin-bottom:8px;"><input type="checkbox">' + s + '</label>';
       }).join('') + '</div>' +
@@ -1043,6 +1050,7 @@ document.addEventListener('DOMContentLoaded', function () {
       var block = document.createElement('div');
       block.className = 'qcard';
       block.innerHTML = '<div class="qcard-label">' + (idx + 1) + '. ' + q.question + '</div>' +
+        '<p class="qcard-hint">Elegí una opción:</p>' +
         '<div class="type-grid" id="quiz' + idx + 'opts"></div>' +
         '<div class="reveal-panel" id="quiz' + idx + 'reveal"><p id="quiz' + idx + 'revealText"></p></div>';
       wrap.appendChild(block);
