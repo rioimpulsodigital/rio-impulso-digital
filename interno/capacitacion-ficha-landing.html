@@ -601,6 +601,7 @@ document.addEventListener('DOMContentLoaded', function () {
   function renderModule2(el) {
     var biz = TRAINING_CONTENT.protagonist;
     el.innerHTML =
+      '<p style="font-size:.9rem;color:var(--ink);margin-bottom:16px;">Una <b>Ficha de Google</b> (también llamada Perfil de Empresa en Google) es el perfil gratuito que Google muestra en el buscador y en Google Maps cuando alguien busca un negocio por nombre o por categoría cerca de su ubicación. La crea o reclama el propio negocio — no hay que pagarle nada a Google para tenerla — y funciona, en la práctica, como su carta de presentación en Google.</p>' +
       '<div class="ficha-mock">' +
         '<div class="ficha-mock-name">' + biz.name + '</div>' +
         '<div class="ficha-mock-meta">★ ' + biz.rating.toFixed(1) + ' (' + biz.reviewCount + ' reseñas) · <span class="ficha-mock-status">Abierto ahora</span></div>' +
