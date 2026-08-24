@@ -962,25 +962,36 @@ document.addEventListener('DOMContentLoaded', function () {
   function renderModule12(el) {
     el.innerHTML =
       '<p style="font-size:.88rem;color:var(--ink);margin-bottom:14px;">Estas son las mismas 7 preguntas que ya vas a usar en el Kit real (Paso 1). La idea no es solo leerlas para que el cliente responda — es entender <b>para qué sirve</b> cada respuesta a la hora de armar su Landing. Tocá cada una:</p>' +
-      '<div id="landingQList"></div>' +
-      '<div class="reveal-panel" id="lqReveal"><div class="label">Para qué sirve esta respuesta</div><p id="lqRevealText"></p></div>';
+      '<div id="landingQList"></div>';
 
     var list = document.getElementById('landingQList');
-    TRAINING_CONTENT.landingQuestions.forEach(function (q) {
+    TRAINING_CONTENT.landingQuestions.forEach(function (q, idx) {
+      var wrap = document.createElement('div');
+      wrap.className = 'qcard';
+
       var block = document.createElement('button');
       block.type = 'button';
       block.className = 'type-card';
-      block.style.marginBottom = '10px';
       block.innerHTML = '<div class="name"><span style="color:var(--sec);font-family:var(--ff-mono);margin-right:6px;">' + q.n + '</span>' + q.question + '</div>';
+
+      var panel = document.createElement('div');
+      panel.className = 'reveal-panel';
+      panel.id = 'lqReveal' + idx;
+      panel.innerHTML = '<div class="label">Para qué sirve esta respuesta</div><p>' + q.purpose + '</p>';
+
       block.addEventListener('click', function () {
+        var alreadyOpen = panel.classList.contains('show');
+        list.querySelectorAll('.reveal-panel').forEach(function (p) { p.classList.remove('show'); });
         list.querySelectorAll('.type-card').forEach(function (b) { b.classList.remove('active'); });
-        block.classList.add('active');
-        var panel = document.getElementById('lqReveal');
-        panel.classList.add('show');
-        document.getElementById('lqRevealText').textContent = q.purpose;
-        panel.scrollIntoView({ behavior: (window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'), block: 'nearest' });
+        if (!alreadyOpen) {
+          panel.classList.add('show');
+          block.classList.add('active');
+        }
       });
-      list.appendChild(block);
+
+      wrap.appendChild(block);
+      wrap.appendChild(panel);
+      list.appendChild(wrap);
     });
 
     var note = document.createElement('div');
