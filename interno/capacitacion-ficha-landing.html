@@ -296,7 +296,7 @@
   <div class="ut-hero-content">
     <a href="/interno/" class="ut-back">Volver al portal</a>
     <p class="ut-label">Capacitación</p>
-    <h1>Capacitación Ficha &amp; Landing</h1>
+    <h1>Ficha &amp; Landing</h1>
     <p class="ut-hero-desc">Aprendé o repasá cómo detectar, explicar y vender Ficha de Google y Landing — a tu ritmo, todas las veces que quieras.</p>
   </div>
 </section>
@@ -313,7 +313,10 @@
           <span class="training-progress-label" id="progressLabel">Módulo 0 de 14</span>
           <div class="training-progress-track"><div class="training-progress-fill" id="progressFill" style="width:0%;"></div></div>
         </div>
-        <span class="kit-badge" id="marketBadge" style="font-family:var(--ff-mono);font-size:.62rem;letter-spacing:.07em;text-transform:uppercase;color:var(--sec);border:1px solid var(--sec);border-radius:100px;padding:5px 12px;"></span>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button type="button" class="training-nav-btn" id="btnHome" style="padding:6px 16px;font-size:.78rem;">🏠 Inicio</button>
+          <span class="kit-badge" id="marketBadge" style="font-family:var(--ff-mono);font-size:.62rem;letter-spacing:.07em;text-transform:uppercase;color:var(--sec);border:1px solid var(--sec);border-radius:100px;padding:5px 12px;"></span>
+        </div>
       </div>
 
       <!-- ── PORTADA / ÍNDICE ── -->
@@ -491,6 +494,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('progressFill').style.width = Math.round((n / TOTAL) * 100) + '%';
 
     document.getElementById('btnPrev').disabled = (n === 0);
+    document.getElementById('btnHome').disabled = (n === 0);
     var nextBtn = document.getElementById('btnNext');
     if (n === TOTAL) {
       nextBtn.textContent = 'Volver al índice';
@@ -1027,6 +1031,7 @@ document.addEventListener('DOMContentLoaded', function () {
   goToScreen(clampScreen(progress.lastScreen || 0));
 
   document.getElementById('btnPrev').addEventListener('click', function () { goToScreen(currentScreen - 1); });
+  document.getElementById('btnHome').addEventListener('click', function () { buildModuleIndex(); goToScreen(0); });
   // btnNext NO lleva un segundo addEventListener acá — goToScreen() ya le asigna
   // un .onclick contextual (Comenzar / Siguiente / Volver al índice) cada vez que
   // se navega. Agregar otro listener aquí duplicaría el avance por cada clic.
