@@ -240,6 +240,12 @@
   .compare-table td:first-child, .compare-table th:first-child { text-align: left; font-weight: 600; color: var(--ink); }
   .mark-yes { color: #2a8040; font-weight: 700; }
   .mark-no { color: var(--muted); }
+  .compare-row-highlight td {
+    background: var(--purple-soft, #f6e9f8); font-weight: 700;
+    border-top: 1.5px solid var(--p); border-bottom: 1.5px solid var(--p);
+  }
+  .compare-row-highlight td:first-child { border-left: 3px solid var(--p); color: var(--p); }
+  .compare-row-highlight td:last-child { border-right: 1.5px solid var(--p); }
 
   /* ── PRODUCTO / PRECIO ── */
   .includes-box { background: var(--white); border: 1px solid var(--border); border-radius: var(--r-m); padding: 18px 20px; margin-bottom: 16px; }
@@ -708,7 +714,7 @@ document.addEventListener('DOMContentLoaded', function () {
     data.columns.forEach(function (c) { html += '<th>' + c + '</th>'; });
     html += '</tr></thead><tbody>';
     data.rows.forEach(function (row) {
-      html += '<tr><td>' + row.label + '</td>';
+      html += '<tr' + (row.highlight ? ' class="compare-row-highlight"' : '') + '><td>' + row.label + '</td>';
       row.marks.forEach(function (m) { html += '<td>' + (m ? '<span class="mark-yes">✓</span>' : '<span class="mark-no">—</span>') + '</td>'; });
       html += '</tr>';
     });

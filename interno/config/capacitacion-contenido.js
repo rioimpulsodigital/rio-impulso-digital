@@ -111,7 +111,7 @@ var TRAINING_CONTENT = {
     rows: [
       { label: 'Solo redes sociales', marks: [true, false, false, true] },
       { label: 'Redes + Ficha de Google', marks: [true, true, false, true] },
-      { label: 'Redes + Ficha + Landing', marks: [true, true, true, true] },
+      { label: 'Redes + Ficha + Landing', marks: [true, true, true, true], highlight: true },
       { label: 'Solo Ficha de Google', marks: [false, true, false, true] },
       { label: 'Ficha de Google + Landing', marks: [false, true, true, true] }
     ]
