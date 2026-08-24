@@ -367,6 +367,9 @@
           </div>
         </div>
         <div class="module-index" id="moduleIndexList"></div>
+        <div style="text-align:center;margin-top:24px;">
+          <button type="button" class="training-nav-btn" id="btnResetProgress" style="font-size:.78rem;">↺ Reiniciar progreso</button>
+        </div>
       </section>
 
       <!-- Los 13 módulos se generan dinámicamente en #modulesContainer -->
@@ -1112,6 +1115,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.getElementById('btnPrev').addEventListener('click', function () { goToScreen(currentScreen - 1); });
   document.getElementById('btnHome').addEventListener('click', function () { buildModuleIndex(); goToScreen(0); });
+  document.getElementById('btnResetProgress').addEventListener('click', function () {
+    if (!confirm('¿Reiniciar el progreso de la capacitación? Se van a desmarcar todos los módulos completados en este dispositivo — el contenido no cambia, podés volver a hacerla completa cuando quieras.')) return;
+    progress = { completed: [], lastScreen: 0 };
+    saveProgress();
+    buildModuleIndex();
+    goToScreen(0);
+  });
   // btnNext NO lleva un segundo addEventListener acá — goToScreen() ya le asigna
   // un .onclick contextual (Comenzar / Siguiente / Volver al índice) cada vez que
   // se navega. Agregar otro listener aquí duplicaría el avance por cada clic.
