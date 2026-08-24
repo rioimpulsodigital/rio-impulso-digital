@@ -139,8 +139,9 @@
   .result-card {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     border: 1.5px solid var(--border); border-radius: var(--r-m); padding: 14px 16px; margin-bottom: 10px;
-    flex-wrap: wrap;
+    flex-wrap: wrap; cursor: pointer;
   }
+  .result-card:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
   .result-card--protagonist { border-color: var(--p); background: #f6e9f8; }
   .result-name { font-weight: 700; font-size: .9rem; color: var(--ink); }
   .result-meta { font-size: .78rem; color: var(--muted); margin-top: 2px; }
@@ -149,6 +150,38 @@
     letter-spacing: .05em; padding: 4px 10px; border-radius: 100px; border: 1px solid var(--border); color: var(--muted);
   }
   .result-badge--yes { border-color: #8fd19e; background: #f2fbf3; color: #2a8040; }
+  .result-card--highlight { border-color: var(--coral); box-shadow: 0 0 0 2px rgba(255,107,107,.25); }
+
+  /* ── MAPA FICTICIO ── */
+  .search-results-layout { display: grid; gap: 16px; grid-template-columns: 1fr; margin-top: 12px; }
+  @media (min-width: 768px) { .search-results-layout { grid-template-columns: 1fr 1fr; align-items: start; } }
+  .map-mock {
+    position: relative; border: 1.5px solid var(--border); border-radius: var(--r-l);
+    height: 260px; overflow: hidden; background-color: #f3f0f5;
+    background-image:
+      linear-gradient(rgba(147,0,159,.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(147,0,159,.08) 1px, transparent 1px);
+    background-size: 13% 13%;
+  }
+  .map-mock-label {
+    position: absolute; top: 8px; left: 10px; font-family: var(--ff-mono); font-size: .58rem;
+    text-transform: uppercase; letter-spacing: .05em; color: var(--muted); background: rgba(255,255,255,.9);
+    padding: 3px 9px; border-radius: 100px; z-index: 2; pointer-events: none;
+  }
+  .map-pin {
+    position: absolute; transform: translate(-50%, -100%); background: none; border: none;
+    padding: 0; cursor: pointer; line-height: 0;
+  }
+  .map-pin-icon {
+    width: 26px; height: 26px; border-radius: 50% 50% 50% 0; background: var(--sec);
+    transform: rotate(-45deg); display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,.3); transition: background .15s, transform .15s;
+  }
+  .map-pin-icon span { transform: rotate(45deg); color: #fff; font-family: var(--ff-mono); font-weight: 700; font-size: .68rem; }
+  .map-pin--protagonist .map-pin-icon { background: var(--p); }
+  .map-pin--active .map-pin-icon { background: var(--coral); transform: rotate(-45deg) scale(1.15); }
+  .map-pin:focus-visible .map-pin-icon { outline: 2px solid var(--coral); outline-offset: 3px; }
+  @media (prefers-reduced-motion: reduce) { .map-pin-icon { transition: none; } }
 
   /* ── FICHA SIMULADA ── */
   .ficha-mock {
@@ -522,14 +555,43 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('trainSearchBtn').addEventListener('click', function () {
       var wrap = document.getElementById('trainSearchResults');
+      var results = TRAINING_CONTENT.searchResults;
+
+      var listHTML = results.map(function (r, idx) {
+        return '<div class="result-card' + (r.protagonist ? ' result-card--protagonist' : '') + '" id="resultCard' + idx + '" data-idx="' + idx + '" tabindex="0" role="button" aria-label="Ver ' + r.name + ' en el mapa">' +
+          '<div><div class="result-name">' + r.name + '</div><div class="result-meta">★ ' + r.rating.toFixed(1) + '</div></div>' +
+          '<span class="result-badge' + (r.hasWebsite ? ' result-badge--yes' : '') + '">' + (r.hasWebsite ? 'Con sitio web' : 'Sin sitio web') + '</span>' +
+        '</div>';
+      }).join('');
+
+      var pinsHTML = results.map(function (r, idx) {
+        return '<button type="button" class="map-pin' + (r.protagonist ? ' map-pin--protagonist' : '') + '" id="mapPin' + idx + '" data-idx="' + idx + '" ' +
+          'style="left:' + r.x + '%;top:' + r.y + '%;" aria-label="' + r.name + ' en el mapa">' +
+          '<span class="map-pin-icon"><span>' + (idx + 1) + '</span></span>' +
+        '</button>';
+      }).join('');
+
       wrap.innerHTML = '<p style="font-size:.82rem;color:var(--muted);margin-bottom:12px;">Así es como aparecen hoy los negocios de "ferretería" en tu zona:</p>' +
-        TRAINING_CONTENT.searchResults.map(function (r) {
-          return '<div class="result-card' + (r.protagonist ? ' result-card--protagonist' : '') + '">' +
-            '<div><div class="result-name">' + r.name + '</div><div class="result-meta">★ ' + r.rating.toFixed(1) + '</div></div>' +
-            '<span class="result-badge' + (r.hasWebsite ? ' result-badge--yes' : '') + '">' + (r.hasWebsite ? 'Con sitio web' : 'Sin sitio web') + '</span>' +
-          '</div>';
-        }).join('') +
+        '<div class="search-results-layout">' +
+          '<div id="resultsList">' + listHTML + '</div>' +
+          '<div class="map-mock" id="mapMock"><span class="map-mock-label">Mapa ilustrativo</span>' + pinsHTML + '</div>' +
+        '</div>' +
         '<div class="callout-quote">Fijate: no todos tienen sitio web propio, aunque todos tengan Ficha. En el próximo módulo vamos a explorar la Ficha de <b>' + TRAINING_CONTENT.protagonist.name + '</b>.</div>';
+
+      function highlight(idx) {
+        results.forEach(function (r, i) {
+          document.getElementById('resultCard' + i).classList.toggle('result-card--highlight', i === idx);
+          document.getElementById('mapPin' + i).classList.toggle('map-pin--active', i === idx);
+        });
+      }
+      results.forEach(function (r, idx) {
+        var card = document.getElementById('resultCard' + idx);
+        card.addEventListener('click', function () { highlight(idx); });
+        card.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); highlight(idx); }
+        });
+        document.getElementById('mapPin' + idx).addEventListener('click', function () { highlight(idx); });
+      });
     });
   }
 

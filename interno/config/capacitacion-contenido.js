@@ -75,11 +75,13 @@ var TRAINING_CONTENT = {
   },
 
   // ── Resultados de la búsqueda simulada (módulo 1) ───────────────────
+  // x/y son coordenadas ilustrativas en porcentaje (0-100) dentro del mapa ficticio,
+  // no representan una ubicación real.
   searchResults: [
-    { name: 'Ferretería El Tornillo', rating: 4.6, hasWebsite: false, protagonist: true },
-    { name: 'Ferretería Don Pedro', rating: 4.2, hasWebsite: true },
-    { name: 'Ferretería y Pinturas Sur', rating: 3.9, hasWebsite: false },
-    { name: 'Multiservicio La Llave', rating: 4.8, hasWebsite: true }
+    { name: 'Ferretería El Tornillo', rating: 4.6, hasWebsite: false, protagonist: true, x: 35, y: 42 },
+    { name: 'Ferretería Don Pedro', rating: 4.2, hasWebsite: true, x: 68, y: 24 },
+    { name: 'Ferretería y Pinturas Sur', rating: 3.9, hasWebsite: false, x: 22, y: 74 },
+    { name: 'Multiservicio La Llave', rating: 4.8, hasWebsite: true, x: 78, y: 66 }
   ],
 
   // ── Elementos de una Ficha de Google, con explicación (módulo 2) ────
