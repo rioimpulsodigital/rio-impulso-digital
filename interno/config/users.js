@@ -8,7 +8,7 @@
 
 const USER_MAP = {
   'xikorivera@gmail.com':              { name: 'Pablo',     defaultMarket: 'CL', allowedMarkets: ['CL'] },
-  'albertoperezmatta@gmail.com':       { name: 'Alberto',   defaultMarket: 'CL', allowedMarkets: ['CL'] },
+  'albertoperezmatta@gmail.com':       { name: 'Alberto',   defaultMarket: 'CL', allowedMarkets: ['CL', 'AR'] },
   'gabrielaaleroa@gmail.com':          { name: 'Gabriela',  defaultMarket: 'CL', allowedMarkets: ['CL'] },
   'jotaherre024@gmail.com':            { name: 'Julia',     defaultMarket: 'CL', allowedMarkets: ['CL'] },
   'lorenaramirezfuentealba@gmail.com': { name: 'Lorena',    defaultMarket: 'CL', allowedMarkets: ['CL'] },
@@ -17,7 +17,16 @@ const USER_MAP = {
   'brenda@rioimpulsodigital.com':      { name: 'Brenda',    defaultMarket: 'AR', allowedMarkets: ['CL', 'AR'] }
 };
 
-const MARKET_STORAGE_KEY = 'rio_portal_market';
+const MARKET_STORAGE_PREFIX = 'rio_portal_market:';
+
+// RIO-98: la clave de localStorage incluye el correo del ejecutivo. Antes había una
+// única clave global ('rio_portal_market') compartida por cualquier usuario multimercado
+// en el mismo navegador — una preferencia de Brenda podía filtrarse a Alberto (u otro
+// ejecutivo multimercado futuro) si compartían dispositivo. Con la clave por usuario,
+// cada ejecutivo lee y guarda únicamente su propia preferencia.
+function marketStorageKey(executive) {
+  return MARKET_STORAGE_PREFIX + executive.email;
+}
 
 function getCFUserEmail() {
   const cookie = document.cookie.split('; ').find(r => r.startsWith('CF_Authorization='));
@@ -40,7 +49,7 @@ function resolveExecutive() {
 
 // Resuelve el mercado activo para un ejecutivo ya identificado.
 // - Un solo mercado autorizado → ese mercado siempre, localStorage se ignora por completo.
-// - Más de un mercado autorizado (hoy, solo Brenda) → preferencia guardada si es válida,
+// - Más de un mercado autorizado (hoy, Brenda y Alberto) → preferencia guardada si es válida,
 //   si no existe o no pertenece a allowedMarkets, cae a defaultMarket. Nunca acepta un
 //   valor de localStorage que no esté en allowedMarkets.
 function resolveActiveMarket(executive) {
@@ -50,7 +59,7 @@ function resolveActiveMarket(executive) {
   }
   var stored = null;
   try {
-    stored = window.localStorage.getItem(MARKET_STORAGE_KEY);
+    stored = window.localStorage.getItem(marketStorageKey(executive));
   } catch (e) {
     stored = null; // localStorage no disponible (modo privado, permisos, etc.)
   }
@@ -66,7 +75,7 @@ function setActiveMarket(executive, market) {
   if (!executive || executive.allowedMarkets.length <= 1) return;
   if (executive.allowedMarkets.indexOf(market) === -1) return;
   try {
-    window.localStorage.setItem(MARKET_STORAGE_KEY, market);
+    window.localStorage.setItem(marketStorageKey(executive), market);
   } catch (e) {
     // localStorage no disponible — la selección sigue funcionando en memoria durante la sesión
   }

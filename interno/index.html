@@ -540,7 +540,7 @@
       executive.name + ', RiO te da la bienvenida al Portal Interno.<br>Selecciona una herramienta para empezar.';
   }
 
-  // Solo se agrega al DOM si allowedMarkets tiene más de un elemento (hoy, solo Brenda).
+  // Solo se agrega al DOM si allowedMarkets tiene más de un elemento (hoy, Brenda y Alberto).
   // Para el resto de ejecutivos el elemento no existe en absoluto — no solo está oculto.
   function renderMarketSwitcher(executive, currentMarket) {
     if (!executive || executive.allowedMarkets.length <= 1) return;
