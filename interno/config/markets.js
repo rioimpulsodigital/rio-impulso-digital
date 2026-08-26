@@ -92,12 +92,12 @@ var MARKETS = {
       generico: {
         label: 'Landing Express',
         regular: 185000, promo: 120000,
-        paymentPlan: '50-50'
+        paymentPlan: '100'
       },
       personalizado: {
         label: 'Landing Premium',
         regular: 230000, promo: 150000,
-        paymentPlan: '50-50'
+        paymentPlan: '100'
       },
       ficha_generico: {
         label: 'Ficha de Google + Landing Express',
