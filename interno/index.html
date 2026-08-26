@@ -289,7 +289,7 @@
         </div>
       </div>
 
-      <div class="ut-cards">
+      <div class="ut-cards" id="capacitacionCards">
 
         <a class="ut-card" href="./capacitacion-ficha-landing.html">
           <div class="ut-card-icon ut-card-icon--coral">🎓</div>
@@ -307,6 +307,18 @@
           <p style="font-size:.7rem;color:var(--muted);margin:0 0 6px;">📎 PDF descargable</p>
           <span class="ut-card-link">Descargar PDF <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 21h16"/></svg></span>
         </a>
+
+        <a class="ut-card" href="./hoja-preguntas-cliente.pdf" download aria-label="Descargar PDF: Hoja de preguntas para el cliente">
+          <div class="ut-card-icon ut-card-icon--violet">📝</div>
+          <span class="ut-card-tag">Material descargable</span>
+          <h3>Hoja de preguntas para el cliente</h3>
+          <p>Imprimila y completá a mano las preguntas de Ficha, Landing y urgencia durante la conversación. Después cargá todo tranquilo en el Kit digital del Portal.</p>
+          <p style="font-size:.7rem;color:var(--muted);margin:0 0 6px;">📎 PDF descargable · 3 páginas</p>
+          <span class="ut-card-link">Descargar PDF <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 21h16"/></svg></span>
+        </a>
+
+        <!-- Tarjeta "Presentación comercial — Argentina" agregada dinámicamente por
+             renderArgentinaPresentation() solo cuando el mercado activo es AR. -->
 
       </div>
 
@@ -532,6 +544,7 @@
     renderMarketSwitcher(executive, currentMarket);
     applyAccessState(executive);
     if (currentMarket) renderMarketingResources(currentMarket);
+    renderArgentinaPresentation(currentMarket);
   });
 
   function renderGreeting(executive) {
@@ -629,6 +642,26 @@
         '</div>'
       );
     }).join('');
+  }
+
+  // Tarjeta "Presentación comercial — Argentina" (RIO-104) — solo existe en el DOM
+  // cuando el mercado activo es AR. No depende de una segunda lógica de permisos:
+  // reutiliza el mismo currentMarket ya resuelto por resolveActiveMarket().
+  function renderArgentinaPresentation(currentMarket) {
+    if (currentMarket !== 'AR') return;
+    var cards = document.getElementById('capacitacionCards');
+    if (!cards) return;
+
+    var card = document.createElement('a');
+    card.className = 'ut-card';
+    card.href = './reunion-comercial-argentina.html';
+    card.innerHTML =
+      '<div class="ut-card-icon ut-card-icon--violet">🇦🇷</div>' +
+      '<span class="ut-card-tag">Mercado Argentina</span>' +
+      '<h3>Presentación comercial — Argentina</h3>' +
+      '<p>Productos, precios, proceso comercial, condiciones y comisiones del mercado argentino.</p>' +
+      '<span class="ut-card-link">Abrir <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>';
+    cards.appendChild(card);
   }
 </script>
 

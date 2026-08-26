@@ -1,0 +1,1620 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#93009f">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Reunión Comercial Argentina | RiO Impulso Digital</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --p: #93009f;
+      --p-dark: #6b0076;
+      --coral: #ff6b6b;
+      --sec: #6b5b95;
+      --ink: #0d0013;
+      --paper: #fffdfd;
+      --soft: #f6f0f8;
+      --line: #e5dce8;
+      --muted: #6e6272;
+      --success: #1d8a63;
+      --warning: #f3a83b;
+      --head: "Syne", system-ui, sans-serif;
+      --body: "DM Sans", system-ui, sans-serif;
+      --mono: "DM Mono", ui-monospace, monospace;
+      --pad: clamp(1.25rem, 4vw, 4.5rem);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    html { background: var(--ink); }
+    body {
+      margin: 0;
+      overflow: hidden;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: var(--body);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, select { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+    a { color: inherit; }
+
+    .deck {
+      position: relative;
+      height: 100dvh;
+      min-height: 100%;
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    .deck::before {
+      content: "";
+      position: fixed;
+      inset: auto -10vw -36vh auto;
+      width: min(62vw, 760px);
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(147,0,159,.14), rgba(147,0,159,0) 66%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .topbar {
+      position: fixed;
+      z-index: 20;
+      top: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      min-height: 58px;
+      padding: .7rem clamp(1rem, 3vw, 2rem);
+      color: #fff;
+      background: rgba(13,0,19,.96);
+      border-bottom: 1px solid rgba(255,255,255,.12);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+      min-width: 0;
+    }
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 35px;
+      height: 35px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      overflow: hidden;
+      background: #fff;
+    }
+    .brand-mark img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .brand-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: var(--head);
+      font-size: .84rem;
+      font-weight: 700;
+      letter-spacing: -.015em;
+    }
+    .brand-name small {
+      margin-left: .45rem;
+      color: rgba(255,255,255,.58);
+      font-family: var(--mono);
+      font-size: .61rem;
+      font-weight: 400;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+
+    .top-actions { display: flex; align-items: center; gap: .55rem; }
+    .icon-btn {
+      display: inline-grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      color: #fff;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 50%;
+      cursor: pointer;
+      transition: background .18s, transform .18s;
+    }
+    .icon-btn:hover { background: rgba(255,255,255,.17); }
+    .icon-btn:active { transform: scale(.94); }
+    a.icon-btn { text-decoration: none; font-size: 1rem; }
+    .counter {
+      min-width: 4rem;
+      color: rgba(255,255,255,.68);
+      font-family: var(--mono);
+      font-size: .72rem;
+      text-align: right;
+    }
+
+    .progress {
+      position: fixed;
+      z-index: 30;
+      top: 58px;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: rgba(147,0,159,.12);
+    }
+    .progress > span {
+      display: block;
+      width: 0;
+      height: 100%;
+      background: linear-gradient(90deg, var(--coral), var(--p));
+      transition: width .35s ease;
+    }
+
+    .slides { height: 100%; }
+    .slide {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      display: grid;
+      align-content: center;
+      padding: calc(58px + var(--pad)) var(--pad) calc(62px + var(--pad));
+      overflow: auto;
+      opacity: 0;
+      transform: translateX(28px);
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity .26s ease, transform .34s ease, visibility 0s .34s;
+    }
+    .slide.active {
+      z-index: 2;
+      opacity: 1;
+      transform: translateX(0);
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity .28s ease, transform .34s ease;
+    }
+    .slide.exit-left { transform: translateX(-28px); }
+
+    .slide-inner {
+      width: min(1180px, 100%);
+      margin: auto;
+    }
+    .slide--dark {
+      color: #fff;
+      background:
+        radial-gradient(circle at 88% 18%, rgba(255,107,107,.18), transparent 26%),
+        radial-gradient(circle at 10% 90%, rgba(147,0,159,.34), transparent 35%),
+        var(--ink);
+    }
+    .slide--purple {
+      color: #fff;
+      background:
+        radial-gradient(circle at 78% 20%, rgba(255,255,255,.16), transparent 25%),
+        linear-gradient(135deg, var(--p-dark), var(--p));
+    }
+    .slide--coral {
+      background:
+        radial-gradient(circle at 12% 18%, rgba(255,255,255,.45), transparent 28%),
+        linear-gradient(135deg, #ffd8d8, #fff8f6 68%);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      margin-bottom: 1.1rem;
+      color: var(--p);
+      font-family: var(--mono);
+      font-size: clamp(.66rem, 1.1vw, .8rem);
+      font-weight: 500;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    .slide--dark .eyebrow,
+    .slide--purple .eyebrow { color: #ffd5d5; }
+    .eyebrow::before {
+      content: "";
+      width: 28px;
+      height: 2px;
+      background: currentColor;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1, h2, h3 { font-family: var(--head); }
+    h1 {
+      max-width: 980px;
+      margin-bottom: 1.3rem;
+      font-size: clamp(2.65rem, 7vw, 6.3rem);
+      line-height: .96;
+      letter-spacing: -.065em;
+    }
+    h2 {
+      max-width: 980px;
+      margin-bottom: 1.15rem;
+      font-size: clamp(2rem, 4.6vw, 4.4rem);
+      line-height: 1.01;
+      letter-spacing: -.052em;
+    }
+    h3 {
+      margin-bottom: .55rem;
+      font-size: clamp(1.05rem, 1.7vw, 1.42rem);
+      letter-spacing: -.03em;
+    }
+    .lead {
+      max-width: 800px;
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: clamp(1.08rem, 2vw, 1.55rem);
+      line-height: 1.48;
+    }
+    .slide--dark .lead,
+    .slide--purple .lead { color: rgba(255,255,255,.76); }
+    .accent { color: var(--coral); }
+    .purple { color: var(--p); }
+
+    .title-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .75rem 1.4rem;
+      margin-top: clamp(2rem, 6vh, 4rem);
+      color: rgba(255,255,255,.65);
+      font-family: var(--mono);
+      font-size: .76rem;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .statement {
+      max-width: 1000px;
+      font-family: var(--head);
+      font-size: clamp(2rem, 5vw, 4.8rem);
+      font-weight: 700;
+      line-height: 1.08;
+      letter-spacing: -.05em;
+    }
+    .statement strong { color: var(--p); }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, 1.06fr) minmax(320px, .94fr);
+      align-items: center;
+      gap: clamp(2rem, 6vw, 6rem);
+    }
+
+    .stack { display: grid; gap: 1rem; }
+    .plain-list {
+      display: grid;
+      gap: .95rem;
+      margin: 1.6rem 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .plain-list li {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: .8rem;
+      align-items: start;
+      font-size: clamp(1rem, 1.55vw, 1.28rem);
+      line-height: 1.42;
+    }
+    .plain-list .num {
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--p);
+      font-family: var(--mono);
+      font-size: .72rem;
+    }
+
+    .visual-search {
+      padding: clamp(1rem, 3vw, 1.8rem);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      box-shadow: 0 24px 70px rgba(107,0,118,.14);
+      transform: rotate(1.2deg);
+    }
+    .searchbar {
+      display: flex;
+      align-items: center;
+      gap: .7rem;
+      padding: .85rem 1rem;
+      border: 1px solid var(--line);
+      border-radius: 100px;
+      color: var(--muted);
+      font-size: .92rem;
+    }
+    .search-results { display: grid; gap: .75rem; margin-top: 1rem; }
+    .search-result {
+      display: grid;
+      grid-template-columns: 44px 1fr auto;
+      align-items: center;
+      gap: .7rem;
+      padding: .75rem;
+      background: var(--soft);
+      border-radius: 14px;
+    }
+    .search-icon {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: #fff;
+      font-size: 1.2rem;
+    }
+    .search-result strong { display: block; font-size: .88rem; }
+    .search-result small { color: var(--muted); font-size: .72rem; }
+    .stars { color: #e9a11c; font-size: .72rem; white-space: nowrap; }
+
+    .product-lineup {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: clamp(.7rem, 1.5vw, 1.15rem);
+      margin-top: clamp(1.5rem, 4vh, 3rem);
+    }
+    .product {
+      position: relative;
+      min-height: 230px;
+      padding: clamp(1rem, 2vw, 1.45rem);
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+    }
+    .product::after {
+      content: attr(data-no);
+      position: absolute;
+      right: -.1em;
+      bottom: -.35em;
+      color: rgba(147,0,159,.06);
+      font-family: var(--head);
+      font-size: 7rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .product-label {
+      color: var(--coral);
+      font-family: var(--mono);
+      font-size: .65rem;
+      text-transform: uppercase;
+    }
+    .product h3 { margin-top: .8rem; }
+    .product p { position: relative; z-index: 1; color: var(--muted); font-size: .88rem; line-height: 1.42; }
+
+    .feature-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .85rem 2rem;
+      margin: 1.5rem 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .feature-list li {
+      position: relative;
+      padding-left: 1.45rem;
+      font-size: clamp(.92rem, 1.45vw, 1.12rem);
+      line-height: 1.4;
+    }
+    .feature-list li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: var(--success);
+      font-weight: 800;
+    }
+
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: clamp(1rem, 3vw, 2rem);
+      margin-top: clamp(1.4rem, 4vh, 2.6rem);
+    }
+    .choice {
+      padding: clamp(1.3rem, 3vw, 2rem);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      box-shadow: 0 16px 44px rgba(107,0,118,.08);
+    }
+    .choice.premium { color: #fff; background: var(--ink); border-color: var(--ink); }
+    .choice-tag {
+      color: var(--p);
+      font-family: var(--mono);
+      font-size: .68rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    .choice.premium .choice-tag { color: var(--coral); }
+    .choice .domain {
+      margin: 1.2rem 0;
+      font-family: var(--head);
+      font-size: clamp(1.1rem, 2vw, 1.65rem);
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .choice p { margin: 0; color: var(--muted); line-height: 1.5; }
+    .choice.premium p { color: rgba(255,255,255,.72); }
+
+    .ecosystem {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: clamp(1rem, 4vw, 3rem);
+      margin-top: clamp(1.5rem, 4vh, 3rem);
+    }
+    .ecosystem-part {
+      padding: clamp(1.3rem, 3vw, 2.2rem);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      min-height: 220px;
+    }
+    .ecosystem-part .big-icon { font-size: 2.2rem; }
+    .ecosystem-part p { color: var(--muted); line-height: 1.48; }
+    .plus {
+      color: var(--p);
+      font-family: var(--head);
+      font-size: clamp(2rem, 5vw, 4.5rem);
+      font-weight: 800;
+    }
+
+    .price-wrap {
+      margin-top: clamp(1rem, 3vh, 2rem);
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: #fff;
+      box-shadow: 0 18px 55px rgba(107,0,118,.08);
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td {
+      padding: clamp(.72rem, 1.5vw, 1rem) clamp(.72rem, 1.5vw, 1.15rem);
+      border-bottom: 1px solid var(--line);
+      text-align: right;
+      white-space: nowrap;
+    }
+    th:first-child, td:first-child { text-align: left; }
+    th {
+      color: var(--muted);
+      background: #fbf8fc;
+      font-family: var(--mono);
+      font-size: .66rem;
+      font-weight: 500;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    td { font-size: clamp(.8rem, 1.35vw, 1.02rem); }
+    tbody tr:last-child td { border-bottom: 0; }
+    .launch-price { color: var(--p); font-weight: 800; }
+    .saving { color: var(--success); font-weight: 700; }
+    .campaign-note {
+      display: flex;
+      align-items: center;
+      gap: .7rem;
+      margin-top: 1rem;
+      color: var(--p-dark);
+      font-size: .88rem;
+      font-weight: 600;
+    }
+
+    .payment-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: clamp(1rem, 3vw, 2rem);
+      margin-top: 1.8rem;
+    }
+    .payment-rule {
+      padding: clamp(1.35rem, 3vw, 2.25rem);
+      border-radius: 28px;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+    .payment-rule strong.big {
+      display: block;
+      margin: .4rem 0 .8rem;
+      color: var(--p);
+      font-family: var(--head);
+      font-size: clamp(2.4rem, 5vw, 4.8rem);
+      line-height: 1;
+    }
+    .payment-rule p { margin-bottom: 0; color: var(--muted); line-height: 1.5; }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      margin-top: clamp(1.5rem, 5vh, 3.5rem);
+      padding: 0;
+      list-style: none;
+    }
+    .timeline li {
+      position: relative;
+      padding: 0 1.2rem 0 0;
+    }
+    .timeline li::before {
+      content: "";
+      display: block;
+      width: 16px;
+      height: 16px;
+      margin-bottom: 1.2rem;
+      border: 4px solid var(--paper);
+      border-radius: 50%;
+      background: var(--p);
+      box-shadow: 0 0 0 2px var(--p);
+    }
+    .timeline li::after {
+      content: "";
+      position: absolute;
+      top: 7px;
+      left: 18px;
+      right: 0;
+      height: 2px;
+      background: var(--line);
+    }
+    .timeline li:last-child::after { display: none; }
+    .timeline time {
+      display: block;
+      margin-bottom: .5rem;
+      color: var(--coral);
+      font-family: var(--mono);
+      font-size: .72rem;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+    .timeline h3 { font-size: clamp(.98rem, 1.6vw, 1.3rem); }
+    .timeline p { color: var(--muted); font-size: .88rem; line-height: 1.42; }
+
+    .formula {
+      display: grid;
+      gap: .55rem;
+      margin: clamp(1.5rem, 4vh, 3rem) 0;
+      font-family: var(--head);
+      font-size: clamp(1.3rem, 2.7vw, 2.55rem);
+      font-weight: 700;
+      letter-spacing: -.035em;
+      line-height: 1.2;
+    }
+    .formula-line {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: .12em;
+    }
+    .formula-line--result { font-size: 1.08em; }
+    .formula .operator { color: var(--coral); padding: 0 .22em; }
+    .formula .result { color: var(--p); }
+    .slide--purple .formula .result { color: #ffd0d0; }
+    .costs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .75rem;
+    }
+    .cost-chip {
+      padding: .7rem 1rem;
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 100px;
+      font-size: .84rem;
+    }
+    .slide--purple .cost-chip {
+      color: var(--ink);
+      background: rgba(255,255,255,.96);
+      border-color: rgba(255,255,255,.96);
+      font-weight: 600;
+    }
+
+    .calculator {
+      display: grid;
+      grid-template-columns: minmax(270px, .85fr) minmax(320px, 1.15fr);
+      gap: clamp(1rem, 4vw, 3rem);
+      margin-top: 1.4rem;
+      align-items: stretch;
+    }
+    .calc-controls, .calc-result {
+      padding: clamp(1.1rem, 2.5vw, 1.8rem);
+      border-radius: 24px;
+    }
+    .calc-controls { background: #fff; border: 1px solid var(--line); }
+    .calc-result { color: #fff; background: var(--ink); }
+    .control { display: grid; gap: .4rem; margin-bottom: 1rem; }
+    .control:last-child { margin-bottom: 0; }
+    .control label {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: .65rem;
+      text-transform: uppercase;
+    }
+    select, input {
+      width: 100%;
+      padding: .8rem .9rem;
+      color: var(--ink);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      outline: none;
+    }
+    select:focus, input:focus { border-color: var(--p); box-shadow: 0 0 0 3px rgba(147,0,159,.1); }
+    .segmented {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding: 4px;
+      background: var(--soft);
+      border-radius: 12px;
+    }
+    .segmented button {
+      padding: .7rem;
+      border: 0;
+      border-radius: 9px;
+      color: var(--muted);
+      background: transparent;
+      cursor: pointer;
+    }
+    .segmented button.active { color: #fff; background: var(--p); font-weight: 700; }
+    .calc-main {
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(255,255,255,.16);
+    }
+    .calc-main span, .result-row span { color: rgba(255,255,255,.6); font-size: .78rem; }
+    .calc-main strong {
+      display: block;
+      margin-top: .25rem;
+      color: #fff;
+      font-family: var(--head);
+      font-size: clamp(2.2rem, 5vw, 4.2rem);
+      line-height: 1;
+      letter-spacing: -.05em;
+    }
+    .result-rows { display: grid; gap: .65rem; padding-top: 1rem; }
+    .result-row { display: flex; justify-content: space-between; gap: 1rem; }
+    .result-row strong { font-family: var(--mono); font-size: .86rem; }
+
+    .proof-flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: .9rem;
+      margin-top: 2rem;
+      counter-reset: flow;
+    }
+    .proof-step {
+      position: relative;
+      min-height: 170px;
+      padding: 1.3rem;
+      overflow: hidden;
+      color: var(--ink);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      counter-increment: flow;
+    }
+    .proof-step::before {
+      content: "0" counter(flow);
+      display: block;
+      margin-bottom: 1.1rem;
+      color: var(--coral);
+      font-family: var(--mono);
+      font-size: .72rem;
+      font-weight: 500;
+    }
+    .proof-step p { margin: 0; color: var(--muted); font-size: .88rem; line-height: 1.45; }
+
+    .correction {
+      display: grid;
+      grid-template-columns: .75fr 1.25fr;
+      gap: clamp(1.4rem, 5vw, 5rem);
+      align-items: center;
+    }
+    .before-after { display: grid; gap: 1rem; }
+    .phrase {
+      padding: 1.3rem 1.4rem;
+      border-left: 4px solid var(--line);
+      color: var(--muted);
+      background: rgba(255,255,255,.62);
+      font-size: clamp(1rem, 1.7vw, 1.3rem);
+      line-height: 1.45;
+    }
+    .phrase.correct { border-left-color: var(--p); color: var(--ink); background: #fff; font-weight: 600; }
+    .phrase small {
+      display: block;
+      margin-bottom: .45rem;
+      color: var(--coral);
+      font-family: var(--mono);
+      font-size: .64rem;
+      text-transform: uppercase;
+    }
+
+    .pay-calendar {
+      display: grid;
+      grid-template-columns: minmax(260px, .72fr) minmax(420px, 1.28fr);
+      gap: clamp(1rem, 3vw, 2rem);
+      margin-top: 1.6rem;
+      align-items: stretch;
+    }
+    .pay-calendar-control,
+    .pay-calendar-visual {
+      padding: clamp(1.2rem, 2.7vw, 2rem);
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      background: #fff;
+    }
+    .pay-calendar-control {
+      display: grid;
+      align-content: center;
+      gap: 1rem;
+    }
+    .pay-calendar-control label {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: .68rem;
+      font-weight: 500;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .pay-result {
+      padding: 1rem 1.1rem;
+      color: #fff;
+      background: var(--ink);
+      border-radius: 18px;
+    }
+    .pay-result small {
+      display: block;
+      margin-bottom: .35rem;
+      color: rgba(255,255,255,.62);
+      font-family: var(--mono);
+      font-size: .66rem;
+      text-transform: uppercase;
+    }
+    .pay-result strong {
+      display: block;
+      color: #fff;
+      font-family: var(--head);
+      font-size: clamp(1.35rem, 3vw, 2.35rem);
+      line-height: 1.08;
+      letter-spacing: -.04em;
+    }
+    .pay-result span {
+      display: block;
+      margin-top: .55rem;
+      color: #ffd0d0;
+      font-size: .83rem;
+      line-height: 1.4;
+    }
+    .month-strip {
+      display: grid;
+      grid-template-columns: 10fr 15fr 6fr;
+      gap: 5px;
+      margin: .7rem 0 1.2rem;
+    }
+    .month-period {
+      min-width: 0;
+      padding: 1rem .8rem;
+      color: #fff;
+      border-radius: 14px;
+      text-align: center;
+    }
+    .month-period strong,
+    .month-period span { display: block; }
+    .month-period strong { font-family: var(--head); font-size: clamp(.9rem, 1.7vw, 1.2rem); }
+    .month-period span { margin-top: .2rem; font-family: var(--mono); font-size: .6rem; opacity: .78; }
+    .month-period.period-a { background: var(--p); }
+    .month-period.period-b { background: var(--coral); }
+    .pay-rules {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .75rem;
+    }
+    .pay-rule-card {
+      padding: 1rem;
+      border-radius: 16px;
+      background: var(--soft);
+    }
+    .pay-rule-card small {
+      display: block;
+      margin-bottom: .35rem;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: .62rem;
+      text-transform: uppercase;
+    }
+    .pay-rule-card strong { display: block; color: var(--p-dark); font-family: var(--head); font-size: 1rem; }
+    .pay-rule-card p { margin: .35rem 0 0; color: var(--muted); font-size: .8rem; line-height: 1.35; }
+    .calendar-caption { margin: 1rem 0 0; color: var(--muted); font-size: .78rem; line-height: 1.4; }
+
+    .workflow {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.25rem 2rem;
+      margin-top: 2rem;
+      padding: 0;
+      list-style: none;
+      counter-reset: work;
+    }
+    .workflow li {
+      position: relative;
+      padding: 0 0 1.2rem 3rem;
+      border-bottom: 1px solid var(--line);
+      counter-increment: work;
+    }
+    .workflow li::before {
+      content: counter(work);
+      position: absolute;
+      left: 0;
+      top: -.15rem;
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      color: #fff;
+      background: var(--p);
+      border-radius: 50%;
+      font-family: var(--mono);
+      font-size: .72rem;
+    }
+    .workflow h3 { font-size: 1rem; }
+    .workflow p { margin: 0; color: var(--muted); font-size: .86rem; line-height: 1.43; }
+
+    .quiz {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+    .quiz button {
+      min-height: 165px;
+      padding: 1.3rem;
+      color: var(--ink);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      text-align: left;
+      cursor: pointer;
+      transition: transform .18s, border-color .18s, box-shadow .18s;
+    }
+    .quiz button:hover { transform: translateY(-3px); border-color: var(--p); box-shadow: 0 14px 35px rgba(107,0,118,.1); }
+    .quiz button.correct { color: #fff; background: var(--success); border-color: var(--success); }
+    .quiz button.wrong { border-color: var(--coral); box-shadow: inset 0 0 0 2px var(--coral); }
+    .quiz button strong { display: block; margin-bottom: .6rem; font-family: var(--head); font-size: 1.05rem; }
+    .quiz-feedback { min-height: 2.4rem; margin-top: 1rem; color: var(--p-dark); font-weight: 600; }
+
+    .close-list {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-top: 2.2rem;
+    }
+    .close-point {
+      padding: 1.3rem;
+      border-top: 2px solid rgba(255,255,255,.26);
+    }
+    .close-point strong { display: block; margin-bottom: .45rem; font-family: var(--head); font-size: 1.15rem; }
+    .close-point span { color: rgba(255,255,255,.68); line-height: 1.42; }
+
+    .source-list {
+      display: grid;
+      gap: 1rem;
+      margin-top: 1.5rem;
+      padding: 0;
+      list-style: none;
+    }
+    .source-list li { padding-bottom: 1rem; border-bottom: 1px solid var(--line); }
+    .source-list a { color: var(--p); font-weight: 700; }
+    .source-list p { margin: .35rem 0 0; color: var(--muted); font-size: .88rem; line-height: 1.45; }
+
+    .nav {
+      position: fixed;
+      z-index: 25;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .7rem;
+      min-height: 62px;
+      padding: .65rem 1rem max(.65rem, env(safe-area-inset-bottom));
+      pointer-events: none;
+    }
+    .nav button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .45rem;
+      min-width: 96px;
+      padding: .75rem 1rem;
+      color: #fff;
+      background: rgba(13,0,19,.92);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 100px;
+      box-shadow: 0 8px 28px rgba(13,0,19,.22);
+      cursor: pointer;
+      pointer-events: auto;
+    }
+    .nav button:disabled { opacity: .35; cursor: not-allowed; }
+
+    .notes {
+      position: fixed;
+      z-index: 40;
+      right: 1rem;
+      bottom: 5rem;
+      width: min(430px, calc(100vw - 2rem));
+      max-height: min(55vh, 460px);
+      padding: 1.2rem;
+      overflow: auto;
+      visibility: hidden;
+      opacity: 0;
+      transform: translateY(10px);
+      color: #fff;
+      background: rgba(13,0,19,.97);
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 18px;
+      box-shadow: 0 22px 70px rgba(0,0,0,.34);
+      transition: opacity .2s, transform .2s, visibility 0s .2s;
+    }
+    .notes.open { visibility: visible; opacity: 1; transform: translateY(0); transition: opacity .2s, transform .2s; }
+    .notes h3 { margin-bottom: .7rem; color: var(--coral); font-size: .95rem; }
+    .notes p { margin: 0; color: rgba(255,255,255,.76); font-size: .86rem; line-height: 1.5; }
+
+    .kbd-help {
+      position: fixed;
+      z-index: 50;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 1rem;
+      visibility: hidden;
+      opacity: 0;
+      background: rgba(13,0,19,.72);
+      backdrop-filter: blur(10px);
+      transition: opacity .2s, visibility 0s .2s;
+    }
+    .kbd-help.open { visibility: visible; opacity: 1; transition: opacity .2s; }
+    .help-card {
+      width: min(460px, 100%);
+      padding: 1.5rem;
+      color: #fff;
+      background: var(--ink);
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 22px;
+    }
+    .help-card dl { display: grid; grid-template-columns: auto 1fr; gap: .75rem 1rem; margin: 1rem 0 0; }
+    .help-card dt { color: var(--coral); font-family: var(--mono); }
+    .help-card dd { margin: 0; color: rgba(255,255,255,.72); }
+
+    :focus-visible { outline: 3px solid var(--coral); outline-offset: 3px; }
+
+    @media (max-width: 900px) {
+      .product-lineup { grid-template-columns: repeat(2, 1fr); }
+      .product:last-child { grid-column: 1 / -1; min-height: 170px; }
+      .timeline { grid-template-columns: 1fr 1fr; gap: 1.5rem 0; }
+      .timeline li:nth-child(2)::after, .timeline li:last-child::after { display: none; }
+      .proof-flow { grid-template-columns: 1fr 1fr; }
+      .workflow { grid-template-columns: 1fr 1fr; }
+      .quiz { grid-template-columns: 1fr; }
+      .quiz button { min-height: auto; }
+    }
+
+    @media (max-width: 700px) {
+      :root { --pad: 1.15rem; }
+      .brand-name small { display: none; }
+      .slide { align-content: start; padding-top: 88px; }
+      .split, .correction, .calculator, .pay-calendar { grid-template-columns: 1fr; }
+      .visual-search { max-width: 470px; transform: none; }
+      .product-lineup, .comparison, .payment-grid, .ecosystem, .proof-flow, .workflow, .close-list { grid-template-columns: 1fr; }
+      .product { min-height: 160px; }
+      .product:last-child { grid-column: auto; }
+      .feature-list { grid-template-columns: 1fr; }
+      .ecosystem { gap: .7rem; }
+      .ecosystem-part { min-height: auto; }
+      .plus { text-align: center; line-height: .8; }
+      .timeline { grid-template-columns: 1fr; gap: 1.15rem; }
+      .timeline li { padding-left: 2.3rem; }
+      .timeline li::before { position: absolute; left: 0; top: 0; }
+      .timeline li::after { top: 18px; left: 7px; right: auto; width: 2px; height: calc(100% + 1rem); }
+      .timeline li:nth-child(2)::after { display: block; }
+      .timeline li:last-child::after { display: none; }
+      .pay-rules { grid-template-columns: 1fr; }
+      .nav button { min-width: 0; }
+      .nav .nav-label { display: none; }
+      .counter { min-width: 3.2rem; }
+    }
+
+    @media (max-height: 650px) and (min-width: 701px) {
+      :root { --pad: 1.25rem; }
+      .slide { align-content: start; padding-top: 82px; }
+      h1 { font-size: clamp(2.7rem, 6vw, 4.6rem); }
+      h2 { font-size: clamp(2rem, 4vw, 3.3rem); }
+      .product { min-height: 190px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+
+    @media print {
+      html, body { height: auto; overflow: visible; background: #fff; }
+      .deck { height: auto; overflow: visible; }
+      .topbar, .progress, .nav, .notes, .kbd-help { display: none !important; }
+      .slides { height: auto; }
+      .slide, .slide.active {
+        position: relative;
+        inset: auto;
+        display: grid;
+        min-height: 100vh;
+        padding: 4rem;
+        overflow: visible;
+        opacity: 1;
+        transform: none;
+        visibility: visible;
+        pointer-events: auto;
+        break-after: page;
+      }
+      .price-wrap { overflow: visible; }
+      .quiz-feedback { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck" aria-label="Presentación comercial para ejecutivos de Argentina">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><img src="../assets/branding/rio-logo-primary-48x48.webp" alt=""></span>
+        <span class="brand-name">RiO Impulso Digital <small>Reunión Argentina</small></span>
+      </div>
+      <div class="top-actions">
+        <a class="icon-btn" href="/interno/" aria-label="Volver al Portal" title="Volver al Portal">⌂</a>
+        <span class="counter" id="counter" aria-live="polite">01 / 16</span>
+        <button class="icon-btn" id="notesBtn" type="button" aria-label="Mostrar notas de presentación" title="Notas de presentación (N)">N</button>
+        <button class="icon-btn" id="helpBtn" type="button" aria-label="Mostrar ayuda de navegación" title="Ayuda (?)">?</button>
+        <button class="icon-btn" id="fullscreenBtn" type="button" aria-label="Ver en pantalla completa" title="Pantalla completa (F)">⛶</button>
+      </div>
+    </header>
+    <div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
+
+    <div class="slides" id="slides">
+      <section class="slide slide--dark active" data-note="Abrí desde la oportunidad: no venimos a memorizar precios, sino a entender qué problema resolvemos y cómo acompañamos bien al cliente. Esta reunión está enfocada únicamente en el mercado argentino.">
+        <div class="slide-inner">
+          <span class="eyebrow">Reunión comercial · Argentina</span>
+          <h1>Vender con claridad.<br><span class="accent">Cobrar con orden.</span></h1>
+          <p class="lead">Productos, precios, proceso comercial y comisiones para empezar a trabajar con seguridad.</p>
+          <div class="title-meta">
+            <span>RiO Impulso Digital</span>
+            <span>Mercado Argentina</span>
+            <span>Campaña vigente hasta 30·09·2026</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-note="Al finalizar, cada ejecutivo tiene que poder explicar los productos en palabras simples, recomendar la solución correcta, informar cómo se paga y saber cuándo una comisión queda habilitada.">
+        <div class="slide-inner split">
+          <div>
+            <span class="eyebrow">El objetivo</span>
+            <h2>Que cada conversación termine con un <span class="purple">próximo paso claro</span></h2>
+          </div>
+          <ol class="plain-list">
+            <li><span class="num">1</span><span>Entender qué necesidad resuelve cada producto.</span></li>
+            <li><span class="num">2</span><span>Presentar precios y condiciones sin improvisar.</span></li>
+            <li><span class="num">3</span><span>Registrar la información en el Portal para avanzar.</span></li>
+            <li><span class="num">4</span><span>Saber cómo se calcula y cuándo se paga la comisión.</span></li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="slide slide--coral" data-note="Usá un ejemplo cotidiano: alguien busca ‘ferretería cerca’. Google muestra negocios con Ficha. Las redes pueden ser excelentes, pero no reemplazan aparecer cuando una persona ya está buscando comprar.">
+        <div class="slide-inner split">
+          <div>
+            <span class="eyebrow">La necesidad</span>
+            <h2>El cliente ya está buscando. El negocio necesita <span class="purple">aparecer</span>.</h2>
+            <p class="lead">La Ficha lo vuelve encontrable en Google y Maps. La Landing le da un lugar propio para explicar su propuesta y recibir consultas.</p>
+          </div>
+          <div class="visual-search" aria-label="Ejemplo ficticio de resultados de búsqueda">
+            <div class="searchbar"><span aria-hidden="true">⌕</span> ferretería cerca</div>
+            <div class="search-results">
+              <div class="search-result"><span class="search-icon">🔧</span><span><strong>Ferretería El Tornillo</strong><small>Abierto · Cómo llegar · WhatsApp</small></span><span class="stars">★★★★★</span></div>
+              <div class="search-result"><span class="search-icon">🧰</span><span><strong>Ferretería Central</strong><small>Abierto · Sitio web · Llamar</small></span><span class="stars">★★★★☆</span></div>
+              <div class="search-result"><span class="search-icon">🪛</span><span><strong>Todo Herramientas</strong><small>Abierto · Cómo llegar · Llamar</small></span><span class="stars">★★★★★</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-note="No presenten cinco cosas desconectadas. Hay dos soluciones base y tres combinaciones. Primero diagnosticamos si necesita ser encontrado, explicar mejor su negocio o ambas cosas.">
+        <div class="slide-inner">
+          <span class="eyebrow">Nuestra oferta</span>
+          <h2>Cinco formas de construir <span class="purple">presencia digital</span></h2>
+          <div class="product-lineup">
+            <article class="product" data-no="1"><span class="product-label">Google</span><h3>Ficha de Google</h3><p>Para aparecer en el buscador y en Maps con información profesional.</p></article>
+            <article class="product" data-no="2"><span class="product-label">Web</span><h3>Landing Express</h3><p>Página simple y profesional con subdominio RiO.</p></article>
+            <article class="product" data-no="3"><span class="product-label">Web</span><h3>Landing Premium</h3><p>La misma solución con dominio propio .com.ar incluido el primer año.</p></article>
+            <article class="product" data-no="4"><span class="product-label">Pack</span><h3>Ficha + Express</h3><p>Visibilidad en Google más un lugar propio para presentar el negocio.</p></article>
+            <article class="product" data-no="5"><span class="product-label">Pack</span><h3>Ficha + Premium</h3><p>Presencia completa con Ficha y dominio propio .com.ar.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide slide--purple" data-note="La Ficha sirve para negocios con local y también para quienes trabajan por zona de cobertura. No prometan primeros lugares: ofrecemos configuración y optimización profesional, no una posición garantizada.">
+        <div class="slide-inner split">
+          <div>
+            <span class="eyebrow">Producto 1</span>
+            <h2>Ficha de Google: ser encontrado donde empieza la búsqueda</h2>
+            <p class="lead">Convierte una búsqueda en una llamada, una visita, una ruta o un mensaje.</p>
+          </div>
+          <ul class="feature-list">
+            <li>Creación o reclamo del perfil.</li>
+            <li>Categoría, horarios y datos de contacto.</li>
+            <li>Dirección o zona de cobertura.</li>
+            <li>Logo, portada y fotos del negocio.</li>
+            <li>Carga inicial de productos o servicios.</li>
+            <li>Optimización SEO local.</li>
+            <li>Acompañamiento en la verificación.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="slide" data-note="Explicá con precisión: Express y Premium tienen la misma calidad y alcance de página. La única diferencia comercial es el tipo de dominio. En ambos casos el cliente debe renovar el dominio el año siguiente si quiere conservarlo; RiO solo lo informa.">
+        <div class="slide-inner">
+          <span class="eyebrow">Productos 2 y 3</span>
+          <h2>Una Landing profesional. <span class="purple">Dos tipos de dirección.</span></h2>
+          <div class="comparison">
+            <article class="choice">
+              <span class="choice-tag">Landing Express</span>
+              <div class="domain">tunegocio.rio-landing.com</div>
+              <p>Incluye subdominio de RiO. Es simple, rápida y no suma el costo de un dominio propio.</p>
+            </article>
+            <article class="choice premium">
+              <span class="choice-tag">Landing Premium</span>
+              <div class="domain">tunegocio.com.ar</div>
+              <p>Incluye dominio propio .com.ar durante el primer año. La renovación futura queda a cargo del cliente.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide slide--coral" data-note="Acá aparece de forma natural la respuesta a ‘ya tengo Instagram’. Las redes conectan y generan comunidad; la Ficha captura búsquedas; la Landing ordena la información. Se complementan, no compiten.">
+        <div class="slide-inner">
+          <span class="eyebrow">Productos 4 y 5</span>
+          <h2>El Pack une <span class="purple">descubrimiento</span> y <span class="purple">confianza</span></h2>
+          <div class="ecosystem">
+            <article class="ecosystem-part"><span class="big-icon">📍</span><h3>Ficha de Google</h3><p>El negocio aparece cuando alguien busca el servicio en Google o Maps.</p></article>
+            <span class="plus" aria-hidden="true">+</span>
+            <article class="ecosystem-part"><span class="big-icon">🌐</span><h3>Landing Page</h3><p>El cliente conoce la propuesta, ve información ordenada y contacta por WhatsApp.</p></article>
+          </div>
+          <p class="lead" style="margin-top:1.35rem"><strong>¿Y las redes?</strong> Generan vínculo y contenido. La Ficha y la Landing complementan esa presencia cuando el cliente busca y compara.</p>
+        </div>
+      </section>
+
+      <section class="slide" data-note="Mostrá primero el precio regular y después el de lanzamiento. La oportunidad es real: la campaña termina el 30 de septiembre de 2026. No creen falsa urgencia; comuniquen la fecha concreta.">
+        <div class="slide-inner">
+          <span class="eyebrow">Precios Argentina</span>
+          <h2>El lanzamiento es una <span class="purple">oportunidad concreta</span></h2>
+          <div class="price-wrap">
+            <table>
+              <thead><tr><th>Producto</th><th>Regular</th><th>Lanzamiento</th><th>Ahorro</th></tr></thead>
+              <tbody>
+                <tr><td>Ficha de Google</td><td>$215.000</td><td class="launch-price">$125.000</td><td class="saving">$90.000</td></tr>
+                <tr><td>Landing Express</td><td>$185.000</td><td class="launch-price">$120.000</td><td class="saving">$65.000</td></tr>
+                <tr><td>Landing Premium</td><td>$230.000</td><td class="launch-price">$150.000</td><td class="saving">$80.000</td></tr>
+                <tr><td>Ficha + Express</td><td>$360.000</td><td class="launch-price">$220.000</td><td class="saving">$140.000</td></tr>
+                <tr><td>Ficha + Premium</td><td>$400.000</td><td class="launch-price">$250.000</td><td class="saving">$150.000</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="campaign-note"><span aria-hidden="true">●</span> Valores en ARS · Vigentes hasta el 30 de septiembre de 2026.</div>
+        </div>
+      </section>
+
+      <section class="slide slide--coral" data-note="No mezclen las condiciones: Ficha o Landing se pagan completas para comenzar. Los packs se dividen 50/50. En el pack, el saldo debe estar acreditado antes de publicar.">
+        <div class="slide-inner">
+          <span class="eyebrow">Condiciones de pago</span>
+          <h2>Una regla simple para <span class="purple">cada tipo de venta</span></h2>
+          <div class="payment-grid">
+            <article class="payment-rule"><span class="product-label">Productos individuales</span><strong class="big">100%</strong><h3>Al contratar</h3><p>Ficha de Google, Landing Express o Landing Premium comienzan con el pago total acreditado.</p></article>
+            <article class="payment-rule"><span class="product-label">Packs</span><strong class="big">50 / 50</strong><h3>Inicio y publicación</h3><p>Primer 50% para comenzar. Segundo 50% después de la aprobación y antes de publicar.<br><br><strong>Lanzamiento:</strong> Express $110.000 + $110.000 · Premium $125.000 + $125.000.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-note="Los plazos empiezan cuando coinciden dos cosas: pago acreditado y materiales completos. En los packs, registramos cada componente. La Ficha tiene 3 días hábiles; la Landing, primera versión en 48 horas hábiles después de recibir toda la información.">
+        <div class="slide-inner">
+          <span class="eyebrow">Del pago a la entrega</span>
+          <h2>El reloj empieza cuando tenemos <span class="purple">pago + materiales</span></h2>
+          <ol class="timeline">
+            <li><time>Paso 1</time><h3>Pago acreditado</h3><p>RiO verifica que el dinero haya ingresado.</p></li>
+            <li><time>Paso 2</time><h3>Materiales completos</h3><p>Textos, fotos, logo y accesos, cuando corresponda.</p></li>
+            <li><time>3 días hábiles</time><h3>Ficha de Google</h3><p>Primera configuración y acompañamiento de verificación.</p></li>
+            <li><time>48 horas hábiles</time><h3>Primera Landing</h3><p>Primera versión una vez recibida toda la información.</p></li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="slide slide--purple" data-note="La comisión es sobre utilidad neta, no sobre el precio bruto. Con transferencia, el costo del medio de pago es cero. Premium descuenta el dominio propio. Si luego usamos una pasarela, también se descuenta su comisión real.">
+        <div class="slide-inner">
+          <span class="eyebrow">Comisión comercial</span>
+          <h2>El ejecutivo recibe el <span class="accent">40% de la utilidad neta</span></h2>
+          <div class="formula">
+            <div class="formula-line"><span>Utilidad neta</span><span class="operator">=</span><span>precio cobrado</span><span class="operator">−</span><span>costos directos</span></div>
+            <div class="formula-line formula-line--result"><span>Comisión</span><span class="operator">=</span><span>utilidad neta</span><span class="operator">×</span><span class="result">40%</span></div>
+          </div>
+          <div class="costs">
+            <span class="cost-chip">Dominio propio en Premium</span>
+            <span class="cost-chip">Comisión del medio de pago, si existe</span>
+            <span class="cost-chip">Transferencia: sin comisión informada</span>
+          </div>
+          <p class="lead" style="margin-top:1.4rem">El dominio .com.ar cuesta actualmente <strong>$8.500 ARS</strong> por el primer año y se descuenta solo en Premium.</p>
+        </div>
+      </section>
+
+      <section class="slide" data-note="Esta tabla usa transferencia, por lo tanto no descuenta comisión de pasarela. Premium y Pack Premium sí descuentan el dominio .com.ar de $8.500. Aclarales que el simulador permite recalcular si cambia algún costo.">
+        <div class="slide-inner">
+          <span class="eyebrow">Comisiones por producto</span>
+          <h2>Lo que gana el ejecutivo en <span class="purple">cada venta</span></h2>
+          <div class="price-wrap">
+            <table>
+              <thead><tr><th>Producto</th><th>Comisión lanzamiento</th><th>Comisión regular</th></tr></thead>
+              <tbody>
+                <tr><td>Ficha de Google</td><td class="launch-price">$50.000</td><td>$86.000</td></tr>
+                <tr><td>Landing Express</td><td class="launch-price">$48.000</td><td>$74.000</td></tr>
+                <tr><td>Landing Premium</td><td class="launch-price">$56.600</td><td>$88.600</td></tr>
+                <tr><td>Ficha + Express</td><td class="launch-price">$88.000</td><td>$144.000</td></tr>
+                <tr><td>Ficha + Premium</td><td class="launch-price">$96.600</td><td>$156.600</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="campaign-note"><span aria-hidden="true">●</span> Cálculo con transferencia y dominio .com.ar a $8.500 cuando corresponde.</div>
+        </div>
+      </section>
+
+      <section class="slide" data-note="Probá dos ejemplos en vivo. Elegí un producto, cambiá entre lanzamiento y regular, y simulá una comisión de pasarela. Los valores precargados usan transferencia y el dominio oficial de $8.500.">
+        <div class="slide-inner">
+          <span class="eyebrow">Simulador</span>
+          <h2>Veamos la comisión <span class="purple">con números reales</span></h2>
+          <div class="calculator">
+            <div class="calc-controls">
+              <div class="control"><label for="productSelect">Producto</label><select id="productSelect"><option value="ficha">Ficha de Google</option><option value="express">Landing Express</option><option value="premium">Landing Premium</option><option value="packExpress">Ficha + Express</option><option value="packPremium">Ficha + Premium</option></select></div>
+              <div class="control"><label>Precio aplicado</label><div class="segmented" role="group" aria-label="Precio aplicado"><button type="button" class="active" data-price-mode="launch">Lanzamiento</button><button type="button" data-price-mode="regular">Regular</button></div></div>
+              <div class="control"><label for="feeInput">Comisión del medio de pago (%)</label><input id="feeInput" type="number" min="0" max="30" step="0.1" value="0" inputmode="decimal"></div>
+            </div>
+            <div class="calc-result" aria-live="polite">
+              <div class="calc-main"><span>Comisión del ejecutivo</span><strong id="commissionValue">$50.000</strong></div>
+              <div class="result-rows">
+                <div class="result-row"><span>Precio cobrado</span><strong id="saleValue">$125.000</strong></div>
+                <div class="result-row"><span>Dominio</span><strong id="domainValue">$0</strong></div>
+                <div class="result-row"><span>Medio de pago</span><strong id="feeValue">$0</strong></div>
+                <div class="result-row"><span>Utilidad neta</span><strong id="netValue">$125.000</strong></div>
+                <div class="result-row"><span>RiO después de comisión</span><strong id="rioValue">$75.000</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide slide--coral" data-note="El comprobante da inicio a la verificación, no confirma el pago. Esto protege a todos. El ejecutivo reenvía el comprobante al correo y RiO confirma la acreditación antes de iniciar o registrar el pago como completo.">
+        <div class="slide-inner">
+          <span class="eyebrow">Comprobante de pago</span>
+          <h2>Informar no es lo mismo que <span class="purple">acreditar</span></h2>
+          <div class="proof-flow">
+            <article class="proof-step"><h3>Cliente paga</h3><p>Realiza la transferencia y envía el comprobante al ejecutivo.</p></article>
+            <article class="proof-step"><h3>Ejecutivo reenvía</h3><p>Envía el comprobante a ventas@rioimpulsodigital.com.</p></article>
+            <article class="proof-step"><h3>RiO verifica</h3><p>Confirma que el dinero esté efectivamente acreditado.</p></article>
+            <article class="proof-step"><h3>Se actualiza la venta</h3><p>Recién entonces el pago queda confirmado y avanza el proceso.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-note="Esta es la corrección que hay que explicar con tranquilidad. Antes simplificamos demasiado. Ahora la regla es más profesional: el pago del cliente no libera por sí solo la comisión. Deben existir pago total, venta firme y ausencia de reclamos. RiO confirma la fecha de liberación.">
+        <div class="slide-inner correction">
+          <div>
+            <span class="eyebrow">Una aclaración necesaria</span>
+            <h2>La comisión se paga cuando la venta está <span class="purple">firme</span></h2>
+          </div>
+          <div class="before-after">
+            <div class="phrase"><small>Lo simplificamos así</small>“El cliente paga y yo cobro.”</div>
+            <div class="phrase correct"><small>La regla correcta</small>“RiO confirma el pago total, verifica que la venta esté firme y comunica la fecha de liberación de la comisión.”</div>
+            <p class="lead">Las contrataciones a distancia contemplan un derecho de revocación de 10 días corridos. Por eso no prometemos una comisión inmediata solo con el comprobante.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-note="Primero recordá que la comisión debe estar habilitada: pago total acreditado y venta firme. Después aplicamos este calendario. Probá distintas fechas en vivo para que cada ejecutivo entienda los dos cortes. El período del 26 al 10 se paga el 25; el período del 11 al 25 se paga el día 10 siguiente.">
+        <div class="slide-inner">
+          <span class="eyebrow">Calendario de comisiones</span>
+          <h2>Dos períodos, dos fechas de <span class="purple">pago</span></h2>
+          <div class="pay-calendar">
+            <div class="pay-calendar-control">
+              <label for="saleDateInput">Elegí la fecha de la venta</label>
+              <input id="saleDateInput" type="date">
+              <div class="pay-result" id="payResult" aria-live="polite">
+                <small>Fecha estimada de pago</small>
+                <strong id="payDateValue">—</strong>
+                <span id="payPeriodValue">Seleccioná una fecha para ver el período correspondiente.</span>
+              </div>
+            </div>
+            <div class="pay-calendar-visual">
+              <span class="product-label">Así se divide cada mes</span>
+              <div class="month-strip" aria-label="Períodos mensuales de pago">
+                <div class="month-period period-a"><strong>1—10</strong><span>pago el 25</span></div>
+                <div class="month-period period-b"><strong>11—25</strong><span>pago el 10 siguiente</span></div>
+                <div class="month-period period-a"><strong>26—fin</strong><span>pago el 25 siguiente</span></div>
+              </div>
+              <div class="pay-rules">
+                <article class="pay-rule-card"><small>Período A</small><strong>Del 26 al 10 → día 25</strong><p>Incluye el cierre del mes anterior y los primeros diez días del mes actual.</p></article>
+                <article class="pay-rule-card"><small>Período B</small><strong>Del 11 al 25 → día 10</strong><p>Se paga el día 10 del mes siguiente.</p></article>
+              </div>
+              <p class="calendar-caption">Este cronograma se aplica una vez que la comisión reúne las condiciones para ser pagada.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-note="Este es el hábito operativo. La conversación puede comenzar por llamada, terreno o WhatsApp, pero la información debe terminar en el Portal. Así Producción recibe datos claros y el ejecutivo conserva trazabilidad.">
+        <div class="slide-inner">
+          <span class="eyebrow">El trabajo del ejecutivo</span>
+          <h2>Conversar, diagnosticar, registrar y <span class="purple">acompañar</span></h2>
+          <ol class="workflow">
+            <li><h3>Abrir la conversación</h3><p>Entender cómo el negocio consigue clientes hoy.</p></li>
+            <li><h3>Diagnosticar</h3><p>Identificar si necesita Ficha, Landing o ambas.</p></li>
+            <li><h3>Presentar la solución</h3><p>Explicar valor, precio y condiciones sin improvisar.</p></li>
+            <li><h3>Completar el Portal</h3><p>Registrar exactamente la información del cliente.</p></li>
+            <li><h3>Enviar el medio de pago</h3><p>Generar el mensaje desde el sistema y acompañar el cierre.</p></li>
+            <li><h3>Dar seguimiento</h3><p>Comprobante, materiales, aprobación y pago final.</p></li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="slide slide--purple" data-note="Presentá estos pasos como la activación formal de cada ejecutivo. El correo que informe será también su identidad de acceso al Portal. Los datos bancarios deben estar completos para evitar demoras cuando corresponda pagar una comisión.">
+        <div class="slide-inner">
+          <span class="eyebrow">Pasos a seguir</span>
+          <h2>Primero dejamos listo tu <span class="accent">acceso y forma de pago</span></h2>
+          <div class="proof-flow">
+            <article class="proof-step"><h3>Enviá tu correo</h3><p>Informá el correo electrónico personal que usarás para ingresar al Portal.</p></article>
+            <article class="proof-step"><h3>Enviá tu cuenta</h3><p>Titular, DNI o CUIL, banco, CBU o CVU y alias para el pago de comisiones.</p></article>
+            <article class="proof-step"><h3>RiO crea tu acceso</h3><p>La cuenta del Portal se habilita utilizando el correo electrónico informado.</p></article>
+            <article class="proof-step"><h3>Ingresá y capacitate</h3><p>Completá el curso antes de comenzar a presentar los productos a clientes.</p></article>
+          </div>
+          <p class="lead" style="margin-top:1.35rem">Correo personal y datos bancarios: <strong>comercial@rioimpulsodigital.com</strong>.<br>Comprobantes de pagos de clientes: <strong>ventas@rioimpulsodigital.com</strong>.</p>
+        </div>
+      </section>
+
+      <section class="slide" data-note="Mostrales el Portal en vivo después de esta pantalla. Señalá dónde se abre el curso, dónde se descarga el PDF y dónde están las piezas de Argentina. El historial de ventas será una mejora posterior, por lo que no hay que prometer una fecha todavía.">
+        <div class="slide-inner">
+          <span class="eyebrow">Tu espacio de trabajo</span>
+          <h2>El Portal reúne lo que necesitás para <span class="purple">vender y repasar</span></h2>
+          <div class="comparison">
+            <article class="choice">
+              <span class="choice-tag">Disponible</span>
+              <h3 style="margin-top:1.1rem">Capacitación y apoyo comercial</h3>
+              <ul class="feature-list" style="grid-template-columns:1fr">
+                <li>Curso interactivo para realizar y repetir cuando lo necesites.</li>
+                <li>Ficha de Google en PDF para descargar y usar como apoyo inicial.</li>
+                <li>Material publicitario de los cinco productos para compartir en redes sociales.</li>
+                <li>Kit para registrar los datos del cliente y preparar el cierre.</li>
+              </ul>
+            </article>
+            <article class="choice premium">
+              <span class="choice-tag">Próximamente</span>
+              <h3 style="margin-top:1.1rem">Historial de ventas</h3>
+              <p>Se incorporará una sección para consultar tus ventas y saber en qué etapa se encuentra cada proceso.</p>
+              <ul class="feature-list" style="grid-template-columns:1fr;margin-top:1.2rem">
+                <li>Estado del pago.</li>
+                <li>Materiales y producción.</li>
+                <li>Entrega y aprobación.</li>
+                <li>Estado de la comisión.</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide slide--coral" data-note="Hacé que respondan antes de mostrar la devolución. La respuesta correcta es C: al estar acreditado el segundo 50% y confirmada la venta firme por RiO.">
+        <div class="slide-inner">
+          <span class="eyebrow">Comprobación rápida</span>
+          <h2>¿Cuándo se habilita la comisión de un Pack?</h2>
+          <div class="quiz" id="quiz">
+            <button type="button" data-answer="wrong"><strong>A. Con el primer 50%</strong>Porque el cliente ya autorizó el inicio del trabajo.</button>
+            <button type="button" data-answer="wrong"><strong>B. Al aprobar la Landing</strong>Aunque todavía no se haya acreditado el saldo.</button>
+            <button type="button" data-answer="correct"><strong>C. Con el 100% y la venta firme</strong>RiO verifica el pago total y confirma la liberación.</button>
+          </div>
+          <div class="quiz-feedback" id="quizFeedback" role="status" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="slide slide--dark" data-note="Cerrá reforzando los tres criterios: claridad para el cliente, orden en el sistema y seguimiento responsable. Después abrí preguntas concretas sobre productos, pagos y comisiones.">
+        <div class="slide-inner">
+          <span class="eyebrow">El estándar RiO</span>
+          <h2>Una buena venta deja al cliente <span class="accent">seguro</span> y al equipo <span class="accent">ordenado</span></h2>
+          <div class="close-list">
+            <div class="close-point"><strong>Claridad</strong><span>El cliente entiende qué compra, cuánto paga y cuándo recibe.</span></div>
+            <div class="close-point"><strong>Registro</strong><span>La información queda completa en el Portal, no dispersa en mensajes.</span></div>
+            <div class="close-point"><strong>Seguimiento</strong><span>El ejecutivo acompaña hasta el cierre sin prometer lo que no corresponde.</span></div>
+          </div>
+          <p class="lead" style="margin-top:2rem">Ahora sí: preguntas, casos y práctica.</p>
+        </div>
+      </section>
+
+      <section class="slide" data-note="Esta diapositiva queda como respaldo. No hace falta mostrarla salvo que pregunten de dónde salen el plazo legal o el costo del dominio.">
+        <div class="slide-inner">
+          <span class="eyebrow">Fuentes verificadas</span>
+          <h2>Información oficial utilizada</h2>
+          <ul class="source-list">
+            <li><a href="https://www.argentina.gob.ar/normativa/nacional/ley-24240-638/actualizacion" target="_blank" rel="noopener">Ley 24.240 de Defensa del Consumidor · Artículo 34</a><p>Derecho de revocación durante 10 días corridos en contrataciones a distancia; la información debe comunicarse de forma clara y notoria.</p></li>
+            <li><a href="https://www.argentina.gob.ar/justicia/derechofacil/leysimple/boton-arrepentimiento" target="_blank" rel="noopener">Derecho Fácil · Botón de arrepentimiento</a><p>Explicación oficial y accesible sobre el plazo de 10 días corridos.</p></li>
+            <li><a href="https://nic.ar/es/dominios/aranceles" target="_blank" rel="noopener">NIC Argentina · Dominios y aranceles</a><p>Alta y renovación anual de un dominio .com.ar: $8.500 ARS, consultado el 25 de agosto de 2026.</p></li>
+          </ul>
+        </div>
+      </section>
+    </div>
+
+    <nav class="nav" aria-label="Navegación de la presentación">
+      <button id="prevBtn" type="button" disabled><span aria-hidden="true">←</span><span class="nav-label">Anterior</span></button>
+      <button id="nextBtn" type="button"><span class="nav-label">Siguiente</span><span aria-hidden="true">→</span></button>
+    </nav>
+
+    <aside class="notes" id="notes" aria-live="polite"><h3>Guía para Brenda</h3><p id="notesText"></p></aside>
+
+    <div class="kbd-help" id="help" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <div class="help-card">
+        <h3 id="helpTitle">Cómo navegar</h3>
+        <dl><dt>← →</dt><dd>Anterior / siguiente</dd><dt>Espacio</dt><dd>Siguiente</dd><dt>N</dt><dd>Mostrar notas para Brenda</dd><dt>F</dt><dd>Pantalla completa</dd><dt>Esc</dt><dd>Cerrar paneles</dd></dl>
+        <button class="icon-btn" id="closeHelp" type="button" style="margin-top:1.25rem;width:auto;padding:0 1rem;border-radius:100px">Cerrar</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const slideEls = [...document.querySelectorAll('.slide')];
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const counter = document.getElementById('counter');
+      const progress = document.getElementById('progressBar');
+      const notes = document.getElementById('notes');
+      const notesText = document.getElementById('notesText');
+      const notesBtn = document.getElementById('notesBtn');
+      const help = document.getElementById('help');
+      let current = Math.max(0, Math.min(slideEls.length - 1, Number(location.hash.replace('#', '')) - 1 || 0));
+
+      function show(index, direction = 1) {
+        const next = Math.max(0, Math.min(slideEls.length - 1, index));
+        slideEls.forEach((slide, i) => {
+          slide.classList.toggle('active', i === next);
+          slide.classList.toggle('exit-left', i < next);
+          slide.setAttribute('aria-hidden', i === next ? 'false' : 'true');
+        });
+        current = next;
+        counter.textContent = `${String(current + 1).padStart(2, '0')} / ${String(slideEls.length).padStart(2, '0')}`;
+        progress.style.width = `${((current + 1) / slideEls.length) * 100}%`;
+        prevBtn.disabled = current === 0;
+        nextBtn.disabled = current === slideEls.length - 1;
+        notesText.textContent = slideEls[current].dataset.note || 'Sin notas adicionales.';
+        history.replaceState(null, '', `#${current + 1}`);
+        slideEls[current].scrollTop = 0;
+      }
+
+      const move = delta => show(current + delta, delta);
+      prevBtn.addEventListener('click', () => move(-1));
+      nextBtn.addEventListener('click', () => move(1));
+      notesBtn.addEventListener('click', () => notes.classList.toggle('open'));
+      document.getElementById('helpBtn').addEventListener('click', () => help.classList.add('open'));
+      document.getElementById('closeHelp').addEventListener('click', () => help.classList.remove('open'));
+      help.addEventListener('click', event => { if (event.target === help) help.classList.remove('open'); });
+
+      async function toggleFullscreen() {
+        try {
+          if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+          else await document.exitFullscreen();
+        } catch (_) { /* El navegador puede bloquear pantalla completa desde archivos locales. */ }
+      }
+      document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+
+      document.addEventListener('keydown', event => {
+        if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+        if (event.key === 'ArrowRight' || event.key === 'PageDown' || event.key === ' ') { event.preventDefault(); move(1); }
+        if (event.key === 'ArrowLeft' || event.key === 'PageUp') { event.preventDefault(); move(-1); }
+        if (event.key.toLowerCase() === 'n') notes.classList.toggle('open');
+        if (event.key.toLowerCase() === 'f') toggleFullscreen();
+        if (event.key === '?' || event.key === '/') help.classList.add('open');
+        if (event.key === 'Escape') { notes.classList.remove('open'); help.classList.remove('open'); }
+        if (event.key === 'Home') show(0);
+        if (event.key === 'End') show(slideEls.length - 1);
+      });
+
+      let touchStartX = 0;
+      document.addEventListener('touchstart', event => { touchStartX = event.changedTouches[0].clientX; }, { passive: true });
+      document.addEventListener('touchend', event => {
+        const dx = event.changedTouches[0].clientX - touchStartX;
+        if (Math.abs(dx) > 70) move(dx < 0 ? 1 : -1);
+      }, { passive: true });
+
+      const products = {
+        ficha: { launch: 125000, regular: 215000, domain: 0 },
+        express: { launch: 120000, regular: 185000, domain: 0 },
+        premium: { launch: 150000, regular: 230000, domain: 8500 },
+        packExpress: { launch: 220000, regular: 360000, domain: 0 },
+        packPremium: { launch: 250000, regular: 400000, domain: 8500 }
+      };
+      let priceMode = 'launch';
+      const money = value => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(Math.round(value));
+      const productSelect = document.getElementById('productSelect');
+      const feeInput = document.getElementById('feeInput');
+
+      function calculate() {
+        const product = products[productSelect.value];
+        const sale = product[priceMode];
+        const feeRate = Math.max(0, Math.min(30, Number(feeInput.value) || 0)) / 100;
+        const fee = sale * feeRate;
+        const net = Math.max(0, sale - product.domain - fee);
+        const commission = net * .4;
+        const rio = net - commission;
+        document.getElementById('commissionValue').textContent = money(commission);
+        document.getElementById('saleValue').textContent = money(sale);
+        document.getElementById('domainValue').textContent = money(product.domain);
+        document.getElementById('feeValue').textContent = money(fee);
+        document.getElementById('netValue').textContent = money(net);
+        document.getElementById('rioValue').textContent = money(rio);
+      }
+      productSelect.addEventListener('change', calculate);
+      feeInput.addEventListener('input', calculate);
+      document.querySelectorAll('[data-price-mode]').forEach(button => button.addEventListener('click', () => {
+        priceMode = button.dataset.priceMode;
+        document.querySelectorAll('[data-price-mode]').forEach(item => item.classList.toggle('active', item === button));
+        calculate();
+      }));
+
+      const saleDateInput = document.getElementById('saleDateInput');
+      const payDateValue = document.getElementById('payDateValue');
+      const payPeriodValue = document.getElementById('payPeriodValue');
+      const parseLocalDate = value => {
+        const [year, month, day] = value.split('-').map(Number);
+        return new Date(year, month - 1, day);
+      };
+      const formatDate = date => new Intl.DateTimeFormat('es-AR', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+      }).format(date);
+
+      function updatePayDate() {
+        if (!saleDateInput.value) return;
+        const saleDate = parseLocalDate(saleDateInput.value);
+        const day = saleDate.getDate();
+        let payDate;
+        let period;
+        if (day <= 10) {
+          payDate = new Date(saleDate.getFullYear(), saleDate.getMonth(), 25);
+          period = 'Esta venta pertenece al período del 26 al 10.';
+        } else if (day <= 25) {
+          payDate = new Date(saleDate.getFullYear(), saleDate.getMonth() + 1, 10);
+          period = 'Esta venta pertenece al período del 11 al 25.';
+        } else {
+          payDate = new Date(saleDate.getFullYear(), saleDate.getMonth() + 1, 25);
+          period = 'Esta venta inicia el período del 26 al 10.';
+        }
+        payDateValue.textContent = formatDate(payDate);
+        payPeriodValue.textContent = `${period} La comisión debe estar habilitada antes de entrar al pago.`;
+      }
+      const today = new Date();
+      saleDateInput.value = [today.getFullYear(), String(today.getMonth() + 1).padStart(2, '0'), String(today.getDate()).padStart(2, '0')].join('-');
+      saleDateInput.addEventListener('change', updatePayDate);
+      updatePayDate();
+
+      const feedback = document.getElementById('quizFeedback');
+      document.querySelectorAll('#quiz button').forEach(button => button.addEventListener('click', () => {
+        document.querySelectorAll('#quiz button').forEach(item => item.classList.remove('correct', 'wrong'));
+        const correct = button.dataset.answer === 'correct';
+        button.classList.add(correct ? 'correct' : 'wrong');
+        feedback.textContent = correct ? 'Correcto. La comisión se libera con el pago total acreditado y la venta firme.' : 'Todavía no. Falta que el pago total esté acreditado y que RiO confirme la venta firme.';
+      }));
+
+      show(current);
+      calculate();
+    })();
+  </script>
+</body>
+</html>
