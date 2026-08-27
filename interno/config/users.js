@@ -7,14 +7,17 @@
  */
 
 const USER_MAP = {
-  'xikorivera@gmail.com':              { name: 'Pablo',     defaultMarket: 'CL', allowedMarkets: ['CL'] },
-  'albertoperezmatta@gmail.com':       { name: 'Alberto',   defaultMarket: 'CL', allowedMarkets: ['CL', 'AR'] },
-  'gabrielaaleroa@gmail.com':          { name: 'Gabriela',  defaultMarket: 'CL', allowedMarkets: ['CL'] },
-  'jotaherre024@gmail.com':            { name: 'Julia',     defaultMarket: 'CL', allowedMarkets: ['CL'] },
-  'lorenaramirezfuentealba@gmail.com': { name: 'Lorena',    defaultMarket: 'CL', allowedMarkets: ['CL'] },
-  'fjamis@gmail.com':                  { name: 'Fuad',      defaultMarket: 'CL', allowedMarkets: ['CL'] },
-  'mchristian.reyes@gmail.com':        { name: 'Christian', defaultMarket: 'CL', allowedMarkets: ['CL'] },
-  'brenda@rioimpulsodigital.com':      { name: 'Brenda',    defaultMarket: 'AR', allowedMarkets: ['CL', 'AR'] }
+  'xikorivera@gmail.com':                   { name: 'Pablo',      defaultMarket: 'CL', allowedMarkets: ['CL'] },
+  'albertoperezmatta@gmail.com':            { name: 'Alberto',    defaultMarket: 'CL', allowedMarkets: ['CL', 'AR'] },
+  'gabrielaaleroa@gmail.com':               { name: 'Gabriela',   defaultMarket: 'CL', allowedMarkets: ['CL'] },
+  'jotaherre024@gmail.com':                 { name: 'Julia',      defaultMarket: 'CL', allowedMarkets: ['CL'] },
+  'lorenaramirezfuentealba@gmail.com':      { name: 'Lorena',     defaultMarket: 'CL', allowedMarkets: ['CL'] },
+  'fjamis@gmail.com':                       { name: 'Fuad',       defaultMarket: 'CL', allowedMarkets: ['CL'] },
+  'mchristian.reyes@gmail.com':             { name: 'Christian',  defaultMarket: 'CL', allowedMarkets: ['CL'] },
+  'araujochristianwalterdejesus@gmail.com': { name: 'Christian',  defaultMarket: 'AR', allowedMarkets: ['AR'] },
+  'lore_1212@hotmail.com':                  { name: 'Nina',       defaultMarket: 'AR', allowedMarkets: ['AR'] },
+  'mholsbachperalta@gmail.com':             { name: 'Maira',      defaultMarket: 'AR', allowedMarkets: ['AR'] },
+  'brenda@rioimpulsodigital.com':           { name: 'Brenda',     defaultMarket: 'AR', allowedMarkets: ['CL', 'AR'] }
 };
 
 const MARKET_STORAGE_PREFIX = 'rio_portal_market:';
