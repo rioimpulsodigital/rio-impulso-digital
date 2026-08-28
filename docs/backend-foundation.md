@@ -74,11 +74,11 @@ dependencias extra de testing). `wrangler` queda fijado como devDependency
 
 ## Variables y secretos (nombres únicamente)
 
-| Nombre | Tipo | Dónde vive |
-|---|---|---|
-| `CF_ACCESS_TEAM_DOMAIN` | variable pública | `wrangler.toml` → `[vars]` (no es secreto, confirmado en RIO-108) |
-| `CF_ACCESS_AUD` | secreto | `wrangler pages secret put CF_ACCESS_AUD` (producción/preview) · `.dev.vars` (local, no versionado) |
-| `DB` | binding D1, no es una variable | `wrangler.toml` → `[[d1_databases]]` |
+| Nombre | Tipo | Dónde vive | Estado |
+|---|---|---|---|
+| `CF_ACCESS_TEAM_DOMAIN` | variable pública | `wrangler.toml` → `[vars]`; configurada también en el entorno Preview del proyecto real | ✅ Configurado (28/08/2026) |
+| `CF_ACCESS_AUD` | secreto | `wrangler pages secret put CF_ACCESS_AUD` (producción/preview) · `.dev.vars` (local, no versionado) | 🔴 Pendiente — requiere permisos de Access/Zero Trust que Anthy no tiene (RIO-109) |
+| `DB` | binding D1, no es una variable | `wrangler.toml` → `[[d1_databases]]`; configurado también en el entorno Preview del proyecto real | ✅ Configurado (28/08/2026) |
 
 Copiar `.dev.vars.example` a `.dev.vars` (ya en `.gitignore`) y completar el
 valor real solo en la máquina local — nunca commitear ni pegar el valor en
@@ -116,6 +116,32 @@ Verificado en esta sesión, 100% local (`--local`, sin token de Cloudflare):
   más, nunca editando una ya aplicada).
 - Insertar y leer una fila de `_system_health` funcionó correctamente contra
   la base local.
+
+## Token de Cloudflare y base D1 real (28/08/2026)
+
+El token `anthy-rio-deploy` (creado en RIO-109) se validó con éxito
+(`wrangler whoami`) — el "Invalid API Token" que había devuelto antes era un
+problema de copiado del valor, no del token en sí. Con eso resuelto:
+
+- Se creó `rio-ventas-preview` en la cuenta real (`wrangler d1 create`,
+  región ENAM), `database_id` cargado en `wrangler.toml`.
+- Las migraciones `0001`/`0002` se aplicaron contra esa base **remota real**
+  (`--remote`, no `--local`) y se verificaron con una fila de prueba.
+- El binding D1 `DB` y la variable `CF_ACCESS_TEAM_DOMAIN` se configuraron
+  sobre el entorno **Preview** del proyecto de Pages real, vía la API de
+  Cloudflare (`PATCH .../pages/projects/rio-impulso-digital`,
+  `deployment_configs.preview`) — el entorno **Production** se verificó
+  explícitamente sin cambios antes y después de cada PATCH.
+- **Hallazgo:** el primer deploy de la rama (antes de tener el `database_id`
+  real) falló en la etapa `deploy` de Cloudflare Pages — confirma que el
+  build de Pages sí valida `wrangler.toml` (el placeholder
+  `PENDIENTE_WRANGLER_D1_CREATE_RIO_110` no es un ID válido). El siguiente
+  deploy, ya con el ID real, completó todas las etapas (`queued` → `deploy`)
+  en `success`.
+- Sigue pendiente únicamente el secreto `CF_ACCESS_AUD` (ver tabla arriba) —
+  sin él, la validación de JWT contra la app real de Access todavía no se
+  puede probar en la vista previa desplegada (localmente sí, con un valor de
+  prueba en `.dev.vars`).
 
 ## Validación de Access (server-side)
 
@@ -177,7 +203,7 @@ registra en logs del lado servidor, nunca se envía al cliente (ver también
 
 | | Preview (esta tarea) | Producción (fuera de alcance de RIO-110) |
 |---|---|---|
-| D1 | `rio-ventas-preview` | Base de producción — **no se crea en RIO-110** |
+| D1 | `rio-ventas-preview` (creada y vinculada, 28/08/2026) | Base de producción — **no se crea en RIO-110** |
 | Rama | `rio-110-backend-foundation` (y cualquier otra rama que no sea `main`) | `main` |
 | Acceso | Vistas previas ya protegidas con Access (RIO-109) | `rioimpulsodigital.com` |
 | Quién puede fusionar | — | Requiere aprobación expresa de Brenda (fuera de esta tarea) |
