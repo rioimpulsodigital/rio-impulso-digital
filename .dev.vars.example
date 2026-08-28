@@ -1,0 +1,5 @@
+# Copiar a .dev.vars (ignorado por git) y completar con valores reales solo
+# en tu máquina local. Nunca commitear .dev.vars ni pegar estos valores en
+# Notion, chat o capturas de pantalla.
+
+CF_ACCESS_AUD=

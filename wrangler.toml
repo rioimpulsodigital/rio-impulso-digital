@@ -1,0 +1,38 @@
+name = "rio-impulso-digital"
+compatibility_date = "2024-11-01"
+pages_build_output_dir = "."
+
+# D1 — RIO-110 sección 5/6. `database_id` queda como placeholder hasta que se
+# valide el token de Cloudflare y se pueda ejecutar `wrangler d1 create
+# rio-ventas-preview` (bloqueado — ver docs/backend-foundation.md).
+[[d1_databases]]
+binding = "DB"
+database_name = "rio-ventas-preview"
+database_id = "PENDIENTE_WRANGLER_D1_CREATE_RIO_110"
+migrations_dir = "migrations"
+
+# Variables públicas — no son secretos (confirmado en la auditoría RIO-108:
+# el dominio de equipo de Access es un dato público, no un identificador de
+# validación de tokens). El AUD de la aplicación de Access SÍ es sensible y
+# se define como secreto, nunca acá — ver abajo.
+[vars]
+CF_ACCESS_TEAM_DOMAIN = "rio-impulsodigital-team.cloudflareaccess.com"
+
+# Secretos requeridos (nombres únicamente — nunca el valor en este archivo
+# ni en ningún archivo versionado):
+#   CF_ACCESS_AUD   → wrangler pages secret put CF_ACCESS_AUD
+#     (etiqueta AUD de la aplicación de Access "rioimpulsodigital.com",
+#     visible solo en el panel de Cloudflare Access → Applications.)
+#
+# En desarrollo local, estos mismos nombres van en `.dev.vars` (ignorado por
+# git — ver `.dev.vars.example` para el formato, sin valores reales).
+
+# --- Entornos ---
+# Producción (rama main): usa el binding de arriba tal cual, pero SOLO debe
+# apuntarse a una base D1 de producción real cuando RIO-110 esté aprobada y
+# fusionada — mientras tanto, "DB" es siempre la base de preview/desarrollo.
+# Vista previa (cualquier otra rama, ej. rio-110-backend-foundation): Cloudflare
+# Pages genera un despliegue de preview por rama automáticamente; los bindings
+# de preview se configuran en el panel del proyecto (Settings → Functions →
+# D1 database bindings) apuntando a la MISMA base rio-ventas-preview definida
+# arriba — no se crea una base D1 distinta por cada preview.

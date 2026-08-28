@@ -1,0 +1,21 @@
+{
+  "name": "rio-impulso-digital-backend",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Fundacion del backend del Portal Interno (RIO-110) — Pages Functions + D1 + validacion server-side de Cloudflare Access. El resto del repo (sitio publico y /interno/*) sigue siendo HTML/CSS/JS estatico, sin build step.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev . --d1=DB=rio-ventas-preview --compatibility-date=2026-08-01",
+    "test": "node --test tests/",
+    "db:migrations:list": "wrangler d1 migrations list DB --local",
+    "db:migrations:apply:local": "wrangler d1 migrations apply DB --local",
+    "db:migrations:apply:preview": "wrangler d1 migrations apply DB --remote",
+    "cf:whoami": "wrangler whoami"
+  },
+  "devDependencies": {
+    "wrangler": "4.127.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
