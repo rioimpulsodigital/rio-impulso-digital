@@ -77,7 +77,7 @@ dependencias extra de testing). `wrangler` queda fijado como devDependency
 | Nombre | Tipo | Dónde vive | Estado |
 |---|---|---|---|
 | `CF_ACCESS_TEAM_DOMAIN` | variable pública | `wrangler.toml` → `[vars]`; configurada también en el entorno Preview del proyecto real | ✅ Configurado (28/08/2026) |
-| `CF_ACCESS_AUD` | secreto | `wrangler pages secret put CF_ACCESS_AUD` (producción/preview) · `.dev.vars` (local, no versionado) | 🔴 Pendiente — requiere permisos de Access/Zero Trust que Anthy no tiene (RIO-109) |
+| `CF_ACCESS_AUD` | secreto | `.dev.vars` (local) + entorno Preview del proyecto real, vía API (`secret_text`, nunca en texto plano) | ✅ Configurado y verificado con login real (28/08/2026) |
 | `DB` | binding D1, no es una variable | `wrangler.toml` → `[[d1_databases]]`; configurado también en el entorno Preview del proyecto real | ✅ Configurado (28/08/2026) |
 
 Copiar `.dev.vars.example` a `.dev.vars` (ya en `.gitignore`) y completar el
@@ -142,6 +142,27 @@ problema de copiado del valor, no del token en sí. Con eso resuelto:
   sin él, la validación de JWT contra la app real de Access todavía no se
   puede probar en la vista previa desplegada (localmente sí, con un valor de
   prueba en `.dev.vars`).
+
+## Verificación end-to-end final (28/08/2026)
+
+Con `CF_ACCESS_AUD` real cargado en `.dev.vars` y configurado como secreto en el
+entorno Preview del proyecto real (vía API, `secret_text`), y con la política
+de acceso a las vistas previas ajustada para permitir el mismo login de
+mail + código que ya usa el equipo — se confirmó una solicitud autenticada
+real contra `/interno/api/health` en la vista previa desplegada:
+
+```json
+{"ok":true,"data":{"status":"ok","checks":{"pagesFunctions":true,"access":true,"d1Binding":true,"d1Connectivity":true}},"error":null}
+```
+
+Los cuatro controles (`pagesFunctions`, `access`, `d1Binding`,
+`d1Connectivity`) en `true` — es la primera vez que el proyecto valida un JWT
+de Cloudflare Access realmente firmado por Cloudflare, de punta a punta,
+contra D1 real. Verificado independientemente por Anthy contra la API de
+Cloudflare: el commit `12e54a5` es la punta de `rio-110-backend-foundation`
+(no está en `main`), `deployment_configs.production` sigue sin
+`d1_databases` ni `env_vars`, y la suite completa (44 pruebas) sigue en
+verde sobre ese mismo commit.
 
 ## Validación de Access (server-side)
 
