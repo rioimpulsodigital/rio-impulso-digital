@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler pages dev . --d1=DB=rio-ventas-preview --compatibility-date=2026-08-01",
-    "test": "node --test tests/",
+    "test": "node --test tests/*.test.js",
     "db:migrations:list": "wrangler d1 migrations list DB --local",
     "db:migrations:apply:local": "wrangler d1 migrations apply DB --local",
     "db:migrations:apply:preview": "wrangler d1 migrations apply DB --remote",
