@@ -7,7 +7,6 @@
  */
 
 const USER_MAP = {
-  'xikorivera@gmail.com':                   { name: 'Pablo',             defaultMarket: 'CL', allowedMarkets: ['CL'] },
   'albertoperezmatta@gmail.com':            { name: 'Alberto',           defaultMarket: 'CL', allowedMarkets: ['CL', 'AR'] },
   'gabrielaaleroa@gmail.com':               { name: 'Gabriela',          defaultMarket: 'CL', allowedMarkets: ['CL'] },
   'jotaherre024@gmail.com':                 { name: 'Julia',             defaultMarket: 'CL', allowedMarkets: ['CL'] },
