@@ -43,6 +43,8 @@ export function fail(code, message, status, requestId, extraHeaders = {}) {
 export const Errors = {
   unauthenticated: (requestId, extraHeaders) =>
     fail('UNAUTHENTICATED', 'No se pudo verificar tu identidad. Iniciá sesión nuevamente.', 401, requestId, extraHeaders),
+  forbidden: (requestId, extraHeaders) =>
+    fail('FORBIDDEN', 'No tenés permiso para acceder a este recurso.', 403, requestId, extraHeaders),
   methodNotAllowed: (requestId, extraHeaders) =>
     fail('METHOD_NOT_ALLOWED', 'Método no permitido para esta ruta.', 405, requestId, extraHeaders),
   notFound: (requestId, extraHeaders) =>
