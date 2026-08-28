@@ -10,6 +10,8 @@
 // `allowed_markets` y `user_status` de la fila vigente en D1 — nunca una
 // condición por nombre propio.
 
+import { Errors } from './response.js';
+
 export class AuthzError extends Error {
   constructor(reason) {
     super(reason);
@@ -117,6 +119,32 @@ export async function resolveRoleIdentity(db, email, requestId) {
   };
 }
 
+// Middleware reutilizable (RIO-112): resuelve `context.data.roleIdentity` a
+// partir del email ya verificado por Access, con denegación por defecto —
+// usado por functions/interno/api/identidad/_middleware.js (RIO-111) y por
+// functions/interno/api/ventas/_middleware.js (RIO-112). Vive acá para que
+// ningún directorio nuevo tenga que reimplementar esta misma resolución
+// (el mismo tipo de duplicación que RIO-111 tuvo que corregir en users.js).
+export async function requireRoleIdentity(context) {
+  const { env, data, next } = context;
+  const { requestId, identity } = data;
+
+  let roleIdentity;
+  try {
+    roleIdentity = await resolveRoleIdentity(env.DB, identity.email, requestId);
+  } catch (e) {
+    if (e instanceof AuthzError) {
+      console.warn(JSON.stringify({ requestId, scope: 'authz', reason: e.reason }));
+    } else {
+      console.error(JSON.stringify({ requestId, scope: 'authz', reason: 'unexpected_error' }));
+    }
+    return Errors.forbidden(requestId);
+  }
+
+  context.data.roleIdentity = roleIdentity;
+  return next();
+}
+
 // Un mercado solo es válido para esta identidad si está en su lista de
 // mercados autorizados vigente — igual para cualquier rol, incluido admin
 // (RIO-97 v2: el admin también tiene su propio allowedMarkets, hoy CL+AR,
@@ -128,17 +156,25 @@ export function assertMarketAllowed(roleIdentity, market) {
 }
 
 // Autorización de acceso a un recurso de otra persona (ej. las ventas de un
-// ejecutivo). `ownerEmail` es el email dueño del recurso solicitado.
-// - admin: siempre permitido.
+// ejecutivo). `ownerEmail` es el email dueño del recurso solicitado;
+// `ownerMarket` es el mercado de ese recurso (obligatorio para cualquier
+// recurso con mercado — ventas, proyectos, componentes).
+// - admin: permitido si `ownerMarket` está en su propio allowedMarkets —
+//   RIO-112 corrige acá un caso no cubierto en la v1 de RIO-111: el admin
+//   NO tiene un bypass implícito de mercado (mismo principio ya documentado
+//   en assertMarketAllowed, ahora aplicado también acá). Hoy es invisible
+//   porque Brenda (única admin) tiene CL+AR, pero un futuro admin con un
+//   solo mercado autorizado debe quedar igual de limitado.
 // - supervisor: permitido solo si `ownerMarket` está en su allowedMarkets.
 // - ejecutivo / asistente: permitido únicamente si el recurso es propio
 //   (ownerEmail === roleIdentity.email) — nunca de otra persona, sin
 //   excepción, ni siquiera con un parámetro que diga lo contrario.
 export function assertCanAccessOwner(roleIdentity, ownerEmail, ownerMarket) {
   if (ownerEmail === roleIdentity.email) return; // siempre puede ver lo propio.
-  if (roleIdentity.permissions.viewOthersData === true) return; // admin.
-  if (roleIdentity.permissions.viewOthersData === 'sameMarketOnly') {
-    if (ownerMarket && roleIdentity.allowedMarkets.includes(ownerMarket)) return;
+  const canBypassOwnership = roleIdentity.permissions.viewOthersData === true // admin
+    || roleIdentity.permissions.viewOthersData === 'sameMarketOnly'; // supervisor
+  if (canBypassOwnership && ownerMarket && roleIdentity.allowedMarkets.includes(ownerMarket)) {
+    return;
   }
   throw new AuthzError('resource_not_owned');
 }

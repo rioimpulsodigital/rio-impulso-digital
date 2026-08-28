@@ -202,9 +202,18 @@ test('assertCanAccessOwner() — un asistente NO puede acceder al recurso de otr
   });
 });
 
-test('assertCanAccessOwner() — un admin puede acceder al recurso de cualquiera', () => {
+test('assertCanAccessOwner() — un admin puede acceder al recurso de cualquiera, dentro de sus propios mercados', () => {
   const identity = { email: 'admin@example.com', allowedMarkets: ['CL', 'AR'], permissions: PERMISSIONS.admin };
   assert.doesNotThrow(() => assertCanAccessOwner(identity, 'cualquiera@example.com', 'AR'));
+});
+
+test('assertCanAccessOwner() — un admin NO tiene bypass implícito: un mercado fuera de su allowedMarkets también lo bloquea (RIO-112)', () => {
+  const identity = { email: 'admin.solo.cl@example.com', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin };
+  assert.throws(() => assertCanAccessOwner(identity, 'ejecutivo.ar@example.com', 'AR'), (e) => {
+    assert.ok(e instanceof AuthzError);
+    assert.equal(e.reason, 'resource_not_owned');
+    return true;
+  });
 });
 
 test('assertCanAccessOwner() — un supervisor puede acceder a un recurso de SU mercado', () => {
