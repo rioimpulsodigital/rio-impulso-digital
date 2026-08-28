@@ -536,8 +536,10 @@
 <script src="../assets/js/main.js?v=20260627" defer></script>
 
 <script>
-  document.addEventListener('DOMContentLoaded', function () {
-    var executive = resolveExecutive();
+  document.addEventListener('DOMContentLoaded', async function () {
+    // RIO-111: resolveExecutive() ahora consulta /interno/api/identidad/whoami
+    // (D1, verificado en el servidor) — ya no hay un USER_MAP local que consultar.
+    var executive = await resolveExecutive();
     var currentMarket = executive ? resolveActiveMarket(executive) : null;
 
     renderGreeting(executive);
@@ -588,8 +590,10 @@
     drawer.insertBefore(buildGroup(), drawerCta);
   }
 
-  // Comercial y Marketing quedan bloqueados para un correo autenticado que no existe
-  // en USER_MAP. Nunca se asigna Chile ni ningún otro mercado por defecto.
+  // Comercial y Marketing quedan bloqueados si /interno/api/identidad/whoami
+  // (D1, RIO-111) no devolvió una identidad — correo no registrado, sin
+  // asignación vigente, o inactivo. Nunca se asigna Chile ni ningún otro
+  // mercado por defecto.
   function applyAccessState(executive) {
     if (executive) return;
     var blockedHTML =
@@ -601,7 +605,7 @@
       var section = document.getElementById(id);
       if (section) section.innerHTML = blockedHTML;
     });
-    console.warn('[Portal RiO] Usuario autenticado sin mercado configurado en USER_MAP — Comercial y Marketing bloqueados.');
+    console.warn('[Portal RiO] Identidad no resuelta por el servidor (whoami) — Comercial y Marketing bloqueados.');
   }
 
   function renderMarketingResources(currentMarket) {

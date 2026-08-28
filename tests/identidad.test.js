@@ -10,10 +10,37 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { onRequest as whoamiHandler } from '../functions/interno/api/identidad/whoami.js';
 import { onRequest as usuariosHandler } from '../functions/interno/api/identidad/usuarios.js';
 import { onRequest as identidadMiddleware } from '../functions/interno/api/identidad/_middleware.js';
 import { PERMISSIONS } from '../functions/_shared/authz.js';
+
+// Auditoría de Brenda (28/08/2026): confirma por inspección del código fuente
+// — no solo por comportamiento observado en un caso puntual — que ningún
+// archivo de la capa de identidad importa, lee ni referencia interno/config/
+// users.js ni USER_MAP. Si algún día alguien reintroduce esa dependencia
+// (ej. como atajo para "autocompletar" un dato), esta prueba falla.
+test('la capa de identidad server-side (authz/whoami/usuarios/middleware) no depende de users.js ni de USER_MAP', () => {
+  const archivos = [
+    'functions/_shared/authz.js',
+    'functions/interno/api/identidad/whoami.js',
+    'functions/interno/api/identidad/usuarios.js',
+    'functions/interno/api/identidad/_middleware.js',
+  ];
+  for (const archivo of archivos) {
+    const contenido = readFileSync(new URL('../' + archivo, import.meta.url), 'utf8');
+    // Busca acoplamiento real de código (import/require de users.js), no
+    // comentarios que lo mencionen para explicar por qué NO se usa —
+    // authz.js documenta a propósito que no depende de users.js.
+    assert.doesNotMatch(
+      contenido,
+      /(?:from|require)\s*\(?['"][^'"]*users\.js['"]/,
+      `${archivo} no debería importar users.js`
+    );
+    assert.doesNotMatch(contenido, /USER_MAP/, `${archivo} no debería referenciar USER_MAP`);
+  }
+});
 
 function roleIdentity(overrides = {}) {
   return {
@@ -21,6 +48,7 @@ function roleIdentity(overrides = {}) {
     nombre: 'Ejecutivo A',
     role: 'ejecutivo',
     allowedMarkets: ['CL'],
+    defaultMarket: 'CL',
     userStatus: 'activo',
     validFrom: '2026-01-01 00:00:00',
     validUntil: null,
@@ -45,6 +73,7 @@ test('whoami sin parámetro — devuelve la identidad propia, ya resuelta por el
   assert.equal(body.data.email, 'ejecutivo.a@example.com');
   assert.equal(body.data.role, 'ejecutivo');
   assert.deepEqual(body.data.allowedMarkets, ['CL']);
+  assert.equal(body.data.defaultMarket, 'CL');
 });
 
 test('whoami?email=<propio> — mismo resultado que sin parámetro (no es un intento de ver a otro)', async () => {
@@ -91,7 +120,7 @@ test('whoami?email=<otro> — un admin SÍ puede consultar la identidad de otra 
         first: async () => {
           if (sql.includes('FROM usuarios')) return { id: 99, email: 'ejecutivo.b@example.com', nombre: 'Ejecutivo B' };
           if (sql.includes('FROM asignaciones_rol')) {
-            return { role: 'ejecutivo', allowed_markets: '["AR"]', user_status: 'activo', valid_from: '2026-01-01', valid_until: null };
+            return { role: 'ejecutivo', allowed_markets: '["AR"]', default_market: 'AR', user_status: 'activo', valid_from: '2026-01-01', valid_until: null };
           }
           throw new Error('consulta inesperada');
         },
@@ -136,7 +165,7 @@ test('usuarios — admin obtiene el listado', async () => {
         bind() { return this; },
         all: async () => ({
           results: [
-            { email: 'a@example.com', nombre: 'A', role: 'ejecutivo', allowed_markets: '["CL"]', user_status: 'activo', valid_from: '2026-01-01', valid_until: null },
+            { email: 'a@example.com', nombre: 'A', role: 'ejecutivo', allowed_markets: '["CL"]', default_market: 'CL', user_status: 'activo', valid_from: '2026-01-01', valid_until: null },
           ],
         }),
       };
@@ -206,7 +235,7 @@ test('middleware de /identidad — usuario activo con asignación vigente sí ll
         bind() { return this; },
         first: async () => {
           if (sql.includes('FROM usuarios')) return { id: 1, email: 'activo@example.com', nombre: 'Activo' };
-          return { role: 'ejecutivo', allowed_markets: '["CL"]', user_status: 'activo', valid_from: '2026-01-01', valid_until: null };
+          return { role: 'ejecutivo', allowed_markets: '["CL"]', default_market: 'CL', user_status: 'activo', valid_from: '2026-01-01', valid_until: null };
         },
       };
     },

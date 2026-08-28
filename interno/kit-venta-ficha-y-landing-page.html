@@ -1617,11 +1617,13 @@
     applyFichaState();
   }
 
-  (function initUser(){
-    currentExecutive = resolveExecutive();
+  (async function initUser(){
+    // RIO-111: resolveExecutive() consulta /interno/api/identidad/whoami
+    // (D1, verificado en el servidor) — ya no hay un USER_MAP local.
+    currentExecutive = await resolveExecutive();
     if(!currentExecutive){
       blockKitAccess();
-      console.warn('[Kit RiO] Usuario autenticado sin mercado configurado en USER_MAP — Kit bloqueado.');
+      console.warn('[Kit RiO] Identidad no resuelta por el servidor (whoami) — Kit bloqueado.');
       return;
     }
     currentMarket = resolveActiveMarket(currentExecutive);

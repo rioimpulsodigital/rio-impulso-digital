@@ -49,18 +49,42 @@ function fakeDb({ usuarios = [], asignaciones = [] } = {}) {
 const PAST = '2020-01-01 00:00:00';
 const FUTURE = '2099-01-01 00:00:00';
 
-test('resolveRoleIdentity() — usuario con asignación vigente devuelve rol, mercados y permisos', async () => {
+test('resolveRoleIdentity() — usuario con asignación vigente devuelve rol, mercados, mercado predeterminado y permisos', async () => {
   const db = fakeDb({
     usuarios: [{ id: 1, email: 'ejecutivo.cl@example.com', nombre: 'Test CL' }],
     asignaciones: [
-      { usuario_id: 1, role: 'ejecutivo', allowed_markets: '["CL"]', user_status: 'activo', valid_from: PAST, valid_until: null },
+      { usuario_id: 1, role: 'ejecutivo', allowed_markets: '["CL"]', default_market: 'CL', user_status: 'activo', valid_from: PAST, valid_until: null },
     ],
   });
   const identity = await resolveRoleIdentity(db, 'ejecutivo.cl@example.com', 'req-1');
   assert.equal(identity.role, 'ejecutivo');
   assert.deepEqual(identity.allowedMarkets, ['CL']);
+  assert.equal(identity.defaultMarket, 'CL');
   assert.equal(identity.userStatus, 'activo');
   assert.equal(identity.permissions, PERMISSIONS.ejecutivo);
+});
+
+test('resolveRoleIdentity() — mercado predeterminado puede diferir del primero de allowedMarkets (ej. Brenda: CL,AR pero default AR)', async () => {
+  const db = fakeDb({
+    usuarios: [{ id: 10, email: 'multi.mercado@example.com', nombre: 'Multi' }],
+    asignaciones: [
+      { usuario_id: 10, role: 'admin', allowed_markets: '["CL","AR"]', default_market: 'AR', user_status: 'activo', valid_from: PAST, valid_until: null },
+    ],
+  });
+  const identity = await resolveRoleIdentity(db, 'multi.mercado@example.com', 'req-1b');
+  assert.deepEqual(identity.allowedMarkets, ['CL', 'AR']);
+  assert.equal(identity.defaultMarket, 'AR');
+});
+
+test('resolveRoleIdentity() — si default_market viene vacío en la fila, cae al primer mercado autorizado (nunca a uno fijo)', async () => {
+  const db = fakeDb({
+    usuarios: [{ id: 11, email: 'sin.default@example.com', nombre: 'Sin Default' }],
+    asignaciones: [
+      { usuario_id: 11, role: 'ejecutivo', allowed_markets: '["AR"]', default_market: null, user_status: 'activo', valid_from: PAST, valid_until: null },
+    ],
+  });
+  const identity = await resolveRoleIdentity(db, 'sin.default@example.com', 'req-1c');
+  assert.equal(identity.defaultMarket, 'AR');
 });
 
 test('resolveRoleIdentity() — email no registrado en usuarios queda bloqueado', async () => {

@@ -74,7 +74,7 @@ export async function resolveRoleIdentity(db, email, requestId) {
   try {
     assignmentRow = await db
       .prepare(
-        `SELECT role, allowed_markets, user_status, valid_from, valid_until
+        `SELECT role, allowed_markets, default_market, user_status, valid_from, valid_until
          FROM asignaciones_rol
          WHERE usuario_id = ?
            AND (valid_until IS NULL OR valid_until > datetime('now'))
@@ -100,11 +100,16 @@ export async function resolveRoleIdentity(db, email, requestId) {
     throw new AuthzError('unknown_role');
   }
 
+  const allowedMarkets = parseAllowedMarkets(assignmentRow.allowed_markets);
   return {
     email: userRow.email,
     nombre: userRow.nombre,
     role,
-    allowedMarkets: parseAllowedMarkets(assignmentRow.allowed_markets),
+    allowedMarkets,
+    // Defensivo: si por algún motivo default_market quedó vacío (no debería,
+    // ver migración 0005), cae al primer mercado autorizado — nunca a un
+    // mercado fijo hardcodeado ni a "sin mercado".
+    defaultMarket: assignmentRow.default_market || allowedMarkets[0] || null,
     userStatus: assignmentRow.user_status,
     validFrom: assignmentRow.valid_from,
     validUntil: assignmentRow.valid_until,

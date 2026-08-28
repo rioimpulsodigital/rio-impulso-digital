@@ -418,13 +418,15 @@
 <script src="../assets/js/main.js?v=20260627" defer></script>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', async function () {
 
   // Override de fecha solo para pruebas — nunca se expone en la interfaz.
   // Ej: capacitacion-ficha-landing.html?debugDate=2026-10-01
   var DEBUG_DATE = new URLSearchParams(window.location.search).get('debugDate') || undefined;
 
-  var executive = resolveExecutive();
+  // RIO-111: resolveExecutive() consulta /interno/api/identidad/whoami
+  // (D1, verificado en el servidor) — ya no hay un USER_MAP local.
+  var executive = await resolveExecutive();
   if (!executive) {
     document.getElementById('blockedScreen').style.display = 'block';
     document.getElementById('blockedScreen').innerHTML =
@@ -432,7 +434,7 @@ document.addEventListener('DOMContentLoaded', function () {
         '<p class="portal-blocked-title">Tu cuenta no tiene un mercado comercial asignado todavía.</p>' +
         '<p class="portal-blocked-desc">Contacta a Brenda o al administrador para habilitarlo antes de usar esta sección.</p>' +
       '</div>';
-    console.warn('[Capacitación RiO] Usuario autenticado sin mercado configurado en USER_MAP — acceso bloqueado.');
+    console.warn('[Capacitación RiO] Identidad no resuelta por el servidor (whoami) — acceso bloqueado.');
     return;
   }
 

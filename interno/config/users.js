@@ -1,59 +1,72 @@
 /*
- * Fuente única de identidad y mercado — Portal Interno RiO Impulso Digital.
- * Consumida por interno/index.html y interno/kit-venta-ficha-y-landing-page.html.
- * Arquitectura: RIO-91. Mapeo de ejecutivos confirmado por Brenda (RIO-91, sección 17).
+ * Identidad y mercado — Portal Interno RiO Impulso Digital.
  *
- * No duplicar este archivo ni su contenido en otras páginas del Portal.
+ * RIO-111: la fuente de autoridad para usuarios, rol, mercados autorizados y
+ * mercado predeterminado es D1 — este archivo ya NO contiene esa lista.
+ * Antes tenía un USER_MAP hardcodeado que duplicaba exactamente lo que D1
+ * ahora modela (riesgo #1 señalado desde RIO-97/RIO-108: dos listas que
+ * podían desincronizarse — ya pasó una vez, ver RIO-124/125). Este archivo
+ * consulta /interno/api/identidad/whoami (autenticado por Cloudflare
+ * Access, resuelto server-side contra D1 — ver migrations/0003_identity.sql
+ * y functions/_shared/authz.js) y expone el mismo contrato que ya usaban
+ * interno/index.html, kit-venta-ficha-y-landing-page.html y
+ * capacitacion-ficha-landing.html, para no reescribir esas páginas más de
+ * lo necesario.
+ *
+ * Nada de este archivo decide si alguien está autorizado — solo pide esa
+ * decisión al backend y expone el resultado. La autorización real de cada
+ * endpoint de datos (cuando existan, RIO-112+) se valida de nuevo en el
+ * servidor, igual que whoami — este archivo nunca es la fuente de verdad.
  */
-
-const USER_MAP = {
-  'albertoperezmatta@gmail.com':            { name: 'Alberto',           defaultMarket: 'CL', allowedMarkets: ['CL', 'AR'] },
-  'gabrielaaleroa@gmail.com':               { name: 'Gabriela',          defaultMarket: 'CL', allowedMarkets: ['CL'] },
-  'jotaherre024@gmail.com':                 { name: 'Julia',             defaultMarket: 'CL', allowedMarkets: ['CL'] },
-  'lorenaramirezfuentealba@gmail.com':      { name: 'Lorena',            defaultMarket: 'CL', allowedMarkets: ['CL'] },
-  'fjamis@gmail.com':                       { name: 'Fuad',              defaultMarket: 'CL', allowedMarkets: ['CL'] },
-  'mchristian.reyes@gmail.com':             { name: 'Manuel Christian',  defaultMarket: 'CL', allowedMarkets: ['CL'] },
-  'araujochristianwalterdejesus@gmail.com': { name: 'Christian',         defaultMarket: 'AR', allowedMarkets: ['AR'] },
-  'lore_1212@hotmail.com':                  { name: 'Nina',              defaultMarket: 'AR', allowedMarkets: ['AR'] },
-  'mholsbachperalta@gmail.com':             { name: 'Maira',             defaultMarket: 'AR', allowedMarkets: ['AR'] },
-  'brenda@rioimpulsodigital.com':           { name: 'Brenda',            defaultMarket: 'AR', allowedMarkets: ['CL', 'AR'] }
-};
 
 const MARKET_STORAGE_PREFIX = 'rio_portal_market:';
 
-// RIO-98: la clave de localStorage incluye el correo del ejecutivo. Antes había una
-// única clave global ('rio_portal_market') compartida por cualquier usuario multimercado
-// en el mismo navegador — una preferencia de Brenda podía filtrarse a Alberto (u otro
-// ejecutivo multimercado futuro) si compartían dispositivo. Con la clave por usuario,
-// cada ejecutivo lee y guarda únicamente su propia preferencia.
+// RIO-98: la clave de localStorage incluye el correo del ejecutivo — cada
+// ejecutivo lee y guarda únicamente su propia preferencia, sin cambios en
+// RIO-111 (esto es una comodidad de interfaz, no una decisión de acceso: el
+// valor guardado siempre se valida contra allowedMarkets ya verificado por
+// el servidor antes de usarse — ver resolveActiveMarket()).
 function marketStorageKey(executive) {
   return MARKET_STORAGE_PREFIX + executive.email;
 }
 
-function getCFUserEmail() {
-  const cookie = document.cookie.split('; ').find(r => r.startsWith('CF_Authorization='));
-  if (!cookie) return null;
+// Resuelve la identidad autenticada consultando el backend — nunca una
+// lista local. Devuelve { email, name, defaultMarket, allowedMarkets } o
+// null si el correo no está registrado, no tiene una asignación vigente, o
+// está inactivo (401/403/404 del endpoint) — null sigue significando
+// "bloqueado", nunca "Chile por defecto" (mismo criterio de RIO-91, ahora
+// verificado en el servidor en vez de solo en el navegador).
+async function resolveExecutive() {
+  let response;
   try {
-    const payload = JSON.parse(atob(cookie.split('=')[1].split('.')[1]));
-    return payload.email || null;
+    response = await fetch('/interno/api/identidad/whoami', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    });
+  } catch (e) {
+    return null; // sin red o backend no disponible — bloqueado, no un mercado por defecto.
+  }
+  if (!response.ok) return null; // 401/403/404: sin sesión válida, no registrado, o inactivo.
+  let body;
+  try {
+    body = await response.json();
   } catch (e) {
     return null;
   }
-}
-
-// Devuelve { email, name, defaultMarket, allowedMarkets } o null si el correo
-// autenticado no está registrado — null significa "bloqueado", nunca "Chile por defecto".
-function resolveExecutive() {
-  const email = getCFUserEmail();
-  const entry = email ? USER_MAP[email] : null;
-  return entry ? Object.assign({ email: email }, entry) : null;
+  if (!body || !body.ok || !body.data) return null;
+  return {
+    email: body.data.email,
+    name: body.data.nombre,
+    defaultMarket: body.data.defaultMarket,
+    allowedMarkets: body.data.allowedMarkets,
+  };
 }
 
 // Resuelve el mercado activo para un ejecutivo ya identificado.
 // - Un solo mercado autorizado → ese mercado siempre, localStorage se ignora por completo.
-// - Más de un mercado autorizado (hoy, Brenda y Alberto) → preferencia guardada si es válida,
+// - Más de un mercado autorizado → preferencia guardada si es válida,
 //   si no existe o no pertenece a allowedMarkets, cae a defaultMarket. Nunca acepta un
-//   valor de localStorage que no esté en allowedMarkets.
+//   valor de localStorage que no esté en allowedMarkets (ambos ya verificados por el servidor).
 function resolveActiveMarket(executive) {
   if (!executive) return null;
   if (executive.allowedMarkets.length === 1) {

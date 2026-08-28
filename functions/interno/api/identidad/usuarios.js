@@ -26,7 +26,7 @@ export async function onRequest(context) {
   const rows = await query(
     env.DB,
     requestId,
-    `SELECT u.email, u.nombre, a.role, a.allowed_markets, a.user_status, a.valid_from, a.valid_until
+    `SELECT u.email, u.nombre, a.role, a.allowed_markets, a.default_market, a.user_status, a.valid_from, a.valid_until
      FROM usuarios u
      JOIN asignaciones_rol a ON a.usuario_id = u.id
        AND (a.valid_until IS NULL OR a.valid_until > datetime('now'))
@@ -39,6 +39,7 @@ export async function onRequest(context) {
     nombre: r.nombre,
     role: r.role,
     allowedMarkets: JSON.parse(r.allowed_markets),
+    defaultMarket: r.default_market,
     userStatus: r.user_status,
     validFrom: r.valid_from,
     validUntil: r.valid_until,
