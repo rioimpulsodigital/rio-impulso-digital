@@ -10,6 +10,7 @@ desktop.ini
 # Local env / secrets
 .env
 .env.local
+.cloudflare-api-token.local
 
 # Logs
 *.log
