@@ -15,6 +15,8 @@
 // comisión en este archivo ni en todo RIO-113 (RIO-114 es aparte).
 
 import { query, execute } from './db.js';
+import { logEvento } from './historial.js';
+import { procesarPagoAcreditadoParaComisiones } from './comisiones.js';
 
 export class ProyectoError extends Error {
   constructor(code, message) {
@@ -22,22 +24,6 @@ export class ProyectoError extends Error {
     this.name = 'ProyectoError';
     this.code = code; // código estable para el frontend — nunca se inventa un texto libre.
   }
-}
-
-// Registra un evento en el historial append-only. Nunca se hace UPDATE ni
-// DELETE sobre eventos_historial en ningún otro lugar del código — esta es
-// la única función que escribe en esa tabla.
-export async function logEvento(db, requestId, {
-  ventaId, entidad, entidadId, estadoAnterior, estadoNuevo, usuarioEmail,
-  motivoNota, proximaAccion, responsableProximaAccion,
-}) {
-  await execute(
-    db, requestId,
-    `INSERT INTO eventos_historial
-       (id, venta_id, entidad, entidad_id, estado_anterior, estado_nuevo, usuario_email, motivo_nota, proxima_accion, responsable_proxima_accion)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [crypto.randomUUID(), ventaId, entidad, entidadId, estadoAnterior || null, estadoNuevo, usuarioEmail, motivoNota || null, proximaAccion || null, responsableProximaAccion || null]
-  );
 }
 
 // Carga venta + proyecto + componentes + pagos esperados de una venta.
@@ -298,6 +284,13 @@ export async function acreditarPago(db, requestId, { ventaId, pagoId, montoAcred
     estadoAnterior: 'informado', estadoNuevo: 'acreditado', usuarioEmail: actorEmail,
   });
 
+  // RIO-114: un pago acreditado puede iniciar el plazo de resguardo de la
+  // comisión (si es el primer pago) y/o marcar "pago total acreditado" (si
+  // era el último pendiente) — nunca bloquea ni revierte la acreditación
+  // del pago si algo de esto fallara, es una consecuencia contable, no una
+  // condición del pago en sí.
+  await procesarPagoAcreditadoParaComisiones(db, requestId, { ventaId, pagoTipo: pago.tipo, actorEmail });
+
   let gate = null;
   if (pago.tipo === 'saldo') {
     gate = await evaluateLandingGate(db, requestId, ventaId, actorEmail);
@@ -332,4 +325,24 @@ export async function registrarIncidencia(db, requestId, { ventaId, tipo, motivo
     estadoNuevo: `${tipo}:abierta`, usuarioEmail: actorEmail, motivoNota: motivo,
   });
   return id;
+}
+
+// Resuelve una incidencia — necesario para que "venta firme y sin disputa"
+// (condición de habilitación de comisión, RIO-114) pueda dejar de estar
+// bloqueada si la disputa se resuelve. Exclusivo de administración (se
+// valida en el endpoint, igual que registrarIncidencia).
+export async function resolverIncidencia(db, requestId, { incidenciaId, actorEmail }) {
+  const rows = await query(db, requestId, 'SELECT * FROM incidencias WHERE id = ?', [incidenciaId]);
+  const incidencia = rows[0];
+  if (!incidencia) throw new ProyectoError('incidencia_no_encontrada', 'Incidencia no encontrada.');
+  if (incidencia.estado === 'resuelta') {
+    throw new ProyectoError('ya_resuelta', 'Esta incidencia ya estaba resuelta.');
+  }
+
+  await execute(db, requestId, "UPDATE incidencias SET estado = 'resuelta', resuelta_at = datetime('now') WHERE id = ?", [incidenciaId]);
+  await logEvento(db, requestId, {
+    ventaId: incidencia.venta_id, entidad: 'incidencia', entidadId: incidenciaId,
+    estadoAnterior: `${incidencia.tipo}:abierta`, estadoNuevo: `${incidencia.tipo}:resuelta`, usuarioEmail: actorEmail,
+  });
+  return incidencia.venta_id;
 }

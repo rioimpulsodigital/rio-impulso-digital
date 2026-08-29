@@ -30,8 +30,23 @@ function roleIdentity(overrides = {}) {
 // ventas/index.js y ventas/[id].js — INSERT vía batch() y los SELECT con
 // join a clientes. No es un motor SQL real, pero respeta el mismo
 // contrato prepare().bind().all()/.first() y batch() que usa el código.
+const PRODUCTOS = ['ficha', 'generico', 'personalizado', 'ficha_generico', 'ficha_personalizado'];
+
 function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [], pagos_esperados: [] }) {
   seed.pagos_esperados = seed.pagos_esperados || [];
+  // RIO-114: ventas/index.js ahora también genera comisiones al crear una
+  // venta — se siembra la misma tasa confirmada por Brenda (comercial 40%
+  // en los 5 productos vigentes) para poder probar esa generación real, en
+  // vez de que falle en silencio (el código la tolera, pero acá se quiere
+  // ejercitarla de verdad).
+  seed.planes_comision = seed.planes_comision || PRODUCTOS.map((producto) => ({
+    id: `plan-comercial-${producto}`, tipo: 'comercial', producto, porcentaje: 40, base: 'utilidad_neta_venta', valid_until: null,
+  }));
+  seed.costos_directos = seed.costos_directos || [];
+  seed.comisiones = seed.comisiones || [];
+  seed.eventos_historial = seed.eventos_historial || [];
+  seed.usuarios = seed.usuarios || [];
+  seed.asignaciones_rol = seed.asignaciones_rol || [];
   const state = seed;
 
   function makeStatement(sql) {
@@ -66,6 +81,13 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
       state.componentes.push({ id: p[0], proyecto_id: p[1], tipo: p[2], precio_individual_referencia: p[3], precio_atribuido: p[4], estado_actual: p[5], materiales_estado: 'pendiente' });
     } else if (sql.startsWith('INSERT INTO pagos_esperados')) {
       state.pagos_esperados.push({ id: p[0], venta_id: p[1], tipo: p[2], monto: p[3], moneda: p[4], estado: 'pendiente' });
+    } else if (sql.startsWith('INSERT INTO comisiones')) {
+      state.comisiones.push({
+        id: p[0], tipo: p[1], venta_id: p[2], componente_id: p[3], beneficiario_email: p[4], plan_id: p[5],
+        porcentaje_snapshot: p[6], base_snapshot: p[7], monto_base: p[8], moneda: p[9], monto_comision: p[10], estado: 'calculada_provisional',
+      });
+    } else if (sql.startsWith('INSERT INTO eventos_historial')) {
+      state.eventos_historial.push({ id: p[0], venta_id: p[1], entidad: p[2], entidad_id: p[3] });
     } else {
       throw new Error('INSERT inesperado en test: ' + sql);
     }
@@ -93,10 +115,23 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
     if (sql.startsWith('SELECT * FROM pagos_esperados WHERE venta_id')) {
       return state.pagos_esperados.filter((pg) => pg.venta_id === p[0]);
     }
+    if (sql.startsWith('SELECT monto FROM costos_directos WHERE componente_id')) {
+      return state.costos_directos.filter((c) => c.componente_id === p[0]);
+    }
+    if (sql.includes('FROM planes_comision')) {
+      return state.planes_comision.filter((pl) => pl.tipo === p[0] && pl.producto === p[1] && !pl.valid_until);
+    }
+    if (sql.includes('FROM usuarios u JOIN asignaciones_rol a')) {
+      return state.usuarios
+        .map((u) => ({ u, a: state.asignaciones_rol.find((a) => a.usuario_id === u.id && a.role === 'supervisor' && !a.valid_until) }))
+        .filter((x) => x.a)
+        .map((x) => ({ email: x.u.email, allowed_markets: x.a.allowed_markets }));
+    }
     throw new Error('SELECT inesperado en test: ' + sql);
   }
 
   return {
+    _state: state,
     prepare: (sql) => makeStatement(sql),
     batch: async (statements) => {
       for (const stmt of statements) {
@@ -137,6 +172,44 @@ test('POST /ventas — crea una venta individual con un solo componente', async 
   assert.equal(body.data.componentes.length, 1);
   assert.equal(body.data.componentes[0].precioAtribuido, 50000);
   assert.equal(body.data.componentes[0].estadoActual, 'pendiente');
+});
+
+test('POST /ventas — genera la comisión comercial (40% confirmado) sobre la utilidad neta de la venta, sin costos directos todavía', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  const response = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }));
+  assert.equal(response.status, 201);
+  assert.equal(db._state.comisiones.length, 1, 'sin supervisor sembrado, solo debe generarse la comercial');
+  const comision = db._state.comisiones[0];
+  assert.equal(comision.tipo, 'comercial');
+  assert.equal(comision.beneficiario_email, ri.email);
+  assert.equal(comision.porcentaje_snapshot, 40);
+  assert.equal(comision.monto_base, 50000); // sin costos directos, utilidad neta = precio pactado.
+  assert.equal(comision.monto_comision, 20000); // 40% de 50000.
+  assert.equal(comision.estado, 'calculada_provisional');
+});
+
+test('POST /ventas — un producto sin tasa de comisión configurada genera la comisión igual, pero sin inventar un porcentaje', async () => {
+  const db = fakeDb({ clientes: [], ventas: [], proyectos: [], componentes: [], pagos_esperados: [], planes_comision: [] });
+  const ri = roleIdentity();
+  const response = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }));
+  assert.equal(response.status, 201);
+  assert.equal(db._state.comisiones.length, 1);
+  assert.equal(db._state.comisiones[0].porcentaje_snapshot, null);
+  assert.equal(db._state.comisiones[0].monto_comision, null, 'sin tasa vigente, nunca se inventa un 0% ni ningún otro número');
+});
+
+test('POST /ventas — genera además una comisión de supervisión por cada supervisor activo del mercado de la venta', async () => {
+  const db = fakeDb();
+  db._state.usuarios.push({ id: 1, email: 'supervisor.cl@example.com' });
+  db._state.asignaciones_rol.push({ usuario_id: 1, role: 'supervisor', allowed_markets: '["CL"]', valid_until: null });
+  const ri = roleIdentity();
+  const response = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }));
+  assert.equal(response.status, 201);
+  assert.equal(db._state.comisiones.length, 2);
+  const supervision = db._state.comisiones.find((c) => c.tipo === 'supervision');
+  assert.ok(supervision);
+  assert.equal(supervision.beneficiario_email, 'supervisor.cl@example.com');
 });
 
 test('POST /ventas — crea un pack con dos componentes, precio distribuido y Landing bloqueada desde el inicio', async () => {

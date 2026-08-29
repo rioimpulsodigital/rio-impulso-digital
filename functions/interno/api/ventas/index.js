@@ -24,6 +24,7 @@ import { query, transaction } from '../../../_shared/db.js';
 import { assertMarketAllowed, AuthzError } from '../../../_shared/authz.js';
 import { isMethodAllowed, hasExpectedContentType, isBodyTooLarge } from '../../../_shared/security.js';
 import { isValidPrice, splitPackPrice, CURRENCY_BY_MARKET } from '../../../_shared/pricing.js';
+import { generarComisionesParaVenta } from '../../../_shared/comisiones.js';
 
 const PACK_LANDING_PRODUCT = {
   ficha_generico: 'generico',
@@ -170,13 +171,13 @@ async function handleCreate(context) {
       return Errors.validation('No se pudo calcular la distribución del pack.', requestId);
     }
     componentesPlan = [
-      { tipo: 'ficha', precioIndividualReferencia: precioFichaIndividual, precioAtribuido: split.precioFicha, estado: 'pendiente' },
-      { tipo: 'landing', precioIndividualReferencia: precioLandingIndividual, precioAtribuido: split.precioLanding, estado: 'bloqueada' },
+      { id: crypto.randomUUID(), tipo: 'ficha', precioIndividualReferencia: precioFichaIndividual, precioAtribuido: split.precioFicha, estado: 'pendiente' },
+      { id: crypto.randomUUID(), tipo: 'landing', precioIndividualReferencia: precioLandingIndividual, precioAtribuido: split.precioLanding, estado: 'bloqueada' },
     ];
   } else {
     const tipo = producto === 'ficha' ? 'ficha' : 'landing';
     componentesPlan = [
-      { tipo, precioIndividualReferencia: precioPactado, precioAtribuido: precioPactado, estado: 'pendiente' },
+      { id: crypto.randomUUID(), tipo, precioIndividualReferencia: precioPactado, precioAtribuido: precioPactado, estado: 'pendiente' },
     ];
   }
 
@@ -211,7 +212,7 @@ async function handleCreate(context) {
       .bind(proyectoId, ventaId, codigoProyecto),
     ...componentesPlan.map((c) =>
       db.prepare('INSERT INTO componentes (id, proyecto_id, tipo, precio_individual_referencia, precio_atribuido, estado_actual) VALUES (?, ?, ?, ?, ?, ?)')
-        .bind(crypto.randomUUID(), proyectoId, c.tipo, c.precioIndividualReferencia, c.precioAtribuido, c.estado)
+        .bind(c.id, proyectoId, c.tipo, c.precioIndividualReferencia, c.precioAtribuido, c.estado)
     ),
     ...pagosPlan.map((p) =>
       db.prepare('INSERT INTO pagos_esperados (id, venta_id, tipo, monto, moneda) VALUES (?, ?, ?, ?, ?)')
@@ -223,6 +224,19 @@ async function handleCreate(context) {
     await transaction(db, requestId, statements);
   } catch (e) {
     return Errors.internal(requestId);
+  }
+
+  try {
+    // RIO-114: comisión comercial (+ supervisión si corresponde) — nunca
+    // condiciona la venta ya registrada. Si falla, la venta queda creada
+    // igual (es una consecuencia contable, no un requisito para vender) y
+    // el error queda solo en el log técnico.
+    await generarComisionesParaVenta(db, requestId, {
+      ventaId, vendedorEmail: roleIdentity.email, mercado, producto, moneda,
+      componentes: componentesPlan.map((c) => ({ id: c.id, precio_atribuido: c.precioAtribuido })),
+    });
+  } catch (e) {
+    console.error(JSON.stringify({ requestId, scope: 'comisiones', reason: 'generacion_fallida' }));
   }
 
   return ok(
@@ -238,7 +252,7 @@ async function handleCreate(context) {
         vendedorEmail: roleIdentity.email,
       },
       proyecto: { id: proyectoId, codigoProyecto },
-      componentes: componentesPlan.map((c) => ({ tipo: c.tipo, precioAtribuido: c.precioAtribuido, estadoActual: c.estado })),
+      componentes: componentesPlan.map((c) => ({ id: c.id, tipo: c.tipo, precioAtribuido: c.precioAtribuido, estadoActual: c.estado })),
       pagosEsperados: pagosPlan.map((p) => ({ tipo: p.tipo, monto: p.monto })),
     },
     requestId,

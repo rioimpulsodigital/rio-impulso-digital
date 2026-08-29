@@ -25,6 +25,7 @@ function fakeDb() {
     acreditaciones: [],
     eventos_historial: [],
     incidencias: [],
+    comisiones: [], // RIO-114: acreditarPago() ahora también consulta comisiones — ninguna se siembra en este suite (fuera de su alcance), así que siempre vacío.
   };
 
   function makeStatement(sql) {
@@ -86,6 +87,7 @@ function fakeDb() {
     if (sql.startsWith('SELECT * FROM pagos_informados WHERE pago_esperado_id')) {
       return state.pagos_informados.filter((x) => x.pago_esperado_id === p[0]).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     }
+    if (sql.includes('FROM comisiones WHERE venta_id')) return state.comisiones.filter((c) => c.venta_id === p[0]);
     throw new Error('consulta inesperada en test: ' + sql);
   }
 
