@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { onRequest as ventasHandler } from '../functions/interno/api/ventas/index.js';
 import { onRequest as ventaDetailHandler } from '../functions/interno/api/ventas/[id].js';
 import { PERMISSIONS } from '../functions/_shared/authz.js';
+import { MARKETS } from '../interno/config/markets.js';
 
 function roleIdentity(overrides = {}) {
   return {
@@ -273,4 +274,29 @@ test('método no permitido en /ventas (DELETE) — 405', async () => {
   const db = fakeDb();
   const response = await ventasHandler(fakeContext({ method: 'DELETE', roleIdentity: roleIdentity(), db }));
   assert.equal(response.status, 405);
+});
+
+test('un cambio posterior en el precio canónico (markets.js) NO altera una venta ya registrada (snapshot inmutable)', async () => {
+  const db = fakeDb();
+  const a = roleIdentity({ email: 'ejecutivo.a@example.com' });
+  const precioOriginal = MARKETS.CL.products.ficha.promo;
+
+  const createResponse = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: a, db }));
+  assert.equal(createResponse.status, 201);
+  const created = (await createResponse.json()).data.venta;
+  assert.equal(created.precioPactado, precioOriginal);
+
+  // Simula que el precio canónico cambió después de registrada la venta
+  // (ej. una nueva campaña) — mutamos el mismo objeto MARKETS importado
+  // que usa pricing.js, sin tocar la venta ya guardada.
+  const backup = MARKETS.CL.products.ficha.promo;
+  MARKETS.CL.products.ficha.promo = precioOriginal + 12345;
+  try {
+    const detailResponse = await ventaDetailHandler(fakeContext({ roleIdentity: a, db, params: { id: created.id } }));
+    const detailBody = await detailResponse.json();
+    assert.equal(detailBody.data.venta.precioPactado, precioOriginal, 'la venta histórica debe conservar el precio con el que se pactó, no el nuevo precio canónico');
+    assert.notEqual(detailBody.data.venta.precioPactado, MARKETS.CL.products.ficha.promo);
+  } finally {
+    MARKETS.CL.products.ficha.promo = backup; // no contaminar otras pruebas.
+  }
 });

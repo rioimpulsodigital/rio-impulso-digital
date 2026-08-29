@@ -228,3 +228,19 @@ test('assertCanAccessOwner() — un supervisor NO puede acceder a un recurso de 
     return true;
   });
 });
+
+test('supervisor y admin tienen capacidades distintas, pero ambos quedan igualmente limitados a su propio allowedMarkets (RIO-112, seguimiento del gap de RIO-111)', () => {
+  // Capacidades distintas: solo admin administra usuarios.
+  assert.equal(PERMISSIONS.admin.manageUsers, true);
+  assert.equal(PERMISSIONS.supervisor.manageUsers, false);
+
+  // Mismo mercado autorizado ['CL'] para ambos roles — ninguno de los dos
+  // puede acceder a un recurso de AR, sin importar el rol.
+  const supervisorSoloCl = { email: 'supervisor.cl@example.com', allowedMarkets: ['CL'], permissions: PERMISSIONS.supervisor };
+  const adminSoloCl = { email: 'admin.cl@example.com', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin };
+  for (const identity of [supervisorSoloCl, adminSoloCl]) {
+    assert.throws(() => assertCanAccessOwner(identity, 'ejecutivo.ar@example.com', 'AR'), AuthzError,
+      `${identity.permissions === PERMISSIONS.admin ? 'admin' : 'supervisor'} sin AR en allowedMarkets no debería poder acceder a un recurso de AR`);
+    assert.doesNotThrow(() => assertCanAccessOwner(identity, 'ejecutivo.cl@example.com', 'CL'));
+  }
+});

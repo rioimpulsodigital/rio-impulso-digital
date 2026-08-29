@@ -1,77 +1,50 @@
 // Precios y distribución proporcional de packs — RIO-112.
 //
-// DECISIÓN DE DISEÑO A CONFIRMAR CON BRENDA (documentada, no silenciosa):
-// interno/config/markets.js es la fuente de precios que ya usa el Kit hoy,
-// pero es un script clásico (`var MARKETS = {...}`, sin `export`) pensado
-// para cargarse con <script src> en el navegador — no es importable
-// directamente por una Pages Function (ES module). Convertirlo a módulo
-// ES rompería el orden de carga de las páginas que ya lo consumen así
-// (kit-venta-ficha-y-landing-page.html, capacitacion-ficha-landing.html),
-// un riesgo real sobre páginas que se usan a diario, y fuera del alcance
-// de "ventas, proyectos y componentes" que pide RIO-112.
+// Fuente canónica única de precios: interno/config/markets.js — este
+// módulo la IMPORTA directamente, nunca copia sus valores. Decisión
+// tomada tras auditoría de Brenda (28/08/2026): markets.js pasó a ser un
+// módulo ES (además de las funciones que ya tenía) precisamente para que
+// tanto el navegador (<script type="module">) como esta Pages Function
+// (`import`) lean el mismo archivo — ver el encabezado de markets.js para
+// el detalle completo de esa decisión y por qué no se optó por JSON
+// estático ni por que el backend le pregunte algo al frontend.
 //
-// Por eso esta tabla es una copia deliberada, no una importación — mismo
-// tipo de decisión que RIO-97 v2 ya aceptó para `users.js` (mantenerlo
-// separado de D1 para lo que hace bien), pero acá el riesgo es distinto:
-// los precios cambian rara vez y siempre de forma deliberada y revisada
-// por Brenda (RIO-92/93), a diferencia del plantel de ejecutivos. Aun así,
-// es una segunda lista que puede desincronizarse — si Brenda prefiere que
-// el servidor lea la fuente única real, la alternativa (convertir
-// markets.js a módulo ES con export + reasignación a `window` para no
-// romper los scripts clásicos existentes) queda lista para hacerse en una
-// tarea aparte.
-//
-// Mientras tanto: el precio pactado de la venta lo define el ejecutivo en
-// el Kit (ya usa esta misma tabla hoy) y se envía al crear la venta — este
-// módulo solo VALIDA que ese precio sea uno de los vigentes (regular o de
-// lanzamiento) para ese producto/mercado, y hace el prorrateo del pack con
-// los precios individuales de referencia que también viajan en la
-// solicitud (ver functions/interno/api/ventas/index.js).
+// Este archivo NO lee el código fuente de markets.js como texto ni con
+// expresiones regulares — es un `import` de ES modules estándar,
+// resuelto y empaquetado por el bundler de Pages Functions como cualquier
+// otro import del proyecto.
 
-export const PROMO_END_DATE = '2026-09-30';
-
-export const PRICE_TABLE = Object.freeze({
-  CL: {
-    ficha: { regular: 130000, promo: 50000 },
-    generico: { regular: 105000, promo: 50000 },
-    personalizado: { regular: 130000, promo: 60000 },
-    ficha_generico: { regular: 210000, promo: 90000 },
-    ficha_personalizado: { regular: 235000, promo: 100000 },
-  },
-  AR: {
-    ficha: { regular: 215000, promo: 125000 },
-    generico: { regular: 185000, promo: 120000 },
-    personalizado: { regular: 230000, promo: 150000 },
-    ficha_generico: { regular: 360000, promo: 220000 },
-    ficha_personalizado: { regular: 400000, promo: 250000 },
-  },
-});
+import { MARKETS, isPromoActive as isPromoActiveCanonical, getActivePrice } from '../../interno/config/markets.js';
 
 export const CURRENCY_BY_MARKET = Object.freeze({ CL: 'CLP', AR: 'ARS' });
 
-export function isPromoActive(referenceDate) {
-  const now = referenceDate ? new Date(referenceDate) : new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  const todayUTC = `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}`;
-  return todayUTC <= PROMO_END_DATE;
-}
+export const isPromoActive = isPromoActiveCanonical;
 
 // Valida que un precio pactado corresponda a uno de los dos precios
-// vigentes (regular o lanzamiento) para ese producto/mercado en la fecha
-// dada — nunca acepta un valor arbitrario del cliente.
+// vigentes (regular o de campaña) para ese producto/mercado en la fecha
+// dada — nunca acepta un valor arbitrario enviado por el cliente. Usa
+// getActivePrice() de la fuente canónica, no una copia propia.
 export function isValidPrice(market, product, tipoPrecio, precio, referenceDate) {
-  const entry = PRICE_TABLE[market]?.[product];
+  const entry = MARKETS[market]?.products?.[product];
   if (!entry) return false;
+  if (tipoPrecio === 'lanzamiento' && !isPromoActive(referenceDate)) return false; // no se puede pactar una promo vencida.
   const expected = tipoPrecio === 'lanzamiento' ? entry.promo : entry.regular;
-  if (tipoPrecio === 'lanzamiento' && !isPromoActive(referenceDate)) return false; // no se puede pactar promo vencida.
   return precio === expected;
 }
 
+// Precio individual vigente de un producto — usado por ventas/index.js
+// para validar los precios de referencia del prorrateo de un pack contra
+// la fuente canónica (nunca acepta un valor de referencia arbitrario).
+export function currentIndividualPrice(market, product, referenceDate) {
+  return getActivePrice(market, product, referenceDate);
+}
+
 // Distribución proporcional del precio de un pack entre sus dos
-// componentes, usando los precios individuales de referencia (RIO-97 v2
-// sección 6). Redondea el primero (ficha) y calcula el segundo (landing)
-// como el resto — garantiza que la suma sea EXACTAMENTE precioPactado,
-// sin arrastre de redondeo.
+// componentes, usando los precios individuales de referencia vigentes al
+// momento de la venta (RIO-97 v2 sección 6 · RIO-112). Redondea el primero
+// (ficha) y calcula el segundo (landing) como el resto — garantiza que la
+// suma sea EXACTAMENTE precioPactado, sin arrastre de redondeo, sin
+// importar cuán "feos" sean los números de entrada.
 export function splitPackPrice(precioPactado, precioFichaIndividual, precioLandingIndividual) {
   const totalIndividual = precioFichaIndividual + precioLandingIndividual;
   if (totalIndividual <= 0) throw new RangeError('la suma de precios individuales debe ser mayor a cero');

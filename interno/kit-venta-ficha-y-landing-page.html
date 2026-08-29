@@ -931,7 +931,9 @@
 </footer>
 
 <script src="./config/users.js"></script>
-<script src="./config/markets.js"></script>
+<!-- RIO-112: markets.js es modulo ES (fuente canonica de precios, compartida
+     con el backend via import) -- ver interno/config/markets.js. -->
+<script type="module" src="./config/markets.js"></script>
 <script src="../assets/js/main.js?v=20260627" defer></script>
 
 <script>
@@ -1617,7 +1619,12 @@
     applyFichaState();
   }
 
-  (async function initUser(){
+  // RIO-112: config/markets.js pasó a ser <script type="module"> (fuente
+  // canónica de precios compartida con el backend) — los módulos siempre
+  // se ejecutan diferidos, así que esperamos a DOMContentLoaded para
+  // garantizar que MARKETS/getActivePrice ya existan antes de usarlos
+  // (antes este bloque corría inline, sin esperar nada).
+  document.addEventListener('DOMContentLoaded', async function initUser(){
     // RIO-111: resolveExecutive() consulta /interno/api/identidad/whoami
     // (D1, verificado en el servidor) — ya no hay un USER_MAP local.
     currentExecutive = await resolveExecutive();
@@ -1632,7 +1639,7 @@
     applyArgentinaBillingVisibility();
     renderPricing();
     initKitInteractivity();
-  })();
+  });
 </script>
 </body>
 </html>

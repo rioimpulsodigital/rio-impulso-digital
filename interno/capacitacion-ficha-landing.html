@@ -413,7 +413,9 @@
 </footer>
 
 <script src="./config/users.js" defer></script>
-<script src="./config/markets.js" defer></script>
+<!-- RIO-112: markets.js es modulo ES (fuente canonica de precios, compartida
+     con el backend via import) -- los modulos siempre son diferidos. -->
+<script type="module" src="./config/markets.js"></script>
 <script src="./config/capacitacion-contenido.js" defer></script>
 <script src="../assets/js/main.js?v=20260627" defer></script>
 
