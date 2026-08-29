@@ -180,7 +180,34 @@ export async function aprobarComponente(db, requestId, { ventaId, componenteId, 
   return { gate };
 }
 
-// Marca los materiales de un componente como completos. Si es Landing,
+// Informa la recepción de materiales de un componente (RIO-113
+// corrección, Brenda sección 4: "el vendedor recibió archivos" es un
+// dato reportado, nunca una confirmación oficial). Solo puede llamarse
+// desde 'pendiente' — no reemplaza ni adelanta la confirmación
+// administrativa de `marcarMaterialesCompletos`, y NO reevalúa el gate
+// de Landing (informado ≠ completo, igual criterio que los pagos).
+export async function marcarMaterialesInformados(db, requestId, { ventaId, componenteId, actorEmail }) {
+  const { componentes } = await loadVentaFull(db, requestId, ventaId);
+  const componente = componentes.find((c) => c.id === componenteId);
+  if (!componente) throw new ProyectoError('componente_no_encontrado', 'Componente no encontrado.');
+  if (componente.materiales_estado !== 'pendiente') {
+    throw new ProyectoError('materiales_ya_reportados', 'Los materiales de este componente ya fueron informados o confirmados como completos.');
+  }
+
+  await execute(db, requestId, "UPDATE componentes SET materiales_estado = 'informados' WHERE id = ?", [componenteId]);
+  await logEvento(db, requestId, {
+    ventaId, entidad: 'componente', entidadId: componenteId,
+    estadoAnterior: 'materiales:pendiente', estadoNuevo: 'materiales:informados', usuarioEmail: actorEmail,
+    motivoNota: 'El vendedor informó la recepción de materiales — pendiente de confirmación oficial de administración.',
+    proximaAccion: 'Confirmar si los materiales alcanzan para producción', responsableProximaAccion: null,
+  });
+}
+
+// Confirma oficialmente los materiales de un componente como completos
+// (exclusivo de administración — se valida en el endpoint). Puede
+// llamarse desde 'pendiente' o 'informados': la confirmación oficial no
+// depende de que el vendedor haya informado antes (Brenda no lo exige
+// como paso obligatorio, solo separa ambos conceptos). Si es Landing,
 // reevalúa el gate.
 export async function marcarMaterialesCompletos(db, requestId, { ventaId, componenteId, actorEmail }) {
   const { componentes } = await loadVentaFull(db, requestId, ventaId);
@@ -193,7 +220,8 @@ export async function marcarMaterialesCompletos(db, requestId, { ventaId, compon
   await execute(db, requestId, "UPDATE componentes SET materiales_estado = 'completos' WHERE id = ?", [componenteId]);
   await logEvento(db, requestId, {
     ventaId, entidad: 'componente', entidadId: componenteId,
-    estadoAnterior: 'materiales:pendiente', estadoNuevo: 'materiales:completos', usuarioEmail: actorEmail,
+    estadoAnterior: `materiales:${componente.materiales_estado}`, estadoNuevo: 'materiales:completos', usuarioEmail: actorEmail,
+    motivoNota: 'Confirmación oficial de administración: los materiales alcanzan para producción.',
   });
 
   let gate = null;
@@ -275,6 +303,19 @@ export async function acreditarPago(db, requestId, { ventaId, pagoId, montoAcred
     gate = await evaluateLandingGate(db, requestId, ventaId, actorEmail);
   }
   return { gate };
+}
+
+// Antecedente u observación libre sobre una venta (RIO-113 corrección,
+// Brenda sección 3: "agregar antecedentes u observaciones" es una
+// capacidad explícita del vendedor). Nunca cambia ningún estado oficial
+// ni de pago — es únicamente un dato reportado más en el historial
+// append-only, igual que "el cliente manifestó aprobación" en la
+// sección 4 de su corrección.
+export async function agregarAntecedente(db, requestId, { ventaId, nota, actorEmail }) {
+  await logEvento(db, requestId, {
+    ventaId, entidad: 'venta', entidadId: ventaId,
+    estadoNuevo: 'antecedente', usuarioEmail: actorEmail, motivoNota: nota,
+  });
 }
 
 // Cancelación, devolución, reclamo o disputa — nunca borra nada, solo

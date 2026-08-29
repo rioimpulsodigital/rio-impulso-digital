@@ -53,7 +53,7 @@ test('resolveRoleIdentity() — usuario con asignación vigente devuelve rol, me
   const db = fakeDb({
     usuarios: [{ id: 1, email: 'ejecutivo.cl@example.com', nombre: 'Test CL' }],
     asignaciones: [
-      { usuario_id: 1, role: 'ejecutivo', allowed_markets: '["CL"]', default_market: 'CL', user_status: 'activo', valid_from: PAST, valid_until: null },
+      { usuario_id: 1, role: 'ejecutivo', allowed_markets: '["CL"]', default_market: 'CL', can_sell: 1, user_status: 'activo', valid_from: PAST, valid_until: null },
     ],
   });
   const identity = await resolveRoleIdentity(db, 'ejecutivo.cl@example.com', 'req-1');
@@ -61,7 +61,31 @@ test('resolveRoleIdentity() — usuario con asignación vigente devuelve rol, me
   assert.deepEqual(identity.allowedMarkets, ['CL']);
   assert.equal(identity.defaultMarket, 'CL');
   assert.equal(identity.userStatus, 'activo');
+  assert.equal(identity.canSell, true);
   assert.equal(identity.permissions, PERMISSIONS.ejecutivo);
+});
+
+test('resolveRoleIdentity() — can_sell es independiente del rol: un ejecutivo puede tener can_sell = 0', async () => {
+  const db = fakeDb({
+    usuarios: [{ id: 12, email: 'ejecutivo.sin.venta@example.com', nombre: 'Sin Venta' }],
+    asignaciones: [
+      { usuario_id: 12, role: 'ejecutivo', allowed_markets: '["CL"]', default_market: 'CL', can_sell: 0, user_status: 'activo', valid_from: PAST, valid_until: null },
+    ],
+  });
+  const identity = await resolveRoleIdentity(db, 'ejecutivo.sin.venta@example.com', 'req-1x');
+  assert.equal(identity.canSell, false);
+});
+
+test('resolveRoleIdentity() — can_sell es independiente del rol: un asistente puede tener can_sell = 1', async () => {
+  const db = fakeDb({
+    usuarios: [{ id: 13, email: 'practicante@example.com', nombre: 'Practicante' }],
+    asignaciones: [
+      { usuario_id: 13, role: 'asistente', allowed_markets: '["CL"]', default_market: 'CL', can_sell: 1, user_status: 'activo', valid_from: PAST, valid_until: null },
+    ],
+  });
+  const identity = await resolveRoleIdentity(db, 'practicante@example.com', 'req-1y');
+  assert.equal(identity.role, 'asistente');
+  assert.equal(identity.canSell, true);
 });
 
 test('resolveRoleIdentity() — mercado predeterminado puede diferir del primero de allowedMarkets (ej. Brenda: CL,AR pero default AR)', async () => {

@@ -26,13 +26,25 @@ export class AuthzError extends Error {
 // para cualquier persona con ese rol; si en el futuro Brenda pide que sea
 // editable sin desplegar código, se puede mover a una tabla `permisos` sin
 // cambiar la forma de `resolveRoleIdentity()`.
+// RIO-113 (corrección, decisiones definitivas de Brenda 28/08/2026): el rol
+// principal ya no implica por sí solo la capacidad de vender (ver
+// `canSell` en resolveRoleIdentity, resuelto desde asignaciones_rol —
+// nunca desde este objeto) ni las transiciones oficiales de producción.
+// `manageProduccionOficial` es la única capacidad que permite confirmar
+// materiales completos, iniciar/entregar/aprobar producción, y también
+// funciona como "puede actuar sobre cualquier venta de su mercado" para
+// las acciones de reporte (informar pago, informar materiales) — un
+// vendedor sin este permiso solo puede reportar sobre SUS PROPIAS ventas
+// (verificado por email, no por este objeto — ver rutas de componentes/
+// pagos).
 export const PERMISSIONS = Object.freeze({
   admin: Object.freeze({
     viewAllOwnMarkets: true, // ve todos los mercados de su allowedMarkets (CL+AR)
     viewOthersData: true, // puede ver datos de cualquier ejecutivo/supervisor/asistente
     manageUsers: true, // alta/baja/cambio de rol y mercado (RIO-119)
-    verifyPayments: true, // RIO-113: verificar acreditación bancaria — solo admin (RIO-97 v2 sección 5)
-    manageIncidencias: true, // RIO-113: cancelar/registrar devolución o disputa — solo admin
+    verifyPayments: true, // verificar acreditación bancaria — solo admin (RIO-97 v2 sección 5)
+    manageIncidencias: true, // cancelar/registrar devolución o disputa — solo admin
+    manageProduccionOficial: true, // confirmar materiales, iniciar/entregar/aprobar producción — solo admin
   }),
   supervisor: Object.freeze({
     viewAllOwnMarkets: true,
@@ -40,6 +52,7 @@ export const PERMISSIONS = Object.freeze({
     manageUsers: false,
     verifyPayments: false,
     manageIncidencias: false,
+    manageProduccionOficial: false, // su capacidad de supervisión es de solo lectura (Brenda, sección 3)
   }),
   ejecutivo: Object.freeze({
     viewAllOwnMarkets: true,
@@ -47,6 +60,7 @@ export const PERMISSIONS = Object.freeze({
     manageUsers: false,
     verifyPayments: false,
     manageIncidencias: false,
+    manageProduccionOficial: false,
   }),
   asistente: Object.freeze({
     viewAllOwnMarkets: false, // no navega por mercado — solo por proyecto/componente asignado
@@ -54,6 +68,7 @@ export const PERMISSIONS = Object.freeze({
     manageUsers: false,
     verifyPayments: false,
     manageIncidencias: false,
+    manageProduccionOficial: false,
   }),
 });
 
@@ -84,7 +99,7 @@ export async function resolveRoleIdentity(db, email, requestId) {
   try {
     assignmentRow = await db
       .prepare(
-        `SELECT role, allowed_markets, default_market, user_status, valid_from, valid_until
+        `SELECT role, allowed_markets, default_market, can_sell, user_status, valid_from, valid_until
          FROM asignaciones_rol
          WHERE usuario_id = ?
            AND (valid_until IS NULL OR valid_until > datetime('now'))
@@ -120,6 +135,12 @@ export async function resolveRoleIdentity(db, email, requestId) {
     // ver migración 0005), cae al primer mercado autorizado — nunca a un
     // mercado fijo hardcodeado ni a "sin mercado".
     defaultMarket: assignmentRow.default_market || allowedMarkets[0] || null,
+    // Capacidad para vender — independiente del rol principal (Brenda,
+    // sección 2 de su corrección del 28/08/2026: "la capacidad para
+    // vender no depende del rol principal"). Un admin/supervisor/
+    // ejecutivo/asistente sin esta capacidad no puede registrar ventas,
+    // aunque su rol lo permitiría en otras funciones.
+    canSell: !!assignmentRow.can_sell,
     userStatus: assignmentRow.user_status,
     validFrom: assignmentRow.valid_from,
     validUntil: assignmentRow.valid_until,

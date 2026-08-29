@@ -20,6 +20,7 @@ function roleIdentity(overrides = {}) {
     allowedMarkets: ['CL'],
     defaultMarket: 'CL',
     userStatus: 'activo',
+    canSell: true,
     permissions: PERMISSIONS.ejecutivo,
     ...overrides,
   };
@@ -57,7 +58,7 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
     } else if (sql.startsWith('INSERT INTO ventas')) {
       state.ventas.push({
         id: p[0], codigo_venta: p[1], cliente_id: p[2], mercado: p[3], producto: p[4], moneda: p[5],
-        tipo_precio: p[6], precio_pactado: p[7], ejecutivo_email: p[8], estado_actual: 'registrada', created_at: '2026-08-28 00:00:00',
+        tipo_precio: p[6], precio_pactado: p[7], vendedor_email: p[8], estado_actual: 'registrada', created_at: '2026-08-28 00:00:00',
       });
     } else if (sql.startsWith('INSERT INTO proyectos')) {
       state.proyectos.push({ id: p[0], venta_id: p[1], codigo_proyecto: p[2], estado_actual: 'registrado' });
@@ -71,8 +72,8 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
   }
 
   function runSelect(sql, p) {
-    if (sql.includes('FROM ventas v JOIN clientes c') && sql.includes('WHERE v.ejecutivo_email')) {
-      return state.ventas.filter((v) => v.ejecutivo_email === p[0]).map((v) => ({ ...v, negocio: state.clientes.find((c) => c.id === v.cliente_id)?.negocio }));
+    if (sql.includes('FROM ventas v JOIN clientes c') && sql.includes('WHERE v.vendedor_email')) {
+      return state.ventas.filter((v) => v.vendedor_email === p[0]).map((v) => ({ ...v, negocio: state.clientes.find((c) => c.id === v.cliente_id)?.negocio }));
     }
     if (sql.includes('FROM ventas v JOIN clientes c') && sql.includes('WHERE v.mercado IN')) {
       return state.ventas.filter((v) => p.includes(v.mercado)).map((v) => ({ ...v, negocio: state.clientes.find((c) => c.id === v.cliente_id)?.negocio }));
@@ -166,9 +167,23 @@ test('POST /ventas — rechaza un mercado fuera de allowedMarkets del ejecutivo'
   assert.equal(response.status, 403);
 });
 
-test('POST /ventas — un asistente no puede registrar ventas', async () => {
+test('POST /ventas — un asistente sin can_sell no puede registrar ventas', async () => {
   const db = fakeDb();
-  const ri = roleIdentity({ role: 'asistente', permissions: PERMISSIONS.asistente });
+  const ri = roleIdentity({ role: 'asistente', permissions: PERMISSIONS.asistente, canSell: false });
+  const response = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }));
+  assert.equal(response.status, 403);
+});
+
+test('POST /ventas — un asistente CON can_sell sí puede registrar una venta propia (capacidad, no rol)', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity({ role: 'asistente', permissions: PERMISSIONS.asistente, canSell: true, email: 'practicante@example.com' });
+  const response = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }));
+  assert.equal(response.status, 201);
+});
+
+test('POST /ventas — un ejecutivo SIN can_sell no puede registrar ventas (la capacidad no depende del rol)', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity({ canSell: false });
   const response = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }));
   assert.equal(response.status, 403);
 });
@@ -183,12 +198,12 @@ test('GET /ventas — un ejecutivo solo ve sus propias ventas, nunca las de otro
   const responseA = await ventasHandler(fakeContext({ roleIdentity: a, db }));
   const bodyA = await responseA.json();
   assert.equal(bodyA.data.ventas.length, 1);
-  assert.equal(bodyA.data.ventas[0].ejecutivoEmail, 'ejecutivo.a@example.com');
+  assert.equal(bodyA.data.ventas[0].vendedorEmail, 'ejecutivo.a@example.com');
 
   const responseB = await ventasHandler(fakeContext({ roleIdentity: b, db }));
   const bodyB = await responseB.json();
   assert.equal(bodyB.data.ventas.length, 1);
-  assert.equal(bodyB.data.ventas[0].ejecutivoEmail, 'ejecutivo.b@example.com');
+  assert.equal(bodyB.data.ventas[0].vendedorEmail, 'ejecutivo.b@example.com');
 });
 
 test('GET /ventas — un admin/supervisor solo ve ventas de SUS mercados autorizados, no de otros', async () => {
@@ -214,11 +229,16 @@ test('GET /ventas — un admin/supervisor solo ve ventas de SUS mercados autoriz
   assert.equal(bodyAmbos.data.ventas.length, 2);
 });
 
-test('GET /ventas — un asistente no puede listar ventas', async () => {
+test('GET /ventas — un asistente puede listar (solo ve las suyas, igual que un ejecutivo — la capacidad de ver ajenas nunca depende del nombre del rol)', async () => {
   const db = fakeDb();
-  const ri = roleIdentity({ role: 'asistente', permissions: PERMISSIONS.asistente });
+  const ri = roleIdentity({ email: 'practicante@example.com', role: 'asistente', permissions: PERMISSIONS.asistente, canSell: true });
+  const createResponse = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }));
+  assert.equal(createResponse.status, 201);
   const response = await ventasHandler(fakeContext({ roleIdentity: ri, db }));
-  assert.equal(response.status, 403);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.data.ventas.length, 1);
+  assert.equal(body.data.ventas[0].vendedorEmail, 'practicante@example.com');
 });
 
 test('GET /ventas/:id — un ejecutivo NO puede ver la venta de otro ejecutivo cambiando el id en la ruta (403/404, nunca los datos)', async () => {

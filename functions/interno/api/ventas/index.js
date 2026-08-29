@@ -1,19 +1,23 @@
-// GET/POST /interno/api/ventas — RIO-112.
+// GET/POST /interno/api/ventas — RIO-112, permisos corregidos en RIO-113.
 //
-// GET: lista de ventas, con alcance según rol (RIO-97 v2 sección 4/5):
-//   - ejecutivo: solo las suyas (ejecutivo_email = su email).
-//   - supervisor/admin: las de sus mercados autorizados (nunca "todas" sin
-//     condición — ver assertMarketAllowed/roleIdentity.allowedMarkets).
-//   - asistente: 403 — la matriz de permisos de RIO-97 v2 no le da acceso a
-//     nivel de venta, solo a componentes asignados (tabla de asignación
-//     todavía no existe, RIO-97 v2 documenta el rol como "hoy sin nadie
-//     asignado" — fuera de alcance de RIO-112, no se anticipa acá).
+// GET: lista de ventas, con alcance según CAPACIDAD, no según el nombre del
+// rol (Brenda, sección 1 de su corrección del 28/08/2026 — "no implementar
+// reglas asociadas a nombres propios" aplica también a nombres de ROL):
+//   - viewOthersData true/'sameMarketOnly' (admin/supervisor): las de sus
+//     mercados autorizados (nunca "todas" sin condición).
+//   - el resto (ejecutivo, asistente, o cualquier rol futuro sin esa
+//     capacidad): solo las suyas (vendedor_email = su email) — la persona
+//     vendedora no necesariamente es un Ejecutivo, así que esta rama ya no
+//     depende de comparar `role === 'ejecutivo'`.
 //
 // POST: registra una venta y, en cascada y atómica (un solo db.batch()),
-// su proyecto y 1-2 componentes según el producto. Individual = 1
-// componente; pack = 2, con el precio distribuido proporcionalmente usando
-// los precios individuales de referencia que viajan en la solicitud (ver
-// functions/_shared/pricing.js sobre por qué no se importa markets.js acá).
+// su proyecto y 1-2 componentes según el producto. Requiere la capacidad
+// `canSell` (independiente del rol — Brenda: "pueden vender: admin,
+// supervisor, ejecutivo, asistente... si tiene la capacidad habilitada").
+// Individual = 1 componente; pack = 2, con el precio distribuido
+// proporcionalmente usando los precios individuales de referencia que
+// viajan en la solicitud (ver functions/_shared/pricing.js sobre por qué
+// no se importa markets.js acá).
 
 import { ok, Errors } from '../../../_shared/response.js';
 import { query, transaction } from '../../../_shared/db.js';
@@ -49,7 +53,7 @@ function serializeVenta(row) {
     moneda: row.moneda,
     tipoPrecio: row.tipo_precio,
     precioPactado: row.precio_pactado,
-    ejecutivoEmail: row.ejecutivo_email,
+    vendedorEmail: row.vendedor_email,
     estadoActual: row.estado_actual,
     createdAt: row.created_at,
   };
@@ -59,22 +63,11 @@ async function handleList(context) {
   const { env, data } = context;
   const { requestId, roleIdentity } = data;
 
-  if (roleIdentity.role === 'asistente') {
-    return Errors.forbidden(requestId);
-  }
-
   let rows;
-  if (roleIdentity.role === 'ejecutivo') {
-    rows = await query(
-      env.DB,
-      requestId,
-      `SELECT v.*, c.negocio FROM ventas v JOIN clientes c ON c.id = v.cliente_id
-       WHERE v.ejecutivo_email = ? ORDER BY v.created_at DESC`,
-      [roleIdentity.email]
-    );
-  } else {
-    // admin/supervisor: limitado a sus propios mercados autorizados —
-    // nunca "todas las ventas" sin condición (RIO-97 v2 sección 4).
+  if (roleIdentity.permissions.viewOthersData) {
+    // admin/supervisor (o cualquier capacidad futura equivalente):
+    // limitado a sus propios mercados autorizados — nunca "todas las
+    // ventas" sin condición (RIO-97 v2 sección 4).
     if (roleIdentity.allowedMarkets.length === 0) {
       return ok({ ventas: [] }, requestId);
     }
@@ -86,6 +79,17 @@ async function handleList(context) {
        WHERE v.mercado IN (${placeholders}) ORDER BY v.created_at DESC`,
       roleIdentity.allowedMarkets
     );
+  } else {
+    // Sin capacidad de ver datos ajenos (ejecutivo, asistente, o
+    // cualquier otro rol sin esa capacidad): solo sus propias ventas,
+    // sin importar si figura como ejecutivo o no.
+    rows = await query(
+      env.DB,
+      requestId,
+      `SELECT v.*, c.negocio FROM ventas v JOIN clientes c ON c.id = v.cliente_id
+       WHERE v.vendedor_email = ? ORDER BY v.created_at DESC`,
+      [roleIdentity.email]
+    );
   }
 
   return ok({ ventas: rows.map(serializeVenta) }, requestId);
@@ -95,7 +99,10 @@ async function handleCreate(context) {
   const { request, env, data } = context;
   const { requestId, roleIdentity } = data;
 
-  if (roleIdentity.role === 'asistente') {
+  if (!roleIdentity.canSell) {
+    // La capacidad para vender es independiente del rol (Brenda, sección
+    // 2): un ejecutivo sin can_sell tampoco puede vender, igual que un
+    // admin/supervisor/asistente sin esa capacidad habilitada.
     return Errors.forbidden(requestId);
   }
 
@@ -198,7 +205,7 @@ async function handleCreate(context) {
   const statements = [
     db.prepare('INSERT INTO clientes (id, negocio, contacto_nombre, telefono, email, mercado, datos_facturacion_ar, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(clienteId, cliente.negocio.trim(), cliente.contactoNombre || null, cliente.telefono || null, cliente.email || null, mercado, cliente.datosFacturacionAr || null, roleIdentity.email),
-    db.prepare('INSERT INTO ventas (id, codigo_venta, cliente_id, mercado, producto, moneda, tipo_precio, precio_pactado, ejecutivo_email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    db.prepare('INSERT INTO ventas (id, codigo_venta, cliente_id, mercado, producto, moneda, tipo_precio, precio_pactado, vendedor_email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(ventaId, codigoVenta, clienteId, mercado, producto, moneda, tipoPrecio, precioPactado, roleIdentity.email),
     db.prepare('INSERT INTO proyectos (id, venta_id, codigo_proyecto) VALUES (?, ?, ?)')
       .bind(proyectoId, ventaId, codigoProyecto),
@@ -228,7 +235,7 @@ async function handleCreate(context) {
         moneda,
         tipoPrecio,
         precioPactado,
-        ejecutivoEmail: roleIdentity.email,
+        vendedorEmail: roleIdentity.email,
       },
       proyecto: { id: proyectoId, codigoProyecto },
       componentes: componentesPlan.map((c) => ({ tipo: c.tipo, precioAtribuido: c.precioAtribuido, estadoActual: c.estado })),

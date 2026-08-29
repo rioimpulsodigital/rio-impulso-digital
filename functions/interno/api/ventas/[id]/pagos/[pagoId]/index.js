@@ -1,7 +1,10 @@
-// POST /interno/api/ventas/:id/pagos/:pagoId — RIO-113.
-// action: 'informar' (ejecutivo dueño de la venta, o supervisor/admin de su
-// mercado) o 'acreditar' (SOLO admin — verificar acreditación bancaria es
-// una acción exclusiva de admin, RIO-97 v2 sección 5).
+// POST /interno/api/ventas/:id/pagos/:pagoId — RIO-113, permisos
+// corregidos (Brenda, decisiones definitivas del 28/08/2026).
+// action: 'informar' (el vendedor de ESTA venta, o administración — un
+// supervisor que no vendió esta venta no puede informar pagos ajenos,
+// aunque sea de su mismo mercado) o 'acreditar' (SOLO admin — verificar
+// acreditación bancaria es una acción exclusiva de admin, RIO-97 v2
+// sección 5).
 //
 // "Informado ≠ acreditado" (RIO-97): son dos pasos separados, con su
 // propio responsable — nunca se puede acreditar sin haber informado antes.
@@ -28,12 +31,12 @@ export async function onRequest(context) {
     return Errors.validation('Content-Type debe ser application/json.', requestId);
   }
 
-  const ventaRows = await query(env.DB, requestId, 'SELECT id, ejecutivo_email, mercado FROM ventas WHERE id = ?', [params.id]);
+  const ventaRows = await query(env.DB, requestId, 'SELECT id, vendedor_email, mercado FROM ventas WHERE id = ?', [params.id]);
   const venta = ventaRows[0];
   if (!venta) return Errors.notFound(requestId);
 
   try {
-    assertCanAccessOwner(roleIdentity, venta.ejecutivo_email, venta.mercado);
+    assertCanAccessOwner(roleIdentity, venta.vendedor_email, venta.mercado);
   } catch (e) {
     if (e instanceof AuthzError) return Errors.notFound(requestId);
     throw e;
@@ -68,6 +71,10 @@ export async function onRequest(context) {
   }
 
   if (body?.action === 'informar') {
+    const esVendedor = roleIdentity.email === venta.vendedor_email;
+    if (!esVendedor && !roleIdentity.permissions.manageProduccionOficial) {
+      return Errors.forbidden(requestId); // un supervisor sin ser el vendedor no informa pagos ajenos.
+    }
     if (!Number.isInteger(body.montoInformado) || body.montoInformado <= 0) {
       return Errors.validation('montoInformado inválido.', requestId);
     }

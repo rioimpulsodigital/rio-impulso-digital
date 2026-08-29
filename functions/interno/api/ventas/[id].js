@@ -29,7 +29,7 @@ export async function onRequest(context) {
   if (!venta) return Errors.notFound(requestId);
 
   try {
-    assertCanAccessOwner(roleIdentity, venta.ejecutivo_email, venta.mercado);
+    assertCanAccessOwner(roleIdentity, venta.vendedor_email, venta.mercado);
   } catch (e) {
     if (e instanceof AuthzError) {
       // Nunca se distingue "no existe" de "no autorizado" — ambos casos
@@ -57,7 +57,7 @@ export async function onRequest(context) {
         moneda: venta.moneda,
         tipoPrecio: venta.tipo_precio,
         precioPactado: venta.precio_pactado,
-        ejecutivoEmail: venta.ejecutivo_email,
+        vendedorEmail: venta.vendedor_email,
         estadoActual: venta.estado_actual,
         createdAt: venta.created_at,
       },

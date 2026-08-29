@@ -18,12 +18,12 @@ export async function onRequest(context) {
     return Errors.methodNotAllowed(requestId);
   }
 
-  const ventaRows = await query(env.DB, requestId, 'SELECT id, ejecutivo_email, mercado FROM ventas WHERE id = ?', [params.id]);
+  const ventaRows = await query(env.DB, requestId, 'SELECT id, vendedor_email, mercado FROM ventas WHERE id = ?', [params.id]);
   const venta = ventaRows[0];
   if (!venta) return Errors.notFound(requestId);
 
   try {
-    assertCanAccessOwner(roleIdentity, venta.ejecutivo_email, venta.mercado);
+    assertCanAccessOwner(roleIdentity, venta.vendedor_email, venta.mercado);
   } catch (e) {
     if (e instanceof AuthzError) return Errors.notFound(requestId);
     throw e;

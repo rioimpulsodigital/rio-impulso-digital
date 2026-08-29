@@ -22,6 +22,7 @@ function serialize(roleIdentity) {
     role: roleIdentity.role,
     allowedMarkets: roleIdentity.allowedMarkets,
     defaultMarket: roleIdentity.defaultMarket,
+    canSell: roleIdentity.canSell,
     userStatus: roleIdentity.userStatus,
     validFrom: roleIdentity.validFrom,
     validUntil: roleIdentity.validUntil,

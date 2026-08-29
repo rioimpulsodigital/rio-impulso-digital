@@ -9,8 +9,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   evaluateLandingGate, iniciarProduccion, marcarEntregada, aprobarComponente,
-  marcarMaterialesCompletos, informarPago, acreditarPago, registrarIncidencia,
-  ProyectoError,
+  marcarMaterialesInformados, marcarMaterialesCompletos, informarPago, acreditarPago,
+  registrarIncidencia, agregarAntecedente, ProyectoError,
 } from '../functions/_shared/proyectos.js';
 
 // D1 simulado en memoria — soporta las tablas y consultas reales que usa
@@ -99,7 +99,7 @@ function fakeDb() {
 function seedPack(db, { precio = 90000 } = {}) {
   const ventaId = 'venta-1';
   const proyectoId = 'proyecto-1';
-  db._state.ventas.push({ id: ventaId, ejecutivo_email: 'ejecutivo@example.com', mercado: 'CL' });
+  db._state.ventas.push({ id: ventaId, vendedor_email: 'ejecutivo@example.com', mercado: 'CL' });
   db._state.proyectos.push({ id: proyectoId, venta_id: ventaId, estado_actual: 'registrado' });
   db._state.componentes.push({ id: 'comp-ficha', proyecto_id: proyectoId, tipo: 'ficha', estado_actual: 'pendiente', materiales_estado: 'pendiente' });
   db._state.componentes.push({ id: 'comp-landing', proyecto_id: proyectoId, tipo: 'landing', estado_actual: 'bloqueada', materiales_estado: 'pendiente' });
@@ -111,7 +111,7 @@ function seedPack(db, { precio = 90000 } = {}) {
 function seedIndividual(db) {
   const ventaId = 'venta-ind';
   const proyectoId = 'proyecto-ind';
-  db._state.ventas.push({ id: ventaId, ejecutivo_email: 'ejecutivo@example.com', mercado: 'CL' });
+  db._state.ventas.push({ id: ventaId, vendedor_email: 'ejecutivo@example.com', mercado: 'CL' });
   db._state.proyectos.push({ id: proyectoId, venta_id: ventaId, estado_actual: 'registrado' });
   db._state.componentes.push({ id: 'comp-solo', proyecto_id: proyectoId, tipo: 'ficha', estado_actual: 'pendiente', materiales_estado: 'pendiente' });
   db._state.pagos_esperados.push({ id: 'pago-total', venta_id: ventaId, tipo: 'total', monto: 50000, estado: 'pendiente' });
@@ -306,6 +306,52 @@ test('acreditarPago() — rechaza acreditar dos veces el mismo pago', async () =
 });
 
 // --- Historial e incidencias ---
+
+// --- Materiales: informado (dato reportado) ≠ completo (confirmación oficial) ---
+
+test('marcarMaterialesInformados() — pasa de pendiente a informados y registra el evento, sin tocar el gate', async () => {
+  const db = fakeDb();
+  const { ventaId } = seedPack(db);
+  await marcarMaterialesInformados(db, 'req-16a', { ventaId, componenteId: 'comp-landing', actorEmail: 'vendedor@example.com' });
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-landing').materiales_estado, 'informados');
+  assert.ok(db._state.eventos_historial.some((e) => e.entidad_id === 'comp-landing' && e.estado_nuevo === 'materiales:informados'));
+  // Landing sigue bloqueada — informar materiales no es lo mismo que confirmarlos completos.
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-landing').estado_actual, 'bloqueada');
+});
+
+test('marcarMaterialesInformados() — rechaza informar dos veces (o informar si ya están confirmados completos)', async () => {
+  const db = fakeDb();
+  const { ventaId } = seedPack(db);
+  await marcarMaterialesInformados(db, 'req-17a', { ventaId, componenteId: 'comp-ficha', actorEmail: 'vendedor@example.com' });
+  await assert.rejects(
+    () => marcarMaterialesInformados(db, 'req-17b', { ventaId, componenteId: 'comp-ficha', actorEmail: 'vendedor@example.com' }),
+    (e) => { assert.equal(e.code, 'materiales_ya_reportados'); return true; }
+  );
+});
+
+test('marcarMaterialesCompletos() — la confirmación oficial funciona tanto desde "pendiente" como desde "informados"', async () => {
+  const db = fakeDb();
+  const { ventaId } = seedPack(db);
+  // Ficha: confirmación directa sin haber informado antes.
+  await marcarMaterialesCompletos(db, 'req-18a', { ventaId, componenteId: 'comp-ficha', actorEmail: 'admin@example.com' });
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-ficha').materiales_estado, 'completos');
+
+  // Landing: primero informados, luego confirmación oficial.
+  await marcarMaterialesInformados(db, 'req-18b', { ventaId, componenteId: 'comp-landing', actorEmail: 'vendedor@example.com' });
+  await marcarMaterialesCompletos(db, 'req-18c', { ventaId, componenteId: 'comp-landing', actorEmail: 'admin@example.com' });
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-landing').materiales_estado, 'completos');
+});
+
+// --- Antecedentes u observaciones ---
+
+test('agregarAntecedente() — agrega un evento de historial sin cambiar ningún estado oficial', async () => {
+  const db = fakeDb();
+  const { ventaId } = seedIndividual(db);
+  const estadoAntes = db._state.componentes.find((c) => c.id === 'comp-solo').estado_actual;
+  await agregarAntecedente(db, 'req-19', { ventaId, nota: 'El cliente dijo que le gustó el diseño.', actorEmail: 'vendedor@example.com' });
+  assert.ok(db._state.eventos_historial.some((e) => e.entidad === 'venta' && e.estado_nuevo === 'antecedente' && e.motivo_nota === 'El cliente dijo que le gustó el diseño.'));
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-solo').estado_actual, estadoAntes, 'un antecedente nunca debe mover un estado oficial');
+});
 
 test('registrarIncidencia() — agrega una incidencia y un evento, sin borrar historial previo', async () => {
   const db = fakeDb();
