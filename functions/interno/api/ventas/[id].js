@@ -45,6 +45,7 @@ export async function onRequest(context) {
   const componentes = proyecto
     ? await query(env.DB, requestId, 'SELECT * FROM componentes WHERE proyecto_id = ? ORDER BY tipo', [proyecto.id])
     : [];
+  const pagos = await query(env.DB, requestId, 'SELECT * FROM pagos_esperados WHERE venta_id = ? ORDER BY tipo', [venta.id]);
 
   return ok(
     {
@@ -75,6 +76,14 @@ export async function onRequest(context) {
         precioIndividualReferencia: c.precio_individual_referencia,
         precioAtribuido: c.precio_atribuido,
         estadoActual: c.estado_actual,
+        materialesEstado: c.materiales_estado,
+      })),
+      pagosEsperados: pagos.map((p) => ({
+        id: p.id,
+        tipo: p.tipo,
+        monto: p.monto,
+        moneda: p.moneda,
+        estado: p.estado,
       })),
     },
     requestId

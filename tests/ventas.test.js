@@ -29,7 +29,8 @@ function roleIdentity(overrides = {}) {
 // ventas/index.js y ventas/[id].js — INSERT vía batch() y los SELECT con
 // join a clientes. No es un motor SQL real, pero respeta el mismo
 // contrato prepare().bind().all()/.first() y batch() que usa el código.
-function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [] }) {
+function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [], pagos_esperados: [] }) {
+  seed.pagos_esperados = seed.pagos_esperados || [];
   const state = seed;
 
   function makeStatement(sql) {
@@ -61,7 +62,9 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
     } else if (sql.startsWith('INSERT INTO proyectos')) {
       state.proyectos.push({ id: p[0], venta_id: p[1], codigo_proyecto: p[2], estado_actual: 'registrado' });
     } else if (sql.startsWith('INSERT INTO componentes')) {
-      state.componentes.push({ id: p[0], proyecto_id: p[1], tipo: p[2], precio_individual_referencia: p[3], precio_atribuido: p[4], estado_actual: p[5] });
+      state.componentes.push({ id: p[0], proyecto_id: p[1], tipo: p[2], precio_individual_referencia: p[3], precio_atribuido: p[4], estado_actual: p[5], materiales_estado: 'pendiente' });
+    } else if (sql.startsWith('INSERT INTO pagos_esperados')) {
+      state.pagos_esperados.push({ id: p[0], venta_id: p[1], tipo: p[2], monto: p[3], moneda: p[4], estado: 'pendiente' });
     } else {
       throw new Error('INSERT inesperado en test: ' + sql);
     }
@@ -85,6 +88,9 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
     }
     if (sql.startsWith('SELECT * FROM componentes WHERE proyecto_id')) {
       return state.componentes.filter((c) => c.proyecto_id === p[0]);
+    }
+    if (sql.startsWith('SELECT * FROM pagos_esperados WHERE venta_id')) {
+      return state.pagos_esperados.filter((pg) => pg.venta_id === p[0]);
     }
     throw new Error('SELECT inesperado en test: ' + sql);
   }

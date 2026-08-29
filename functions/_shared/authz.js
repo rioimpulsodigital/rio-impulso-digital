@@ -31,21 +31,29 @@ export const PERMISSIONS = Object.freeze({
     viewAllOwnMarkets: true, // ve todos los mercados de su allowedMarkets (CL+AR)
     viewOthersData: true, // puede ver datos de cualquier ejecutivo/supervisor/asistente
     manageUsers: true, // alta/baja/cambio de rol y mercado (RIO-119)
+    verifyPayments: true, // RIO-113: verificar acreditación bancaria — solo admin (RIO-97 v2 sección 5)
+    manageIncidencias: true, // RIO-113: cancelar/registrar devolución o disputa — solo admin
   }),
   supervisor: Object.freeze({
     viewAllOwnMarkets: true,
     viewOthersData: 'sameMarketOnly', // solo de personas cuyo mercado esté en su allowedMarkets
     manageUsers: false,
+    verifyPayments: false,
+    manageIncidencias: false,
   }),
   ejecutivo: Object.freeze({
     viewAllOwnMarkets: true,
     viewOthersData: false, // nunca — solo sus propios clientes/ventas/comisiones
     manageUsers: false,
+    verifyPayments: false,
+    manageIncidencias: false,
   }),
   asistente: Object.freeze({
     viewAllOwnMarkets: false, // no navega por mercado — solo por proyecto/componente asignado
     viewOthersData: false,
     manageUsers: false,
+    verifyPayments: false,
+    manageIncidencias: false,
   }),
 });
 

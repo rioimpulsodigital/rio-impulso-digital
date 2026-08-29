@@ -180,6 +180,20 @@ async function handleCreate(context) {
   const codigoVenta = shortCode('V');
   const codigoProyecto = shortCode('P');
 
+  // RIO-113: pagos esperados de la venta — 1 fila (100%) si es individual,
+  // 2 (inicial 50% + saldo 50%) si es pack. Mismo criterio de redondeo
+  // exacto que el prorrateo de componentes (RIO-112): se redondea el
+  // primero, el segundo es el resto — la suma siempre da precioPactado.
+  const pagosPlan = pack
+    ? (() => {
+        const inicial = Math.round(precioPactado / 2);
+        return [
+          { tipo: 'inicial', monto: inicial },
+          { tipo: 'saldo', monto: precioPactado - inicial },
+        ];
+      })()
+    : [{ tipo: 'total', monto: precioPactado }];
+
   const db = env.DB;
   const statements = [
     db.prepare('INSERT INTO clientes (id, negocio, contacto_nombre, telefono, email, mercado, datos_facturacion_ar, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
@@ -191,6 +205,10 @@ async function handleCreate(context) {
     ...componentesPlan.map((c) =>
       db.prepare('INSERT INTO componentes (id, proyecto_id, tipo, precio_individual_referencia, precio_atribuido, estado_actual) VALUES (?, ?, ?, ?, ?, ?)')
         .bind(crypto.randomUUID(), proyectoId, c.tipo, c.precioIndividualReferencia, c.precioAtribuido, c.estado)
+    ),
+    ...pagosPlan.map((p) =>
+      db.prepare('INSERT INTO pagos_esperados (id, venta_id, tipo, monto, moneda) VALUES (?, ?, ?, ?, ?)')
+        .bind(crypto.randomUUID(), ventaId, p.tipo, p.monto, moneda)
     ),
   ];
 
@@ -214,6 +232,7 @@ async function handleCreate(context) {
       },
       proyecto: { id: proyectoId, codigoProyecto },
       componentes: componentesPlan.map((c) => ({ tipo: c.tipo, precioAtribuido: c.precioAtribuido, estadoActual: c.estado })),
+      pagosEsperados: pagosPlan.map((p) => ({ tipo: p.tipo, monto: p.monto })),
     },
     requestId,
     201
