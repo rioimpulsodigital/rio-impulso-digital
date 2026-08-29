@@ -16,7 +16,7 @@
 
 import { query, execute } from './db.js';
 import { logEvento } from './historial.js';
-import { procesarPagoAcreditadoParaComisiones } from './comisiones.js';
+import { procesarPagoAcreditadoParaComisiones, generarComisionProduccionSiCorresponde, retenerComisionesPorDisputa } from './comisiones.js';
 
 export class ProyectoError extends Error {
   constructor(code, message) {
@@ -142,9 +142,12 @@ export async function marcarEntregada(db, requestId, { ventaId, componenteId, ac
 }
 
 // Transición entregada -> aprobada. Si es el componente Ficha de un pack,
-// reevalúa el gate de Landing (una de las 3 condiciones acaba de cumplirse).
+// reevalúa el gate de Landing (una de las 3 condiciones acaba de
+// cumplirse). También es el momento en que se genera la comisión de
+// producción de ESTE componente, si hay un asistente asignado con plan
+// vigente (RIO-114) — nunca antes de la aprobación oficial.
 export async function aprobarComponente(db, requestId, { ventaId, componenteId, actorEmail }) {
-  const { componentes } = await loadVentaFull(db, requestId, ventaId);
+  const { venta, componentes } = await loadVentaFull(db, requestId, ventaId);
   const componente = componentes.find((c) => c.id === componenteId);
   if (!componente) throw new ProyectoError('componente_no_encontrado', 'Componente no encontrado.');
   if (componente.estado_actual !== 'entregada') {
@@ -155,6 +158,10 @@ export async function aprobarComponente(db, requestId, { ventaId, componenteId, 
   await logEvento(db, requestId, {
     ventaId, entidad: 'componente', entidadId: componenteId,
     estadoAnterior: 'entregada', estadoNuevo: 'aprobada', usuarioEmail: actorEmail,
+  });
+
+  await generarComisionProduccionSiCorresponde(db, requestId, {
+    ventaId, componente, producto: venta.producto, mercado: venta.mercado, moneda: venta.moneda,
   });
 
   let gate = null;
@@ -324,6 +331,12 @@ export async function registrarIncidencia(db, requestId, { ventaId, tipo, motivo
     ventaId, entidad: 'incidencia', entidadId: id,
     estadoNuevo: `${tipo}:abierta`, usuarioEmail: actorEmail, motivoNota: motivo,
   });
+
+  // RIO-114: una disputa abierta retiene (nunca borra) cualquier comisión
+  // de esta venta que ya estuviera habilitada o programada — "venta firme
+  // y sin disputa" deja de cumplirse antes del pago.
+  await retenerComisionesPorDisputa(db, requestId, { ventaId, actorEmail, motivo: `Incidencia registrada: ${tipo} — ${motivo}` });
+
   return id;
 }
 

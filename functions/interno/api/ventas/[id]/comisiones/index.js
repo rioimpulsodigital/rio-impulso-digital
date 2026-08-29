@@ -1,13 +1,14 @@
 // GET /interno/api/ventas/:id/comisiones — RIO-114.
-// Lista las comisiones (comercial/supervisión, y producción cuando exista)
-// generadas para esta venta. Autorización más estricta que el resto de
-// /ventas/:id/* a propósito: RIO-97 v2 sección 4 deja explícitamente
-// abierto si un supervisor debe ver el detalle personal de la comisión de
-// cada ejecutivo ("ve el total supervisado, no el detalle personal... salvo
-// que Brenda decida exponerlo — decisión abierta"). Mientras esa decisión
-// no se tome, el criterio conservador es: cada quien ve SU PROPIA comisión
-// (beneficiario_email = su email) — admin ve todas las de sus mercados
-// autorizados, igual que el resto del sistema.
+// Lista las comisiones (comercial/supervisión/producción) generadas para
+// esta venta. Autorización más estricta que el resto de /ventas/:id/* —
+// decisión CONFIRMADA por Brenda (28/08/2026, corrección de RIO-114), no
+// una regla provisional: cada usuario ve el cálculo completo de sus
+// propias comisiones (beneficiario_email = su email — esto cubre por igual
+// al vendedor su comercial, al supervisor su supervisión, y al asistente
+// su producción); el supervisor ve las ventas y operaciones de sus
+// mercados (resto de /ventas/:id/*) pero NUNCA el importe/detalle de la
+// comisión personal de otro usuario; el administrador consulta todas las
+// comisiones dentro de sus mercados autorizados.
 
 import { ok, Errors } from '../../../../../_shared/response.js';
 import { query } from '../../../../../_shared/db.js';

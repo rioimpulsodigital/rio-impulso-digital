@@ -1,25 +1,25 @@
-// Cálculo y máquina de 9 estados de la comisión — RIO-114.
+// Cálculo y máquina de estados de la comisión — RIO-114, corregido según
+// las decisiones definitivas de Brenda del 28/08/2026 (segunda corrección).
 //
 // Independiente de la máquina de estados del proyecto (RIO-113): que una
 // comisión esté pagada no dice nada sobre el avance de producción, y
 // viceversa (RIO-97 v2 sección 8).
 //
-// Principio central de esta tarea (Brenda, 28/08/2026, al corregir el
-// alcance de RIO-113): el porcentaje de comisión NUNCA es un valor fijo en
-// el código — es un dato editable en `planes_comision`, resuelto por tipo
-// de comisión y producto vendido. Si no hay una tasa vigente para una
-// combinación, la comisión igual se genera (queda visible y auditable, "una
-// venta puede generar 0% de comisión" no es lo mismo que "no existe"), pero
-// con `porcentaje_snapshot`/`monto_comision` en NULL — nunca se inventa un
-// número.
+// Principio central: el porcentaje NUNCA es un valor fijo en el código, y
+// tampoco alcanza con una tabla de tasas por producto — se resuelve en dos
+// pasos, igual que el modelo de identidad de RIO-111: una DEFINICIÓN de
+// plan (`planes_comision`: tipo, porcentaje, base, productos y mercados
+// alcanzados, estado) y una ASIGNACIÓN versionada de ese plan a una persona
+// (`asignaciones_plan_comision`, mismo patrón que `asignaciones_rol`). Si
+// una persona no tiene una asignación vigente de un plan que además
+// alcance el producto y mercado de la venta, NO se genera esa comisión —
+// nunca un número inventado ni una fila con 0% disfrazado de definitivo
+// (Brenda: "la atribución como vendedor no genera comisión si no existe un
+// plan comercial activo").
 //
 // Deliberadamente NO implementado acá (fuera de alcance de RIO-114, ya
-// documentado en las tareas correspondientes): comisión de producción (no
-// existe todavía ninguna tabla de asignación de asistente a componente —
-// RIO-97 v2 la documenta como "hoy sin nadie asignado"); feriados de
-// Chile/Argentina en el cálculo de la fecha programada (solo se ajusta
-// fin de semana al día hábil anterior); agrupación en liquidaciones y
-// transferencias (RIO-115, "Calendario y liquidaciones").
+// documentado en las tareas correspondientes): agrupación en liquidaciones
+// y transferencias (RIO-115, "Calendario y liquidaciones").
 
 import { query, execute } from './db.js';
 import { logEvento } from './historial.js';
@@ -33,15 +33,14 @@ export class ComisionError extends Error {
 }
 
 // Plazo de resguardo — confirmado por Brenda, RIO-97 v2 sección 9: 10 días
-// corridos desde la acreditación del primer pago. Configuración, no un
-// valor disperso en el código — vive acá, en un solo lugar.
+// corridos desde la acreditación del primer pago.
 const PLAZO_RESGUARDO_DIAS = 10;
 
 function nowSql() {
   return new Date().toISOString().replace('T', ' ').slice(0, 19);
 }
 
-function parseAllowedMarkets(raw) {
+function parseJsonArray(raw) {
   try {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
@@ -50,47 +49,63 @@ function parseAllowedMarkets(raw) {
   }
 }
 
-async function resolverPlanVigente(db, requestId, { tipo, producto }) {
-  const rows = await query(
-    db, requestId,
-    `SELECT * FROM planes_comision
-     WHERE tipo = ? AND producto = ?
-       AND (valid_until IS NULL OR valid_until > datetime('now'))
-       AND valid_from <= datetime('now')
-     ORDER BY valid_from DESC LIMIT 1`,
-    [tipo, producto]
-  );
-  return rows[0] || null;
-}
-
 async function utilidadNetaComponente(db, requestId, componente) {
   const costos = await query(db, requestId, 'SELECT monto FROM costos_directos WHERE componente_id = ?', [componente.id]);
   const totalCostos = costos.reduce((sum, c) => sum + c.monto, 0);
   return componente.precio_atribuido - totalCostos;
 }
 
-async function crearComision(db, requestId, { tipo, ventaId, componenteId, beneficiarioEmail, producto, moneda, montoBase }) {
-  const plan = await resolverPlanVigente(db, requestId, { tipo, producto });
+// Resuelve la asignación de plan VIGENTE de una persona para un tipo de
+// comisión, solo si el plan además alcanza el producto y el mercado de
+// esta venta (productos_alcanzados/mercados_alcanzados). Devuelve null si
+// no hay asignación, si el plan está inactivo/vencido, o si no alcanza
+// este producto o mercado — en cualquiera de esos casos, no corresponde
+// generar la comisión (ver principio central arriba).
+async function resolverAsignacionVigente(db, requestId, { usuarioEmail, tipo, producto, mercado }) {
+  const rows = await query(
+    db, requestId,
+    `SELECT ap.id AS asignacion_id, pl.id AS plan_id, pl.porcentaje, pl.base, pl.productos_alcanzados, pl.mercados_alcanzados
+     FROM usuarios u
+     JOIN asignaciones_plan_comision ap ON ap.usuario_id = u.id
+     JOIN planes_comision pl ON pl.id = ap.plan_id
+     WHERE u.email = ? AND pl.tipo = ?
+       AND (ap.valid_until IS NULL OR ap.valid_until > datetime('now')) AND ap.valid_from <= datetime('now')
+       AND pl.estado = 'activo'
+       AND (pl.valid_until IS NULL OR pl.valid_until > datetime('now')) AND pl.valid_from <= datetime('now')
+     ORDER BY ap.valid_from DESC LIMIT 1`,
+    [usuarioEmail, tipo]
+  );
+  const row = rows[0];
+  if (!row) return null;
+  if (!parseJsonArray(row.productos_alcanzados).includes(producto)) return null;
+  if (!parseJsonArray(row.mercados_alcanzados).includes(mercado)) return null;
+  return row;
+}
+
+async function crearComisionSiCorresponde(db, requestId, { tipo, ventaId, componenteId, beneficiarioEmail, producto, mercado, moneda, montoBase }) {
+  const asignacion = await resolverAsignacionVigente(db, requestId, { usuarioEmail: beneficiarioEmail, tipo, producto, mercado });
+  if (!asignacion) return null;
+
   const id = crypto.randomUUID();
-  const montoComision = plan ? Math.round((montoBase * plan.porcentaje) / 100) : null;
+  const montoComision = Math.round((montoBase * asignacion.porcentaje) / 100);
   await execute(
     db, requestId,
-    `INSERT INTO comisiones (id, tipo, venta_id, componente_id, beneficiario_email, plan_id, porcentaje_snapshot, base_snapshot, monto_base, moneda, monto_comision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, tipo, ventaId, componenteId || null, beneficiarioEmail, plan ? plan.id : null, plan ? plan.porcentaje : null, plan ? plan.base : null, montoBase, moneda, montoComision]
+    `INSERT INTO comisiones (id, tipo, venta_id, componente_id, beneficiario_email, plan_id, asignacion_plan_id, porcentaje_snapshot, base_snapshot, monto_base, moneda, monto_comision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, tipo, ventaId, componenteId || null, beneficiarioEmail, asignacion.plan_id, asignacion.asignacion_id, asignacion.porcentaje, asignacion.base, montoBase, moneda, montoComision]
   );
   await logEvento(db, requestId, {
     ventaId, entidad: 'comision', entidadId: id, estadoNuevo: 'calculada_provisional', usuarioEmail: beneficiarioEmail,
-    motivoNota: plan ? null : 'Sin tasa de comisión configurada todavía para este producto — queda pendiente de carga administrativa en planes_comision.',
   });
   return id;
 }
 
-// Genera la comisión comercial (siempre, 1 por venta) y una comisión de
-// supervisión por cada supervisor activo cuyo mercado autorizado incluya el
-// de esta venta (RIO-97 v2 sección 6: "comisión_supervision si el mercado
-// de la venta tiene supervisor asignado"). NO genera comisión de
-// producción — ver nota de alcance arriba del archivo.
+// Genera la comisión comercial (si el vendedor tiene un plan comercial
+// vigente que alcance este producto/mercado) y una comisión de supervisión
+// por cada supervisor activo cuyo mercado autorizado incluya el de esta
+// venta Y tenga un plan de supervisión vigente que la alcance. Ninguna de
+// las dos se genera "a la fuerza" — sin plan, no hay fila (ver principio
+// central arriba del archivo).
 export async function generarComisionesParaVenta(db, requestId, { ventaId, vendedorEmail, mercado, producto, moneda, componentes }) {
   let utilidadNetaVenta = 0;
   for (const c of componentes) {
@@ -98,9 +113,10 @@ export async function generarComisionesParaVenta(db, requestId, { ventaId, vende
   }
 
   const ids = [];
-  ids.push(await crearComision(db, requestId, {
-    tipo: 'comercial', ventaId, componenteId: null, beneficiarioEmail: vendedorEmail, producto, moneda, montoBase: utilidadNetaVenta,
-  }));
+  const comercialId = await crearComisionSiCorresponde(db, requestId, {
+    tipo: 'comercial', ventaId, componenteId: null, beneficiarioEmail: vendedorEmail, producto, mercado, moneda, montoBase: utilidadNetaVenta,
+  });
+  if (comercialId) ids.push(comercialId);
 
   const supervisoresActivos = await query(
     db, requestId,
@@ -110,22 +126,95 @@ export async function generarComisionesParaVenta(db, requestId, { ventaId, vende
     []
   );
   for (const s of supervisoresActivos) {
-    if (!parseAllowedMarkets(s.allowed_markets).includes(mercado)) continue;
-    ids.push(await crearComision(db, requestId, {
-      tipo: 'supervision', ventaId, componenteId: null, beneficiarioEmail: s.email, producto, moneda, montoBase: utilidadNetaVenta,
-    }));
+    if (!parseJsonArray(s.allowed_markets).includes(mercado)) continue;
+    const id = await crearComisionSiCorresponde(db, requestId, {
+      tipo: 'supervision', ventaId, componenteId: null, beneficiarioEmail: s.email, producto, mercado, moneda, montoBase: utilidadNetaVenta,
+    });
+    if (id) ids.push(id);
   }
 
   return ids;
 }
 
-// Fecha programada de pago (RIO-97 v2 sección 10), calculada a partir de la
-// fecha de HABILITACIÓN (nunca de la fecha de registro de la venta — una
-// comisión no puede programarse antes de estar habilitada). Ajusta fin de
-// semana al día hábil anterior; feriados de Chile/Argentina NO están
-// contemplados todavía (fuera de alcance — no hay calendario de feriados
-// como fuente de datos en este proyecto).
-export function calcularFechaProgramada(fechaHabilitacionSql) {
+// Comisión de producción — requiere las 3 condiciones de Brenda (sección
+// 8): (1) una asignación EXPRESA del componente a un asistente en
+// `asignaciones_produccion` (RIO-97 v2: "hoy sin nadie asignado" — nunca se
+// inventa un beneficiario); (2) que esa persona esté activa (mismo
+// user_status que cualquier otra identidad del sistema — un asistente
+// dado de baja no genera comisión aunque la asignación siga en la tabla);
+// (3) un plan de producción vigente que alcance este producto/mercado.
+// Se llama al aprobar oficialmente el componente (proyectos.js) — nunca
+// antes, y nunca retroactiva: si la asignación llega después de aprobado,
+// no hay a qué "aprobar" de nuevo.
+async function usuarioActivo(db, requestId, email) {
+  const rows = await query(
+    db, requestId,
+    `SELECT a.user_status FROM usuarios u JOIN asignaciones_rol a ON a.usuario_id = u.id
+     WHERE u.email = ? AND (a.valid_until IS NULL OR a.valid_until > datetime('now')) AND a.valid_from <= datetime('now')
+     ORDER BY a.valid_from DESC LIMIT 1`,
+    [email]
+  );
+  return rows[0]?.user_status === 'activo';
+}
+
+export async function generarComisionProduccionSiCorresponde(db, requestId, { ventaId, componente, producto, mercado, moneda }) {
+  const asignaciones = await query(db, requestId, 'SELECT usuario_email FROM asignaciones_produccion WHERE componente_id = ?', [componente.id]);
+  const asignacion = asignaciones[0];
+  if (!asignacion) return null; // sin asignación expresa.
+
+  if (!(await usuarioActivo(db, requestId, asignacion.usuario_email))) return null; // asistente inactivo.
+
+  const utilidad = await utilidadNetaComponente(db, requestId, componente);
+  return crearComisionSiCorresponde(db, requestId, {
+    tipo: 'produccion', ventaId, componenteId: componente.id, beneficiarioEmail: asignacion.usuario_email,
+    producto, mercado, moneda, montoBase: utilidad,
+  });
+}
+
+// Costo directo de un medio de pago que aplica a TODA la venta, no a un
+// componente puntual — se prorratea entre los componentes del pack con el
+// mismo criterio proporcional que la distribución del precio del pack
+// (RIO-97 v2 sección 6: redondea el primero, el segundo es el resto — la
+// suma siempre da el monto total). En un producto individual, todo el
+// monto va a su único componente.
+export async function registrarCostoMedioPago(db, requestId, { ventaId, tipo, monto, moneda, autorizadoPor, nota }) {
+  const proyectos = await query(db, requestId, 'SELECT id FROM proyectos WHERE venta_id = ?', [ventaId]);
+  const proyecto = proyectos[0];
+  if (!proyecto) throw new ComisionError('proyecto_no_encontrado', 'Proyecto no encontrado para esta venta.');
+  const componentes = await query(db, requestId, 'SELECT id, precio_atribuido FROM componentes WHERE proyecto_id = ? ORDER BY tipo', [proyecto.id]);
+  if (componentes.length === 0) throw new ComisionError('sin_componentes', 'Esta venta no tiene componentes.');
+
+  let montos;
+  if (componentes.length === 1) {
+    montos = [monto];
+  } else {
+    const totalAtribuido = componentes.reduce((sum, c) => sum + c.precio_atribuido, 0);
+    const primero = Math.round((monto * componentes[0].precio_atribuido) / totalAtribuido);
+    montos = [primero, monto - primero];
+  }
+
+  const ids = [];
+  for (let i = 0; i < componentes.length; i++) {
+    ids.push(await registrarCostoDirecto(db, requestId, {
+      componenteId: componentes[i].id, tipo, monto: montos[i], moneda, autorizadoPor, nota,
+    }));
+  }
+  return ids;
+}
+
+// Fecha programada de pago (RIO-97 v2 sección 10), calculada a partir de
+// la fecha de HABILITACIÓN. Ajusta hacia atrás, día por día, hasta caer en
+// un día hábil real del mercado de la venta — cubre fin de semana Y
+// feriados configurados en `dias_no_habiles` (varios días no hábiles
+// consecutivos incluidos), sin feriados fijos en el código.
+async function esDiaHabil(db, requestId, fechaIso, mercado) {
+  const dow = new Date(fechaIso + 'T00:00:00Z').getUTCDay();
+  if (dow === 0 || dow === 6) return false;
+  const feriados = await query(db, requestId, 'SELECT 1 AS x FROM dias_no_habiles WHERE mercado = ? AND fecha = ?', [mercado, fechaIso]);
+  return feriados.length === 0;
+}
+
+export async function calcularFechaProgramada(db, requestId, fechaHabilitacionSql, mercado) {
   const d = new Date(fechaHabilitacionSql.replace(' ', 'T') + 'Z');
   const dia = d.getUTCDate();
   const year = d.getUTCFullYear();
@@ -140,26 +229,32 @@ export function calcularFechaProgramada(fechaHabilitacionSql) {
     targetDay = 10; targetMonth = month + 1;
   }
 
-  const programada = new Date(Date.UTC(year, targetMonth, targetDay));
-  const dow = programada.getUTCDay(); // 0 = domingo, 6 = sábado.
-  if (dow === 0) programada.setUTCDate(programada.getUTCDate() - 2);
-  else if (dow === 6) programada.setUTCDate(programada.getUTCDate() - 1);
-  return programada.toISOString().slice(0, 10);
+  const candidato = new Date(Date.UTC(year, targetMonth, targetDay));
+  // Retrocede día por día hasta encontrar un día hábil real — cubre fin de
+  // semana y cualquier cantidad de feriados consecutivos configurados.
+  let guard = 0;
+  while (!(await esDiaHabil(db, requestId, candidato.toISOString().slice(0, 10), mercado))) {
+    candidato.setUTCDate(candidato.getUTCDate() - 1);
+    guard += 1;
+    if (guard > 30) break; // defensivo — nunca debería hacer falta retroceder más de un mes.
+  }
+  return candidato.toISOString().slice(0, 10);
 }
 
 // Evalúa las 3 condiciones independientes que habilitan una comisión
 // (plazo de resguardo cumplido, pago total acreditado, venta sin disputa
-// abierta — RIO-97 v2 sección 8, estados 3/4/5 → 6). Mismo patrón que el
-// gate de 3 condiciones de Landing en RIO-113: siempre informa qué falta,
-// nunca asume un orden entre las condiciones. Si las tres se cumplen,
-// habilita y programa en el mismo paso (programar es automático, nunca
-// requiere una acción manual aparte de habilitar).
+// abierta — RIO-97 v2 sección 8). Mismo patrón que el gate de 3
+// condiciones de Landing en RIO-113: siempre informa qué falta, nunca
+// asume un orden. Funciona tanto para una comisión recién calculada como
+// para una RETENIDA (una disputa se resolvió y hay que reevaluar si ya
+// puede volver a habilitarse) — en ambos casos, si las tres se cumplen,
+// habilita y programa en el mismo paso.
 export async function evaluateComisionGate(db, requestId, comisionId, actorEmail) {
   const rows = await query(db, requestId, 'SELECT * FROM comisiones WHERE id = ?', [comisionId]);
   const comision = rows[0];
   if (!comision) throw new ComisionError('comision_no_encontrada', 'Comisión no encontrada.');
-  if (comision.estado !== 'calculada_provisional') {
-    return { habilitada: true, faltantes: [] }; // ya pasó este punto — nada que reevaluar.
+  if (comision.estado !== 'calculada_provisional' && comision.estado !== 'retenida') {
+    return { habilitada: true, faltantes: [] }; // 'habilitada'/'programada'/'pagada' — nada que reevaluar acá.
   }
 
   const faltantes = [];
@@ -186,20 +281,35 @@ export async function evaluateComisionGate(db, requestId, comisionId, actorEmail
     return { habilitada: false, faltantes };
   }
 
+  const veniaRetenida = comision.estado === 'retenida';
   const fechaHabilitacion = nowSql();
   await execute(db, requestId, "UPDATE comisiones SET estado = 'habilitada', fecha_habilitacion = ? WHERE id = ?", [fechaHabilitacion, comisionId]);
   await logEvento(db, requestId, {
     ventaId: comision.venta_id, entidad: 'comision', entidadId: comisionId,
-    estadoAnterior: 'calculada_provisional', estadoNuevo: 'habilitada', usuarioEmail: actorEmail || 'sistema',
-    motivoNota: 'Las 3 condiciones (plazo de resguardo, pago total acreditado, sin disputa) se cumplieron a la vez.',
+    estadoAnterior: comision.estado, estadoNuevo: 'habilitada', usuarioEmail: actorEmail || 'sistema',
+    motivoNota: veniaRetenida
+      ? 'La disputa que la retenía se resolvió — vuelve a habilitarse.'
+      : 'Las 3 condiciones (plazo de resguardo, pago total acreditado, sin disputa) se cumplieron a la vez.',
   });
 
-  const fechaProgramada = calcularFechaProgramada(fechaHabilitacion);
-  await execute(
-    db, requestId,
-    "UPDATE comisiones SET estado = 'programada', fecha_programada_original = ?, fecha_programada_efectiva = ? WHERE id = ?",
-    [fechaProgramada, fechaProgramada, comisionId]
-  );
+  const ventaRows = await query(db, requestId, 'SELECT mercado FROM ventas WHERE id = ?', [comision.venta_id]);
+  const mercado = ventaRows[0]?.mercado;
+  const fechaProgramada = await calcularFechaProgramada(db, requestId, fechaHabilitacion, mercado);
+
+  if (veniaRetenida && comision.fecha_programada_original) {
+    // No se sobrescribe la fecha original — solo la efectiva, con motivo.
+    await execute(
+      db, requestId,
+      "UPDATE comisiones SET estado = 'programada', fecha_programada_efectiva = ?, motivo_retencion_o_reprogramacion = ? WHERE id = ?",
+      [fechaProgramada, 'Reprogramada tras resolverse la disputa que la retuvo.', comisionId]
+    );
+  } else {
+    await execute(
+      db, requestId,
+      "UPDATE comisiones SET estado = 'programada', fecha_programada_original = ?, fecha_programada_efectiva = ? WHERE id = ?",
+      [fechaProgramada, fechaProgramada, comisionId]
+    );
+  }
   await logEvento(db, requestId, {
     ventaId: comision.venta_id, entidad: 'comision', entidadId: comisionId,
     estadoAnterior: 'habilitada', estadoNuevo: 'programada', usuarioEmail: actorEmail || 'sistema',
@@ -207,6 +317,21 @@ export async function evaluateComisionGate(db, requestId, comisionId, actorEmail
   });
 
   return { habilitada: true, faltantes: [] };
+}
+
+// Retiene (nunca elimina) las comisiones ya habilitadas/programadas de una
+// venta cuando se abre una disputa — Brenda, sección 6: "si una condición
+// deja de cumplirse antes del pago, la comisión debe retenerse... nunca
+// desaparecer". Una comisión ya PAGADA no se toca — es terminal.
+export async function retenerComisionesPorDisputa(db, requestId, { ventaId, actorEmail, motivo }) {
+  const comisiones = await query(db, requestId, "SELECT id, estado FROM comisiones WHERE venta_id = ? AND estado IN ('habilitada', 'programada')", [ventaId]);
+  for (const c of comisiones) {
+    await execute(db, requestId, "UPDATE comisiones SET estado = 'retenida', motivo_retencion_o_reprogramacion = ? WHERE id = ?", [motivo, c.id]);
+    await logEvento(db, requestId, {
+      ventaId, entidad: 'comision', entidadId: c.id,
+      estadoAnterior: c.estado, estadoNuevo: 'retenida', usuarioEmail: actorEmail, motivoNota: motivo,
+    });
+  }
 }
 
 // Reevalúa todas las comisiones de una venta — se llama después de
@@ -220,9 +345,9 @@ export async function reevaluarComisionesDeVenta(db, requestId, ventaId, actorEm
 }
 
 // Se llama desde proyectos.js justo después de que un pago quedó
-// 'acreditado' (nunca antes) — registra las dos fechas que dependen de
-// pagos (inicio del plazo de resguardo, pago total acreditado) y reevalúa
-// el gate de cada comisión de la venta.
+// 'acreditado' — registra las dos fechas que dependen de pagos (inicio del
+// plazo de resguardo, pago total acreditado) y reevalúa el gate de cada
+// comisión de la venta.
 export async function procesarPagoAcreditadoParaComisiones(db, requestId, { ventaId, pagoTipo, actorEmail }) {
   const pagos = await query(db, requestId, 'SELECT * FROM pagos_esperados WHERE venta_id = ?', [ventaId]);
   const esPrimerPago = pagos.length === 1 ? pagoTipo === 'total' : pagoTipo === 'inicial';
@@ -245,8 +370,8 @@ export async function procesarPagoAcreditadoParaComisiones(db, requestId, { vent
 
 // Marca una comisión como pagada — exclusivo de administración (se valida
 // en el endpoint). Solo desde 'programada': "habilitación separada de
-// programación y pago" (criterio de aceptación de RIO-114) — no se puede
-// pagar algo que nunca llegó a programarse.
+// programación y pago" — no se puede pagar algo que nunca llegó a
+// programarse, ni algo retenido por una disputa sin resolver.
 export async function marcarComisionPagada(db, requestId, { comisionId, actorEmail, fechaPagoReal }) {
   const rows = await query(db, requestId, 'SELECT * FROM comisiones WHERE id = ?', [comisionId]);
   const comision = rows[0];
@@ -264,10 +389,9 @@ export async function marcarComisionPagada(db, requestId, { comisionId, actorEma
 
 // Alta de un costo directo de un componente (ej. dominio propio de una
 // Landing Premium) — exclusivo de administración (autorizado_por, validado
-// en el endpoint). Se descuenta de la utilidad neta de ESE componente, pero
-// solo afecta comisiones generadas DESPUÉS de este registro — nunca
-// recalcula hacia atrás una comisión ya generada (mismo principio de
-// snapshot inmutable que el resto del sistema).
+// en el endpoint). Se descuenta de la utilidad neta de ESE componente,
+// pero solo afecta comisiones generadas DESPUÉS de este registro — nunca
+// recalcula hacia atrás una comisión ya generada (snapshot inmutable).
 export async function registrarCostoDirecto(db, requestId, { componenteId, tipo, monto, moneda, autorizadoPor, nota }) {
   const id = crypto.randomUUID();
   await execute(

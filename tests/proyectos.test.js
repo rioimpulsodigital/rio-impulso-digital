@@ -26,6 +26,7 @@ function fakeDb() {
     eventos_historial: [],
     incidencias: [],
     comisiones: [], // RIO-114: acreditarPago() ahora también consulta comisiones — ninguna se siembra en este suite (fuera de su alcance), así que siempre vacío.
+    asignaciones_produccion: [], // RIO-114 (corrección): aprobarComponente() consulta si hay un asistente asignado — ninguno en este suite.
   };
 
   function makeStatement(sql) {
@@ -88,6 +89,9 @@ function fakeDb() {
       return state.pagos_informados.filter((x) => x.pago_esperado_id === p[0]).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     }
     if (sql.includes('FROM comisiones WHERE venta_id')) return state.comisiones.filter((c) => c.venta_id === p[0]);
+    if (sql.startsWith('SELECT usuario_email FROM asignaciones_produccion WHERE componente_id')) {
+      return state.asignaciones_produccion.filter((a) => a.componente_id === p[0]);
+    }
     throw new Error('consulta inesperada en test: ' + sql);
   }
 
