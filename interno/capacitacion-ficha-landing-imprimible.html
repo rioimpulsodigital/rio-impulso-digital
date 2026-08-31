@@ -65,7 +65,9 @@
   .toc-sub { color: var(--muted); font-size: 8.8pt; display: block; }
 
   /* ── Encabezado de módulo ── */
-  .module { padding-top: 2mm; }
+  .module { padding-top: 10mm; margin-top: 10mm; border-top: 1.5px solid var(--border); }
+  .module--first { border-top: none; margin-top: 0; padding-top: 2mm; }
+  .module-head { page-break-after: avoid; break-after: avoid; }
   .module-kicker {
     font-family: var(--ff-mono); font-size: 8.5pt; letter-spacing: .06em; color: var(--coral);
     text-transform: uppercase; margin-bottom: 4px;
@@ -147,7 +149,7 @@
 </section>
 
 <!-- ══════════════ ÍNDICE ══════════════ -->
-<section class="page-break toc">
+<section class="toc">
   <h2>Índice</h2>
   <ol>
     <li><span><b>Así te encuentra un cliente</b><span class="toc-sub">Búsqueda local simulada</span></span></li>
@@ -169,10 +171,12 @@
 </section>
 
 <!-- ══════════════ MÓDULO 1 ══════════════ -->
-<section class="page-break module">
-  <div class="module-kicker">Módulo 1 de 14</div>
-  <h2>Así te encuentra un cliente</h2>
-  <p class="module-sub">Búsqueda local simulada</p>
+<section class="module module--first">
+  <div class="module-head">
+    <div class="module-kicker">Módulo 1 de 14</div>
+    <h2>Así te encuentra un cliente</h2>
+    <p class="module-sub">Búsqueda local simulada</p>
+  </div>
   <p>Cuando alguien busca "ferretería cerca de mí" en Google, aparece una lista de negocios de la zona — cada uno con su nombre, su calificación y si tiene o no un sitio web propio. No todos los negocios de la lista tienen página propia, aunque todos tengan Ficha de Google activa.</p>
   <div class="box">
     <div class="box-title">Ejemplo de resultados para "ferretería cerca de mí"</div>
@@ -188,10 +192,12 @@
 </section>
 
 <!-- ══════════════ MÓDULO 2 ══════════════ -->
-<section class="page-break module">
-  <div class="module-kicker">Módulo 2 de 14</div>
-  <h2>Qué es una Ficha de Google</h2>
-  <p class="module-sub">Elemento por elemento</p>
+<section class="module">
+  <div class="module-head">
+    <div class="module-kicker">Módulo 2 de 14</div>
+    <h2>Qué es una Ficha de Google</h2>
+    <p class="module-sub">Elemento por elemento</p>
+  </div>
   <p>Una <b>Ficha de Google</b> (también llamada Perfil de Empresa en Google) es el perfil gratuito que Google muestra en el buscador y en Google Maps cuando alguien busca un negocio por nombre o por categoría cerca de su ubicación. La crea o reclama el propio negocio — no hay que pagarle nada a Google para tenerla — y funciona, en la práctica, como su carta de presentación en Google.</p>
   <p><b>Ferretería El Tornillo</b> — ★ 4.6 (89 reseñas) · Abierto ahora</p>
   <div class="box">
@@ -211,10 +217,12 @@
 </section>
 
 <!-- ══════════════ MÓDULO 3 (ejercicio 1) ══════════════ -->
-<section class="page-break module">
-  <div class="module-kicker">Módulo 3 de 14</div>
-  <h2>La oportunidad que falta</h2>
-  <p class="module-sub">Ficha sin página propia</p>
+<section class="module">
+  <div class="module-head">
+    <div class="module-kicker">Módulo 3 de 14</div>
+    <h2>La oportunidad que falta</h2>
+    <p class="module-sub">Ficha sin página propia</p>
+  </div>
   <p>Ferretería El Tornillo tiene Ficha de Google activa — <b>sí aparece</b> cuando lo buscan. Pero mirá bien: no tiene ningún enlace a un sitio web.</p>
   <div class="exercise avoid-break">
     <span class="exercise-num">Ejercicio 1</span>
@@ -227,19 +235,23 @@
 </section>
 
 <!-- ══════════════ MÓDULO 4 ══════════════ -->
-<section class="page-break module">
-  <div class="module-kicker">Módulo 4 de 14</div>
-  <h2>Qué es una Landing Page</h2>
-  <p class="module-sub">Una presentación ordenada</p>
+<section class="module">
+  <div class="module-head">
+    <div class="module-kicker">Módulo 4 de 14</div>
+    <h2>Qué es una Landing Page</h2>
+    <p class="module-sub">Una presentación ordenada</p>
+  </div>
   <p>Una Landing es una página web de una sola sección continua, pensada para un objetivo concreto: que quien la visite entienda rápido qué ofrece el negocio y sepa cómo contactarlo.</p>
   <div class="rule"><span class="tag">Importante</span><p style="margin:0;">No es un sitio institucional con muchas páginas — es una presentación clara y directa, con un solo objetivo: que te contacten.</p></div>
 </section>
 
 <!-- ══════════════ MÓDULO 5 ══════════════ -->
-<section class="page-break module">
-  <div class="module-kicker">Módulo 5 de 14</div>
-  <h2>Las preguntas de la Landing</h2>
-  <p class="module-sub">Qué preguntamos y para qué sirve cada respuesta</p>
+<section class="module">
+  <div class="module-head">
+    <div class="module-kicker">Módulo 5 de 14</div>
+    <h2>Las preguntas de la Landing</h2>
+    <p class="module-sub">Qué preguntamos y para qué sirve cada respuesta</p>
+  </div>
   <p>Estas son las mismas 7 preguntas que se usan en el Kit real (Paso 1). No son solo para que el cliente responda — hay que entender <b>para qué sirve</b> cada respuesta a la hora de armar su Landing.</p>
   <div class="box"><div class="box-title">01 — Qué vendés, para quién y el rubro (incluye rango de precio)</div><p style="margin:0;">Define el mensaje central de la Landing y calibra el tono del copy.</p></div>
   <div class="box"><div class="box-title">02 — Qué te hace diferente de los negocios similares en tu zona</div><p style="margin:0;">Es el diferencial que se destaca en la Landing — sin esta respuesta, la página queda genérica.</p></div>
@@ -252,10 +264,12 @@
 </section>
 
 <!-- ══════════════ MÓDULO 6 ══════════════ -->
-<section class="page-break module">
-  <div class="module-kicker">Módulo 6 de 14</div>
-  <h2>El ecosistema completo</h2>
-  <p class="module-sub">Redes + Google + Landing + WhatsApp</p>
+<section class="module">
+  <div class="module-head">
+    <div class="module-kicker">Módulo 6 de 14</div>
+    <h2>El ecosistema completo</h2>
+    <p class="module-sub">Redes + Google + Landing + WhatsApp</p>
+  </div>
   <p>Ninguna de estas herramientas reemplaza a la otra:</p>
   <div class="box"><div class="box-title">📱 Redes sociales</div><p style="margin:0;">Construyen comunidad con quienes ya siguen al negocio. No están pensadas para que alguien nuevo lo encuentre buscando activamente.</p></div>
   <div class="box"><div class="box-title">🔍 Google y Google Maps</div><p style="margin:0;">Es donde aparece el negocio cuando una persona busca activamente algo que necesita, en ese momento, cerca de donde está.</p></div>
@@ -265,10 +279,12 @@
 </section>
 
 <!-- ══════════════ MÓDULO 7 ══════════════ -->
-<section class="page-break module">
-  <div class="module-kicker">Módulo 7 de 14</div>
-  <h2>Comparar escenarios</h2>
-  <p class="module-sub">Qué resuelve cada combinación</p>
+<section class="module">
+  <div class="module-head">
+    <div class="module-kicker">Módulo 7 de 14</div>
+    <h2>Comparar escenarios</h2>
+    <p class="module-sub">Qué resuelve cada combinación</p>
+  </div>
   <table class="compare">
     <tr><th>Escenario</th><th>Contenido y comunidad</th><th>Descubrimiento en búsqueda</th><th>Presentación ordenada</th><th>Conversación y cierre</th></tr>
     <tr><td>Solo redes sociales</td><td class="mark-yes">✓</td><td class="mark-no">—</td><td class="mark-no">—</td><td class="mark-yes">✓</td></tr>
@@ -281,10 +297,12 @@
 </section>
 
 <!-- ══════════════ MÓDULO 8 (ejercicios 2-5) ══════════════ -->
-<section class="page-break module">
-  <div class="module-kicker">Módulo 8 de 14</div>
-  <h2>Reconocer la urgencia real</h2>
-  <p class="module-sub">Se descubre, no se inventa</p>
+<section class="module">
+  <div class="module-head">
+    <div class="module-kicker">Módulo 8 de 14</div>
+    <h2>Reconocer la urgencia real</h2>
+    <p class="module-sub">Se descubre, no se inventa</p>
+  </div>
   <div class="quote">La urgencia se descubre haciendo preguntas. No se fabrica para presionar al prospecto.</div>
   <p style="font-size:9pt;color:var(--muted);">Tipos: <b>A</b> — Capacidad limitada · <b>B</b> — Empeora con el tiempo · <b>C</b> — Estacional / por fecha · <b>D</b> — Sin urgencia real.</p>
 
@@ -315,10 +333,12 @@
 </section>
 
 <!-- ══════════════ MÓDULO 9 (ejercicios 6-10) ══════════════ -->
-<section class="page-break module">
-  <div class="module-kicker">Módulo 9 de 14</div>
-  <h2>Posibles objeciones</h2>
-  <p class="module-sub">La mejor respuesta natural</p>
+<section class="module">
+  <div class="module-head">
+    <div class="module-kicker">Módulo 9 de 14</div>
+    <h2>Posibles objeciones</h2>
+    <p class="module-sub">La mejor respuesta natural</p>
+  </div>
   <p style="font-size:9pt;color:var(--muted);">Elegí, para cada objeción, la respuesta que consideres más adecuada.</p>
 
   <div class="exercise avoid-break">
@@ -355,10 +375,12 @@
 </section>
 
 <!-- ══════════════ MÓDULO 10 ══════════════ -->
-<section class="page-break module">
-  <div class="module-kicker">Módulo 10 de 14</div>
-  <h2>Los cinco productos de RiO</h2>
-  <p class="module-sub">Alcance y condiciones — los precios vigentes se consultan siempre en el Kit digital o el Portal, nunca en este documento</p>
+<section class="module">
+  <div class="module-head">
+    <div class="module-kicker">Módulo 10 de 14</div>
+    <h2>Los cinco productos de RiO</h2>
+    <p class="module-sub">Alcance y condiciones — los precios vigentes se consultan siempre en el Kit digital o el Portal, nunca en este documento</p>
+  </div>
 
   <div class="product avoid-break">
     <div class="product-label">Ficha de Google</div>
@@ -404,10 +426,12 @@
 </section>
 
 <!-- ══════════════ MÓDULO 11 ══════════════ -->
-<section class="page-break module">
-  <div class="module-kicker">Módulo 11 de 14</div>
-  <h2>Express versus Premium</h2>
-  <p class="module-sub">Una sola diferencia real</p>
+<section class="module">
+  <div class="module-head">
+    <div class="module-kicker">Módulo 11 de 14</div>
+    <h2>Express versus Premium</h2>
+    <p class="module-sub">Una sola diferencia real</p>
+  </div>
   <table class="compare">
     <tr><th></th><th>Landing Express</th><th>Landing Premium</th></tr>
     <tr><td>Diseño y desarrollo</td><td>Igual</td><td>Igual</td></tr>
@@ -421,10 +445,12 @@
 </section>
 
 <!-- ══════════════ MÓDULO 12 (ejercicios 11-16) ══════════════ -->
-<section class="page-break module">
-  <div class="module-kicker">Módulo 12 de 14</div>
-  <h2>Elegir la solución</h2>
-  <p class="module-sub">6 casos para diagnosticar</p>
+<section class="module">
+  <div class="module-head">
+    <div class="module-kicker">Módulo 12 de 14</div>
+    <h2>Elegir la solución</h2>
+    <p class="module-sub">6 casos para diagnosticar</p>
+  </div>
   <p style="font-size:9pt;color:var(--muted);">Opciones posibles: Ficha de Google · Landing Express · Landing Premium · Ficha + Landing Express · Ficha + Landing Premium · Agendar un diagnóstico con Brenda · Ninguno (no corresponde ofrecer nada hoy).</p>
 
   <div class="exercise avoid-break">
@@ -466,10 +492,12 @@
 </section>
 
 <!-- ══════════════ MÓDULO 13 ══════════════ -->
-<section class="page-break module">
-  <div class="module-kicker">Módulo 13 de 14</div>
-  <h2>Después de la conversación</h2>
-  <p class="module-sub">El paso obligatorio por el Portal</p>
+<section class="module">
+  <div class="module-head">
+    <div class="module-kicker">Módulo 13 de 14</div>
+    <h2>Después de la conversación</h2>
+    <p class="module-sub">El paso obligatorio por el Portal</p>
+  </div>
   <div class="quote">El cliente nunca entra al Portal — entrás vos, siempre, apenas termina la conversación.</div>
   <ol>
     <li>Conversar con el prospecto.</li>
@@ -487,10 +515,12 @@
 </section>
 
 <!-- ══════════════ MÓDULO 14 — AUTOEVALUACIÓN ══════════════ -->
-<section class="page-break module">
-  <div class="module-kicker">Módulo 14 de 14</div>
-  <h2>Autoevaluación final</h2>
-  <p class="module-sub">Repaso de cierre — 10 preguntas</p>
+<section class="module">
+  <div class="module-head">
+    <div class="module-kicker">Módulo 14 de 14</div>
+    <h2>Autoevaluación final</h2>
+    <p class="module-sub">Repaso de cierre — 10 preguntas</p>
+  </div>
 
   <div class="quiz-item"><span class="quiz-num">1.</span><b>¿Qué es una Ficha de Google?</b>
     <div class="opt"><span class="box-check"></span> Una página web con varias secciones.</div>
