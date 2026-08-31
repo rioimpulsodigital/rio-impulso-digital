@@ -1,14 +1,18 @@
-// POST /interno/api/comisiones/asignaciones-produccion — RIO-114.
-// Asigna un asistente/practicante a un componente específico — el
-// prerrequisito real para que pueda generarse su comisión de producción
-// (RIO-97 v2: "hoy sin nadie asignado"). Exclusivo de administración. Un
-// componente admite un único asistente asignado en esta etapa (columna
-// UNIQUE, migración 0011) — asignarlo dos veces devuelve 409, nunca
-// sobrescribe en silencio.
+// POST /interno/api/comisiones/asignaciones-produccion — RIO-114,
+// extendido en RIO-115 con `rol` ('produccion' | 'desarrollo').
+// Asigna a una persona un componente para un rol específico — el
+// prerrequisito real para que pueda generarse esa comisión (RIO-97 v2:
+// "hoy sin nadie asignado"). Exclusivo de administración. Un componente
+// admite hasta una persona asignada POR ROL (UNIQUE(componente_id, rol),
+// migración 0014) — la misma persona puede ocupar ambos roles sobre el
+// mismo componente (ej. produce y también desarrolla), pero asignar el
+// mismo rol dos veces devuelve 409, nunca sobrescribe en silencio.
 
 import { ok, Errors } from '../../../../_shared/response.js';
 import { query, execute } from '../../../../_shared/db.js';
 import { isMethodAllowed, hasExpectedContentType } from '../../../../_shared/security.js';
+
+const VALID_ROLES = ['produccion', 'desarrollo'];
 
 export async function onRequest(context) {
   const { request, env, data } = context;
@@ -36,20 +40,27 @@ export async function onRequest(context) {
   if (typeof body?.usuarioEmail !== 'string' || !body.usuarioEmail.trim()) {
     return Errors.validation('Falta usuarioEmail.', requestId);
   }
+  if (!VALID_ROLES.includes(body?.rol)) {
+    return Errors.validation('rol inválido. Valores permitidos: produccion, desarrollo.', requestId);
+  }
 
-  const componenteRows = await query(env.DB, requestId, 'SELECT id FROM componentes WHERE id = ?', [body.componenteId]);
-  if (!componenteRows[0]) return Errors.notFound(requestId);
+  const componenteRows = await query(env.DB, requestId, 'SELECT id, tipo FROM componentes WHERE id = ?', [body.componenteId]);
+  const componente = componenteRows[0];
+  if (!componente) return Errors.notFound(requestId);
+  if (componente.tipo !== 'landing') {
+    return Errors.validation('Solo se puede asignar producción o desarrollo a un componente Landing — esta distribución no aplica a Ficha.', requestId);
+  }
 
-  const yaAsignado = await query(env.DB, requestId, 'SELECT id FROM asignaciones_produccion WHERE componente_id = ?', [body.componenteId]);
+  const yaAsignado = await query(env.DB, requestId, 'SELECT id FROM asignaciones_produccion WHERE componente_id = ? AND rol = ?', [body.componenteId, body.rol]);
   if (yaAsignado[0]) {
-    return Errors.conflict('COMPONENTE_YA_ASIGNADO', 'Este componente ya tiene un asistente asignado.', requestId);
+    return Errors.conflict('ROL_YA_ASIGNADO', `Este componente ya tiene a alguien asignado como "${body.rol}".`, requestId);
   }
 
   const id = crypto.randomUUID();
   await execute(
     env.DB, requestId,
-    'INSERT INTO asignaciones_produccion (id, usuario_email, componente_id, asignado_por) VALUES (?, ?, ?, ?)',
-    [id, body.usuarioEmail.trim(), body.componenteId, roleIdentity.email]
+    'INSERT INTO asignaciones_produccion (id, usuario_email, componente_id, rol, asignado_por) VALUES (?, ?, ?, ?, ?)',
+    [id, body.usuarioEmail.trim(), body.componenteId, body.rol, roleIdentity.email]
   );
 
   return ok({ id }, requestId, 201);

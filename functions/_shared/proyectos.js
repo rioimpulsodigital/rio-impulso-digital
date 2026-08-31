@@ -16,7 +16,7 @@
 
 import { query, execute } from './db.js';
 import { logEvento } from './historial.js';
-import { procesarPagoAcreditadoParaComisiones, generarComisionProduccionSiCorresponde, retenerComisionesPorDisputa } from './comisiones.js';
+import { procesarPagoAcreditadoParaComisiones, generarComisionesLandingSiCorresponde, retenerComisionesPorDisputa } from './comisiones.js';
 
 export class ProyectoError extends Error {
   constructor(code, message) {
@@ -143,9 +143,10 @@ export async function marcarEntregada(db, requestId, { ventaId, componenteId, ac
 
 // Transición entregada -> aprobada. Si es el componente Ficha de un pack,
 // reevalúa el gate de Landing (una de las 3 condiciones acaba de
-// cumplirse). También es el momento en que se genera la comisión de
-// producción de ESTE componente, si hay un asistente asignado con plan
-// vigente (RIO-114) — nunca antes de la aprobación oficial.
+// cumplirse). También es el momento en que se generan las comisiones de
+// producción y desarrollo de ESTE componente, si es Landing y hay alguien
+// asignado con plan vigente (RIO-115) — nunca antes de la aprobación
+// oficial, y nunca para un componente Ficha.
 export async function aprobarComponente(db, requestId, { ventaId, componenteId, actorEmail }) {
   const { venta, componentes } = await loadVentaFull(db, requestId, ventaId);
   const componente = componentes.find((c) => c.id === componenteId);
@@ -160,7 +161,7 @@ export async function aprobarComponente(db, requestId, { ventaId, componenteId, 
     estadoAnterior: 'entregada', estadoNuevo: 'aprobada', usuarioEmail: actorEmail,
   });
 
-  await generarComisionProduccionSiCorresponde(db, requestId, {
+  await generarComisionesLandingSiCorresponde(db, requestId, {
     ventaId, componente, producto: venta.producto, mercado: venta.mercado, moneda: venta.moneda,
   });
 

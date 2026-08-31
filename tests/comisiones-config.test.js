@@ -19,7 +19,7 @@ function admin(overrides = {}) {
 function fakeDb() {
   const state = {
     dias_no_habiles: [],
-    componentes: [{ id: 'comp-1', proyecto_id: 'proyecto-1', precio_atribuido: 50000 }],
+    componentes: [{ id: 'comp-1', proyecto_id: 'proyecto-1', tipo: 'landing', precio_atribuido: 50000 }],
     asignaciones_produccion: [],
     ventas: [{ id: 'venta-1', vendedor_email: 'ejecutivo.a@example.com', mercado: 'CL', moneda: 'CLP' }],
     proyectos: [{ id: 'proyecto-1', venta_id: 'venta-1' }],
@@ -36,8 +36,8 @@ function fakeDb() {
   }
   function runSelect(sql, p) {
     if (sql.startsWith('SELECT * FROM dias_no_habiles')) return state.dias_no_habiles;
-    if (sql.startsWith('SELECT id FROM componentes WHERE id')) return state.componentes.filter((c) => c.id === p[0]);
-    if (sql.startsWith('SELECT id FROM asignaciones_produccion WHERE componente_id')) return state.asignaciones_produccion.filter((a) => a.componente_id === p[0]);
+    if (sql.startsWith('SELECT id, tipo FROM componentes WHERE id')) return state.componentes.filter((c) => c.id === p[0]);
+    if (sql.startsWith('SELECT id FROM asignaciones_produccion WHERE componente_id')) return state.asignaciones_produccion.filter((a) => a.componente_id === p[0] && a.rol === p[1]);
     if (sql.includes('FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]);
     if (sql.startsWith('SELECT id FROM proyectos WHERE venta_id')) return state.proyectos.filter((pr) => pr.venta_id === p[0]);
     if (sql.startsWith('SELECT id, precio_atribuido FROM componentes WHERE proyecto_id')) return state.componentes.filter((c) => c.proyecto_id === p[0]);
@@ -49,7 +49,7 @@ function fakeDb() {
       if (dup) throw new Error('UNIQUE constraint failed');
       state.dias_no_habiles.push({ id: p[0], mercado: p[1], fecha: p[2], motivo: p[3], created_by: p[4] });
     } else if (sql.startsWith('INSERT INTO asignaciones_produccion')) {
-      state.asignaciones_produccion.push({ id: p[0], usuario_email: p[1], componente_id: p[2], asignado_por: p[3] });
+      state.asignaciones_produccion.push({ id: p[0], usuario_email: p[1], componente_id: p[2], rol: p[3], asignado_por: p[4] });
     } else if (sql.startsWith('INSERT INTO costos_directos')) {
       state.costos_directos.push({ id: p[0], componente_id: p[1], tipo: p[2], monto: p[3], moneda: p[4], autorizado_por: p[5] });
     }
@@ -105,29 +105,52 @@ test('dias-no-habiles: cualquier usuario identificado puede listarlos (no expone
 
 test('asignaciones-produccion: un ejecutivo NO puede asignar un componente (exclusivo de admin)', async () => {
   const db = fakeDb();
-  const response = await asignacionesProduccionHandler(fakeContext({ body: { componenteId: 'comp-1', usuarioEmail: 'asistente@example.com' }, roleIdentity: roleIdentity(), db }));
+  const response = await asignacionesProduccionHandler(fakeContext({ body: { componenteId: 'comp-1', usuarioEmail: 'asistente@example.com', rol: 'produccion' }, roleIdentity: roleIdentity(), db }));
   assert.equal(response.status, 403);
 });
 
-test('asignaciones-produccion: admin SÍ puede asignar un componente', async () => {
+test('asignaciones-produccion: admin SÍ puede asignar un componente Landing', async () => {
   const db = fakeDb();
-  const response = await asignacionesProduccionHandler(fakeContext({ body: { componenteId: 'comp-1', usuarioEmail: 'asistente@example.com' }, roleIdentity: admin(), db }));
+  const response = await asignacionesProduccionHandler(fakeContext({ body: { componenteId: 'comp-1', usuarioEmail: 'asistente@example.com', rol: 'produccion' }, roleIdentity: admin(), db }));
   assert.equal(response.status, 201);
   assert.equal(db._state.asignaciones_produccion[0].usuario_email, 'asistente@example.com');
+  assert.equal(db._state.asignaciones_produccion[0].rol, 'produccion');
 });
 
-test('asignaciones-produccion: un componente ya asignado devuelve 409, nunca sobrescribe en silencio', async () => {
+test('asignaciones-produccion: rol inválido devuelve 400', async () => {
   const db = fakeDb();
-  await asignacionesProduccionHandler(fakeContext({ body: { componenteId: 'comp-1', usuarioEmail: 'asistente.a@example.com' }, roleIdentity: admin(), db }));
-  const response = await asignacionesProduccionHandler(fakeContext({ body: { componenteId: 'comp-1', usuarioEmail: 'asistente.b@example.com' }, roleIdentity: admin(), db }));
+  const response = await asignacionesProduccionHandler(fakeContext({ body: { componenteId: 'comp-1', usuarioEmail: 'asistente@example.com', rol: 'algo_raro' }, roleIdentity: admin(), db }));
+  assert.equal(response.status, 400);
+});
+
+test('asignaciones-produccion: un componente Ficha se rechaza — esta distribución no aplica a Fichas', async () => {
+  const db = fakeDb();
+  db._state.componentes.push({ id: 'comp-ficha', proyecto_id: 'proyecto-1', tipo: 'ficha', precio_atribuido: 50000 });
+  const response = await asignacionesProduccionHandler(fakeContext({ body: { componenteId: 'comp-ficha', usuarioEmail: 'asistente@example.com', rol: 'produccion' }, roleIdentity: admin(), db }));
+  assert.equal(response.status, 400);
+});
+
+test('asignaciones-produccion: el mismo rol en un componente ya asignado devuelve 409, nunca sobrescribe en silencio', async () => {
+  const db = fakeDb();
+  await asignacionesProduccionHandler(fakeContext({ body: { componenteId: 'comp-1', usuarioEmail: 'asistente.a@example.com', rol: 'produccion' }, roleIdentity: admin(), db }));
+  const response = await asignacionesProduccionHandler(fakeContext({ body: { componenteId: 'comp-1', usuarioEmail: 'asistente.b@example.com', rol: 'produccion' }, roleIdentity: admin(), db }));
   assert.equal(response.status, 409);
   assert.equal(db._state.asignaciones_produccion.length, 1);
   assert.equal(db._state.asignaciones_produccion[0].usuario_email, 'asistente.a@example.com');
 });
 
+test('asignaciones-produccion: el MISMO componente admite un rol distinto (produccion y desarrollo son independientes)', async () => {
+  const db = fakeDb();
+  const r1 = await asignacionesProduccionHandler(fakeContext({ body: { componenteId: 'comp-1', usuarioEmail: 'practicante@example.com', rol: 'produccion' }, roleIdentity: admin(), db }));
+  const r2 = await asignacionesProduccionHandler(fakeContext({ body: { componenteId: 'comp-1', usuarioEmail: 'brenda@example.com', rol: 'desarrollo' }, roleIdentity: admin(), db }));
+  assert.equal(r1.status, 201);
+  assert.equal(r2.status, 201);
+  assert.equal(db._state.asignaciones_produccion.length, 2);
+});
+
 test('asignaciones-produccion: componente inexistente devuelve 404', async () => {
   const db = fakeDb();
-  const response = await asignacionesProduccionHandler(fakeContext({ body: { componenteId: 'no-existe', usuarioEmail: 'asistente@example.com' }, roleIdentity: admin(), db }));
+  const response = await asignacionesProduccionHandler(fakeContext({ body: { componenteId: 'no-existe', usuarioEmail: 'asistente@example.com', rol: 'produccion' }, roleIdentity: admin(), db }));
   assert.equal(response.status, 404);
 });
 

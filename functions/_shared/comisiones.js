@@ -61,6 +61,16 @@ async function utilidadNetaComponente(db, requestId, componente) {
 // no hay asignación, si el plan está inactivo/vencido, o si no alcanza
 // este producto o mercado — en cualquiera de esos casos, no corresponde
 // generar la comisión (ver principio central arriba).
+//
+// IMPORTANTE (corrección RIO-115, 30/08/2026): una misma persona puede
+// tener MÁS de una asignación vigente del mismo tipo a la vez, cada una
+// alcanzando productos distintos — ej. Brenda tiene comercial 0% para
+// Ficha/packs y comercial 40% para Landing individual, simultáneamente
+// vigentes. Por eso acá se traen TODAS las asignaciones vigentes de ese
+// tipo (sin LIMIT en la consulta) y el filtro por producto/mercado se
+// aplica en código a cada una — quedarse con la primera fila antes de
+// filtrar (como hacía la versión anterior) podía descartar por accidente
+// la asignación que sí correspondía a este producto.
 async function resolverAsignacionVigente(db, requestId, { usuarioEmail, tipo, producto, mercado }) {
   const rows = await query(
     db, requestId,
@@ -72,14 +82,13 @@ async function resolverAsignacionVigente(db, requestId, { usuarioEmail, tipo, pr
        AND (ap.valid_until IS NULL OR ap.valid_until > datetime('now')) AND ap.valid_from <= datetime('now')
        AND pl.estado = 'activo'
        AND (pl.valid_until IS NULL OR pl.valid_until > datetime('now')) AND pl.valid_from <= datetime('now')
-     ORDER BY ap.valid_from DESC LIMIT 1`,
+     ORDER BY ap.valid_from DESC`,
     [usuarioEmail, tipo]
   );
-  const row = rows[0];
-  if (!row) return null;
-  if (!parseJsonArray(row.productos_alcanzados).includes(producto)) return null;
-  if (!parseJsonArray(row.mercados_alcanzados).includes(mercado)) return null;
-  return row;
+  const coincide = rows.find((row) =>
+    parseJsonArray(row.productos_alcanzados).includes(producto) && parseJsonArray(row.mercados_alcanzados).includes(mercado)
+  );
+  return coincide || null;
 }
 
 async function crearComisionSiCorresponde(db, requestId, { tipo, ventaId, componenteId, beneficiarioEmail, producto, mercado, moneda, montoBase }) {
@@ -136,16 +145,33 @@ export async function generarComisionesParaVenta(db, requestId, { ventaId, vende
   return ids;
 }
 
-// Comisión de producción — requiere las 3 condiciones de Brenda (sección
-// 8): (1) una asignación EXPRESA del componente a un asistente en
-// `asignaciones_produccion` (RIO-97 v2: "hoy sin nadie asignado" — nunca se
-// inventa un beneficiario); (2) que esa persona esté activa (mismo
-// user_status que cualquier otra identidad del sistema — un asistente
-// dado de baja no genera comisión aunque la asignación siga en la tabla);
-// (3) un plan de producción vigente que alcance este producto/mercado.
-// Se llama al aprobar oficialmente el componente (proyectos.js) — nunca
-// antes, y nunca retroactiva: si la asignación llega después de aprobado,
-// no hay a qué "aprobar" de nuevo.
+// Distribución de participaciones del componente Landing — RIO-115
+// (corrección, Brenda 30/08/2026): 40% comercial + 10% supervisión + 10%
+// producción + 20% desarrollo + 20% empresa, TODOS sobre la misma base
+// (utilidad neta del componente Landing) — nunca en cascada sobre el
+// saldo de otra comisión. Comercial y supervisión ya se generan a nivel
+// de venta (arriba, generarComisionesParaVenta) — acá solo se agregan
+// producción y desarrollo, que son exclusivos de Landing ("no extenderla
+// automáticamente a Fichas"): un componente Ficha nunca llega a
+// resolverAsignacionVigente para estos dos tipos, sin importar qué diga
+// productos_alcanzados. El 20% de empresa NO se modela como fila: no es
+// una comisión personal ni utilidad final confirmada (Brenda: "todavía
+// debe cubrir los gastos generales") — es el remanente implícito, mismo
+// criterio que ya regía cuando no había nadie asignado.
+//
+// Cada rol (producción, desarrollo) requiere sus propias 3 condiciones,
+// igual que antes: (1) una asignación EXPRESA del componente a esa
+// persona PARA ESE ROL en `asignaciones_produccion` (RIO-97 v2: "hoy sin
+// nadie asignado" — nunca se inventa un beneficiario; la ausencia de un
+// practicante no le asigna automáticamente el 10% a nadie más); (2) que
+// esa persona esté activa; (3) un plan vigente de ese tipo que alcance
+// este producto/mercado. Una misma persona puede tener ambos roles sobre
+// el mismo componente (ej. Brenda produce Y desarrolla) — cada uno genera
+// su propia fila, nunca sumadas. Se llama al aprobar oficialmente el
+// componente (proyectos.js) — nunca antes, y nunca retroactiva: si la
+// asignación llega después de aprobado, no hay a qué "aprobar" de nuevo.
+const ROLES_LANDING = ['produccion', 'desarrollo'];
+
 async function usuarioActivo(db, requestId, email) {
   const rows = await query(
     db, requestId,
@@ -157,18 +183,28 @@ async function usuarioActivo(db, requestId, email) {
   return rows[0]?.user_status === 'activo';
 }
 
-export async function generarComisionProduccionSiCorresponde(db, requestId, { ventaId, componente, producto, mercado, moneda }) {
-  const asignaciones = await query(db, requestId, 'SELECT usuario_email FROM asignaciones_produccion WHERE componente_id = ?', [componente.id]);
+async function generarComisionPorRolLanding(db, requestId, { rol, ventaId, componente, producto, mercado, moneda }) {
+  const asignaciones = await query(db, requestId, 'SELECT usuario_email FROM asignaciones_produccion WHERE componente_id = ? AND rol = ?', [componente.id, rol]);
   const asignacion = asignaciones[0];
-  if (!asignacion) return null; // sin asignación expresa.
+  if (!asignacion) return null; // sin asignación expresa para ESTE rol.
 
-  if (!(await usuarioActivo(db, requestId, asignacion.usuario_email))) return null; // asistente inactivo.
+  if (!(await usuarioActivo(db, requestId, asignacion.usuario_email))) return null;
 
   const utilidad = await utilidadNetaComponente(db, requestId, componente);
   return crearComisionSiCorresponde(db, requestId, {
-    tipo: 'produccion', ventaId, componenteId: componente.id, beneficiarioEmail: asignacion.usuario_email,
+    tipo: rol, ventaId, componenteId: componente.id, beneficiarioEmail: asignacion.usuario_email,
     producto, mercado, moneda, montoBase: utilidad,
   });
+}
+
+export async function generarComisionesLandingSiCorresponde(db, requestId, { ventaId, componente, producto, mercado, moneda }) {
+  if (componente.tipo !== 'landing') return []; // "Esta distribución queda confirmada para Landings. No extenderla automáticamente a Fichas."
+  const ids = [];
+  for (const rol of ROLES_LANDING) {
+    const id = await generarComisionPorRolLanding(db, requestId, { rol, ventaId, componente, producto, mercado, moneda });
+    if (id) ids.push(id);
+  }
+  return ids;
 }
 
 // Costo directo de un medio de pago que aplica a TODA la venta, no a un

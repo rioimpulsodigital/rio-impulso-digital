@@ -130,7 +130,6 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
         .map((ap) => ({ asignacion: ap, plan: state.planes_comision.find((pl) => pl.id === ap.plan_id) }))
         .filter((x) => x.plan && x.plan.tipo === p[1] && x.plan.estado === 'activo' && !x.plan.valid_until)
         .sort((a, b) => (a.asignacion.valid_from < b.asignacion.valid_from ? 1 : -1))
-        .slice(0, 1)
         .map((x) => ({
           asignacion_id: x.asignacion.id, plan_id: x.plan.id, porcentaje: x.plan.porcentaje, base: x.plan.base,
           productos_alcanzados: x.plan.productos_alcanzados, mercados_alcanzados: x.plan.mercados_alcanzados,
