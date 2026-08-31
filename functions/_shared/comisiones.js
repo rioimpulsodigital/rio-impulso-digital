@@ -145,32 +145,39 @@ export async function generarComisionesParaVenta(db, requestId, { ventaId, vende
   return ids;
 }
 
-// Distribución de participaciones del componente Landing — RIO-115
-// (corrección, Brenda 30/08/2026): 40% comercial + 10% supervisión + 10%
-// producción + 20% desarrollo + 20% empresa, TODOS sobre la misma base
-// (utilidad neta del componente Landing) — nunca en cascada sobre el
-// saldo de otra comisión. Comercial y supervisión ya se generan a nivel
-// de venta (arriba, generarComisionesParaVenta) — acá solo se agregan
-// producción y desarrollo, que son exclusivos de Landing ("no extenderla
-// automáticamente a Fichas"): un componente Ficha nunca llega a
-// resolverAsignacionVigente para estos dos tipos, sin importar qué diga
-// productos_alcanzados. El 20% de empresa NO se modela como fila: no es
-// una comisión personal ni utilidad final confirmada (Brenda: "todavía
-// debe cubrir los gastos generales") — es el remanente implícito, mismo
-// criterio que ya regía cuando no había nadie asignado.
+// Distribución de participaciones de trabajo por componente — RIO-115
+// (corrección, Brenda 30/08/2026, extendida 31/08/2026): 40% comercial +
+// 10% supervisión + 10% producción + 20% desarrollo + 20% empresa para
+// Landing; para Ficha, lo mismo MENOS desarrollo (Brenda: "en el caso de
+// la ficha es lo mismo, no hay desarrollo, pero alguien tiene que
+// hacerla, y quien la haga tiene que tener su % — los mismos que para la
+// Landing") — así que Ficha reparte comercial 40 + supervisión 10 +
+// producción 10, y el 40% restante (sin un rol de desarrollo que lo
+// reclame) queda como remanente de empresa. Todos sobre la misma base
+// (utilidad neta del componente) — nunca en cascada sobre el saldo de
+// otra comisión. Comercial y supervisión ya se generan a nivel de venta
+// (arriba, generarComisionesParaVenta) — acá solo se agregan producción
+// (Ficha y Landing) y desarrollo (exclusivo de Landing, "no hay
+// desarrollo" para Ficha). El 20%/40% de empresa NO se modela como fila:
+// no es una comisión personal ni utilidad final confirmada (Brenda:
+// "todavía debe cubrir los gastos generales") — es el remanente
+// implícito, mismo criterio que ya regía cuando no había nadie asignado.
 //
-// Cada rol (producción, desarrollo) requiere sus propias 3 condiciones,
-// igual que antes: (1) una asignación EXPRESA del componente a esa
-// persona PARA ESE ROL en `asignaciones_produccion` (RIO-97 v2: "hoy sin
-// nadie asignado" — nunca se inventa un beneficiario; la ausencia de un
-// practicante no le asigna automáticamente el 10% a nadie más); (2) que
-// esa persona esté activa; (3) un plan vigente de ese tipo que alcance
-// este producto/mercado. Una misma persona puede tener ambos roles sobre
-// el mismo componente (ej. Brenda produce Y desarrolla) — cada uno genera
-// su propia fila, nunca sumadas. Se llama al aprobar oficialmente el
-// componente (proyectos.js) — nunca antes, y nunca retroactiva: si la
-// asignación llega después de aprobado, no hay a qué "aprobar" de nuevo.
-const ROLES_LANDING = ['produccion', 'desarrollo'];
+// Cada rol requiere sus propias 3 condiciones, igual que antes: (1) una
+// asignación EXPRESA del componente a esa persona PARA ESE ROL en
+// `asignaciones_produccion` (RIO-97 v2: "hoy sin nadie asignado" — nunca
+// se inventa un beneficiario; la ausencia de un practicante no le asigna
+// automáticamente el % a nadie más); (2) que esa persona esté activa; (3)
+// un plan vigente de ese tipo que alcance este producto/mercado. Una
+// misma persona puede tener ambos roles sobre el mismo componente Landing
+// (ej. Brenda produce Y desarrolla) — cada uno genera su propia fila,
+// nunca sumadas. Se llama al aprobar oficialmente el componente
+// (proyectos.js) — nunca antes, y nunca retroactiva: si la asignación
+// llega después de aprobado, no hay a qué "aprobar" de nuevo.
+const ROLES_POR_TIPO_COMPONENTE = {
+  ficha: ['produccion'],
+  landing: ['produccion', 'desarrollo'],
+};
 
 async function usuarioActivo(db, requestId, email) {
   const rows = await query(
@@ -183,7 +190,7 @@ async function usuarioActivo(db, requestId, email) {
   return rows[0]?.user_status === 'activo';
 }
 
-async function generarComisionPorRolLanding(db, requestId, { rol, ventaId, componente, producto, mercado, moneda }) {
+async function generarComisionPorRolComponente(db, requestId, { rol, ventaId, componente, producto, mercado, moneda }) {
   const asignaciones = await query(db, requestId, 'SELECT usuario_email FROM asignaciones_produccion WHERE componente_id = ? AND rol = ?', [componente.id, rol]);
   const asignacion = asignaciones[0];
   if (!asignacion) return null; // sin asignación expresa para ESTE rol.
@@ -197,11 +204,11 @@ async function generarComisionPorRolLanding(db, requestId, { rol, ventaId, compo
   });
 }
 
-export async function generarComisionesLandingSiCorresponde(db, requestId, { ventaId, componente, producto, mercado, moneda }) {
-  if (componente.tipo !== 'landing') return []; // "Esta distribución queda confirmada para Landings. No extenderla automáticamente a Fichas."
+export async function generarComisionesTrabajoComponenteSiCorresponde(db, requestId, { ventaId, componente, producto, mercado, moneda }) {
+  const roles = ROLES_POR_TIPO_COMPONENTE[componente.tipo] || [];
   const ids = [];
-  for (const rol of ROLES_LANDING) {
-    const id = await generarComisionPorRolLanding(db, requestId, { rol, ventaId, componente, producto, mercado, moneda });
+  for (const rol of roles) {
+    const id = await generarComisionPorRolComponente(db, requestId, { rol, ventaId, componente, producto, mercado, moneda });
     if (id) ids.push(id);
   }
   return ids;

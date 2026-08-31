@@ -7,6 +7,11 @@
 // migración 0014) — la misma persona puede ocupar ambos roles sobre el
 // mismo componente (ej. produce y también desarrolla), pero asignar el
 // mismo rol dos veces devuelve 409, nunca sobrescribe en silencio.
+//
+// 'produccion' aplica a cualquier componente (Ficha o Landing) — "alguien
+// tiene que hacer la Ficha también" (Brenda, 31/08/2026). 'desarrollo'
+// sigue siendo exclusivo de Landing — "en el caso de la Ficha no hay
+// desarrollo".
 
 import { ok, Errors } from '../../../../_shared/response.js';
 import { query, execute } from '../../../../_shared/db.js';
@@ -47,8 +52,8 @@ export async function onRequest(context) {
   const componenteRows = await query(env.DB, requestId, 'SELECT id, tipo FROM componentes WHERE id = ?', [body.componenteId]);
   const componente = componenteRows[0];
   if (!componente) return Errors.notFound(requestId);
-  if (componente.tipo !== 'landing') {
-    return Errors.validation('Solo se puede asignar producción o desarrollo a un componente Landing — esta distribución no aplica a Ficha.', requestId);
+  if (body.rol === 'desarrollo' && componente.tipo !== 'landing') {
+    return Errors.validation('Solo se puede asignar desarrollo a un componente Landing — en Ficha no existe ese rol.', requestId);
   }
 
   const yaAsignado = await query(env.DB, requestId, 'SELECT id FROM asignaciones_produccion WHERE componente_id = ? AND rol = ?', [body.componenteId, body.rol]);

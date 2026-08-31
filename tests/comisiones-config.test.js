@@ -123,10 +123,17 @@ test('asignaciones-produccion: rol inválido devuelve 400', async () => {
   assert.equal(response.status, 400);
 });
 
-test('asignaciones-produccion: un componente Ficha se rechaza — esta distribución no aplica a Fichas', async () => {
+test('asignaciones-produccion: un componente Ficha SÍ admite el rol produccion — alguien tiene que hacerla', async () => {
   const db = fakeDb();
   db._state.componentes.push({ id: 'comp-ficha', proyecto_id: 'proyecto-1', tipo: 'ficha', precio_atribuido: 50000 });
   const response = await asignacionesProduccionHandler(fakeContext({ body: { componenteId: 'comp-ficha', usuarioEmail: 'asistente@example.com', rol: 'produccion' }, roleIdentity: admin(), db }));
+  assert.equal(response.status, 201);
+});
+
+test('asignaciones-produccion: un componente Ficha rechaza el rol desarrollo — "en el caso de la ficha no hay desarrollo"', async () => {
+  const db = fakeDb();
+  db._state.componentes.push({ id: 'comp-ficha', proyecto_id: 'proyecto-1', tipo: 'ficha', precio_atribuido: 50000 });
+  const response = await asignacionesProduccionHandler(fakeContext({ body: { componenteId: 'comp-ficha', usuarioEmail: 'brenda@example.com', rol: 'desarrollo' }, roleIdentity: admin(), db }));
   assert.equal(response.status, 400);
 });
 

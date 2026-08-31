@@ -10,7 +10,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  generarComisionesParaVenta, generarComisionesLandingSiCorresponde,
+  generarComisionesParaVenta, generarComisionesTrabajoComponenteSiCorresponde,
 } from '../functions/_shared/comisiones.js';
 
 function fakeDb() {
@@ -205,7 +205,7 @@ test('8) Asistente asignado a un componente Landing, con plan de producción vig
   db._state.asignaciones_rol.push({ usuario_id: id, role: 'asistente', user_status: 'activo', valid_until: null });
   db._state.asignaciones_produccion.push({ componente_id: 'comp-1', usuario_email: 'asistente.produce@example.com', rol: 'produccion' });
 
-  const ids = await generarComisionesLandingSiCorresponde(db, 'req-8', {
+  const ids = await generarComisionesTrabajoComponenteSiCorresponde(db, 'req-8', {
     ventaId: 'v1', componente: { id: 'comp-1', tipo: 'landing', precio_atribuido: 50000 }, producto: 'generico', mercado: 'CL', moneda: 'CLP',
   });
   assert.equal(ids.length, 1);
@@ -221,7 +221,7 @@ test('9) Asistente que vende y produce una Landing: genera ambas comisiones, com
   db._state.asignaciones_produccion.push({ componente_id: 'comp-1', usuario_email: email, rol: 'produccion' });
 
   const idsComercial = await generarComisionesParaVenta(db, 'req-9a', { ...VENTA_BASE, vendedorEmail: email, producto: 'generico' });
-  const idsProduccion = await generarComisionesLandingSiCorresponde(db, 'req-9b', {
+  const idsProduccion = await generarComisionesTrabajoComponenteSiCorresponde(db, 'req-9b', {
     ventaId: 'v1', componente: { id: 'comp-1', tipo: 'landing', precio_atribuido: 50000 }, producto: 'generico', mercado: 'CL', moneda: 'CLP',
   });
 
@@ -240,7 +240,7 @@ test('10) Asistente que vende pero NO está asignado al componente Landing: no g
   seedAsignacionPlan(db, { email, tipo: 'produccion', porcentaje: 10 }); // tiene el plan, pero no la asignación al componente.
   db._state.asignaciones_rol.push({ usuario_id: id, role: 'asistente', user_status: 'activo', valid_until: null });
 
-  const ids = await generarComisionesLandingSiCorresponde(db, 'req-10', {
+  const ids = await generarComisionesTrabajoComponenteSiCorresponde(db, 'req-10', {
     ventaId: 'v1', componente: { id: 'comp-1', tipo: 'landing', precio_atribuido: 50000 }, producto: 'generico', mercado: 'CL', moneda: 'CLP',
   });
   assert.deepEqual(ids, [], 'sin asignación expresa al componente, nunca se genera producción aunque tenga el plan y venda');
@@ -251,7 +251,7 @@ test('11) Asistente asignado DESPUÉS de aprobar el componente (o con plan fuera
   const email = 'asistente.tarde@example.com';
 
   // Caso A: la asignación llega después de que ya se evaluó (no retroactiva).
-  const idsAntes = await generarComisionesLandingSiCorresponde(db, 'req-11a', {
+  const idsAntes = await generarComisionesTrabajoComponenteSiCorresponde(db, 'req-11a', {
     ventaId: 'v1', componente: { id: 'comp-1', tipo: 'landing', precio_atribuido: 50000 }, producto: 'generico', mercado: 'CL', moneda: 'CLP',
   });
   assert.deepEqual(idsAntes, []);
@@ -265,7 +265,7 @@ test('11) Asistente asignado DESPUÉS de aprobar el componente (o con plan fuera
   const id2 = seedAsignacionPlan(db, { email: email2, tipo: 'produccion', porcentaje: 10, planValidUntil: '2020-01-01 00:00:00' });
   db._state.asignaciones_rol.push({ usuario_id: id2, role: 'asistente', user_status: 'activo', valid_until: null });
   db._state.asignaciones_produccion.push({ componente_id: 'comp-2', usuario_email: email2, rol: 'produccion' });
-  const idsVencido = await generarComisionesLandingSiCorresponde(db, 'req-11b', {
+  const idsVencido = await generarComisionesTrabajoComponenteSiCorresponde(db, 'req-11b', {
     ventaId: 'v1', componente: { id: 'comp-2', tipo: 'landing', precio_atribuido: 50000 }, producto: 'generico', mercado: 'CL', moneda: 'CLP',
   });
   assert.deepEqual(idsVencido, [], 'un plan vencido no genera comisión, aunque la asignación exista');
@@ -280,7 +280,7 @@ test('12) En un pack, la comisión de producción de la Landing usa ÚNICAMENTE 
   db._state.asignaciones_produccion.push({ componente_id: 'comp-landing', usuario_email: 'asistente.landing@example.com', rol: 'produccion' });
   db._state.costos_directos.push({ componente_id: 'comp-landing', monto: 5000 }); // costo propio de la Landing, no afecta a la Ficha.
 
-  const ids = await generarComisionesLandingSiCorresponde(db, 'req-12', {
+  const ids = await generarComisionesTrabajoComponenteSiCorresponde(db, 'req-12', {
     ventaId: 'v1', componente: { id: 'comp-landing', tipo: 'landing', precio_atribuido: 45000 }, producto: 'ficha_generico', mercado: 'CL', moneda: 'CLP',
   });
   const c = db._state.comisiones.find((x) => x.id === ids[0]);
@@ -295,7 +295,7 @@ test('13) Ningún usuario genera una comisión de un tipo si no tiene el plan vi
   const idsComercial = await generarComisionesParaVenta(db, 'req-13a', { ...VENTA_BASE, vendedorEmail: 'nadie.tiene.plan@example.com' });
   assert.equal(idsComercial.length, 0);
 
-  const idsProduccion = await generarComisionesLandingSiCorresponde(db, 'req-13b', {
+  const idsProduccion = await generarComisionesTrabajoComponenteSiCorresponde(db, 'req-13b', {
     ventaId: 'v1', componente: { id: 'comp-1', tipo: 'landing', precio_atribuido: 50000 }, producto: 'generico', mercado: 'CL', moneda: 'CLP',
   });
   assert.deepEqual(idsProduccion, []);

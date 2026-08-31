@@ -119,6 +119,22 @@ test('comisiones: un ejecutivo totalmente ajeno (ni vendedor ni beneficiario) re
   assert.equal(response.status, 404);
 });
 
+test('comisiones: un supervisor de SU mercado ve la propia Y la de su equipo — decisión confirmada por Brenda (ya no es "abierta")', async () => {
+  const db = fakeDb();
+  const supervisor = roleIdentity({ email: 'supervisor@example.com', role: 'supervisor', allowedMarkets: ['CL'], permissions: PERMISSIONS.supervisor });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: supervisor, db }));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.data.comisiones.length, 2, 've la comercial del vendedor de su equipo Y la propia de supervisión');
+});
+
+test('comisiones: un supervisor de OTRO mercado sigue sin ver nada de esta venta', async () => {
+  const db = fakeDb();
+  const supervisorAjeno = roleIdentity({ email: 'supervisor.ar@example.com', role: 'supervisor', allowedMarkets: ['AR'], permissions: PERMISSIONS.supervisor });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: supervisorAjeno, db }));
+  assert.equal(response.status, 404);
+});
+
 // --- Comisiones: marcar pagada ---
 
 test('comisiones: el vendedor NO puede marcar su propia comisión como pagada (exclusivo de admin)', async () => {
