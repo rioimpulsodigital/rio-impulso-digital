@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow">
+<title>Capacitación Ficha &amp; Landing — Material imprimible | RiO Impulso Digital</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --p: #93009f; --p-dark: #6b0076; --coral: #ff6b6b; --sec: #6b5b95;
+    --ink: #0d0013; --muted: #5c5566; --border: #e4dfe8; --off: #faf8fb; --white: #ffffff;
+    --ff-head: 'Syne', sans-serif; --ff-body: 'DM Sans', sans-serif; --ff-mono: 'DM Mono', monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: var(--ff-body); color: var(--ink); background: var(--white);
+    font-size: 10.5pt; line-height: 1.55;
+  }
+  h1, h2, h3, h4 { font-family: var(--ff-head); font-weight: 700; color: var(--ink); margin: 0; }
+  p { margin: 0 0 8px; }
+  ul, ol { margin: 0 0 8px; padding-left: 20px; }
+  li { margin-bottom: 4px; }
+  code { font-family: var(--ff-mono); background: var(--off); padding: 1px 5px; border-radius: 4px; font-size: .92em; }
+
+  /* ── Paginación ── */
+  @page { size: A4; margin: 20mm 16mm 18mm; }
+  .page-break { page-break-before: always; break-before: page; }
+  .avoid-break { page-break-inside: avoid; break-inside: avoid; }
+
+  /* ── Portada ── */
+  .cover {
+    min-height: 240mm; display: flex; flex-direction: column; justify-content: center;
+    text-align: center; padding: 30mm 10mm;
+  }
+  .cover-badge {
+    font-family: var(--ff-mono); font-size: 9pt; letter-spacing: .08em; color: var(--sec);
+    text-transform: uppercase; margin-bottom: 18px;
+  }
+  .cover-icon { font-size: 40pt; margin-bottom: 14px; }
+  .cover h1 { font-size: 30pt; color: var(--p-dark); line-height: 1.15; margin-bottom: 14px; }
+  .cover-sub { font-size: 12.5pt; color: var(--muted); max-width: 420px; margin: 0 auto 26px; }
+  .cover-meta { font-family: var(--ff-mono); font-size: 8.5pt; color: var(--muted); margin-top: 40px; }
+  .cover-notice {
+    margin: 26px auto 0; max-width: 460px; border: 1.5px dashed var(--border); border-radius: 12px;
+    padding: 16px 18px; font-size: 9pt; color: var(--muted); text-align: left; background: var(--off);
+  }
+
+  /* ── Índice ── */
+  .toc { padding: 4mm 0; }
+  .toc h2 { color: var(--p-dark); font-size: 15pt; margin-bottom: 14px; }
+  .toc ol { list-style: none; padding: 0; counter-reset: toc; }
+  .toc li {
+    counter-increment: toc; display: flex; gap: 10px; padding: 7px 0;
+    border-bottom: 1px dotted var(--border); font-size: 10pt;
+  }
+  .toc li::before {
+    content: counter(toc); font-family: var(--ff-mono); font-weight: 700; color: var(--coral);
+    min-width: 18px;
+  }
+  .toc-sub { color: var(--muted); font-size: 8.8pt; display: block; }
+
+  /* ── Encabezado de módulo ── */
+  .module { padding-top: 2mm; }
+  .module-kicker {
+    font-family: var(--ff-mono); font-size: 8.5pt; letter-spacing: .06em; color: var(--coral);
+    text-transform: uppercase; margin-bottom: 4px;
+  }
+  .module h2 { font-size: 17pt; color: var(--p-dark); margin-bottom: 4px; }
+  .module-sub { color: var(--muted); font-size: 9.5pt; margin-bottom: 16px; }
+
+  /* ── Cajas de contenido ── */
+  .box {
+    border: 1.5px solid var(--border); border-radius: 10px; padding: 12px 16px; margin: 10px 0;
+    background: var(--off);
+  }
+  .box-title { font-family: var(--ff-head); font-weight: 700; font-size: 10pt; color: var(--ink); margin-bottom: 6px; }
+  .rule {
+    border-left: 3px solid var(--coral); border-radius: 4px; padding: 8px 14px; margin: 12px 0;
+    background: #fff5f0; font-size: 9.7pt;
+  }
+  .rule .tag {
+    display: inline-block; font-family: var(--ff-mono); font-size: 7.5pt; font-weight: 700;
+    color: var(--coral); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px;
+  }
+  .quote {
+    font-style: italic; color: var(--sec); border-left: 3px solid var(--sec); padding: 6px 14px;
+    margin: 12px 0; font-size: 9.7pt;
+  }
+  table.compare { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 9pt; }
+  table.compare th, table.compare td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; }
+  table.compare th { background: var(--off); font-family: var(--ff-head); font-size: 8.7pt; }
+  .mark-yes { color: #1a8f4a; font-weight: 700; }
+  .mark-no { color: var(--muted); }
+
+  /* ── Producto (módulo 10) ── */
+  .product {
+    border: 1.5px solid var(--border); border-radius: 10px; padding: 12px 16px; margin: 10px 0;
+  }
+  .product-label { font-family: var(--ff-head); font-weight: 700; font-size: 11pt; color: var(--p-dark); margin-bottom: 4px; }
+  .product .meta { font-size: 8.8pt; color: var(--muted); margin: 3px 0; }
+
+  /* ── Ejercicios ── */
+  .exercise {
+    border: 1.5px solid var(--p); border-radius: 10px; padding: 12px 16px; margin: 12px 0;
+  }
+  .exercise-num {
+    display: inline-block; font-family: var(--ff-mono); font-size: 8pt; font-weight: 700;
+    color: #fff; background: var(--p); border-radius: 100px; padding: 2px 9px; margin-bottom: 6px;
+  }
+  .exercise-situation { font-size: 9.5pt; color: var(--muted); margin-bottom: 6px; }
+  .exercise-q { font-weight: 700; font-size: 9.8pt; margin-bottom: 8px; }
+  .opt { display: flex; align-items: flex-start; gap: 8px; font-size: 9.5pt; padding: 3px 0; }
+  .opt .box-check { flex: none; width: 11px; height: 11px; border: 1.4px solid var(--ink); border-radius: 3px; margin-top: 2px; }
+  .notes-line { border-bottom: 1px solid var(--border); height: 16px; margin-top: 4px; }
+
+  /* ── Autoevaluación ── */
+  .quiz-item { border-top: 1px solid var(--border); padding: 10px 0; }
+  .quiz-item:first-child { border-top: none; }
+  .quiz-num { font-family: var(--ff-mono); color: var(--coral); font-weight: 700; margin-right: 4px; }
+
+  /* ── Apéndice de respuestas ── */
+  .answer-key h3 { color: var(--p-dark); font-size: 12.5pt; margin: 18px 0 8px; }
+  .answer-row { font-size: 9pt; padding: 5px 0; border-bottom: 1px dotted var(--border); }
+  .answer-row b { color: var(--p-dark); }
+
+  /* ── Pie de sección ── */
+  .footer-note { font-size: 8pt; color: var(--muted); text-align: center; margin-top: 26px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ PORTADA ══════════════ -->
+<section class="cover">
+  <div class="cover-icon">🎓</div>
+  <div class="cover-badge">Portal Interno · Material de apoyo</div>
+  <h1>Capacitación<br>Ficha &amp; Landing</h1>
+  <p class="cover-sub">Guía completa para leer, repasar y marcar en papel — Google, Landing Page, los cinco productos de RiO y cómo recomendarlos correctamente.</p>
+  <div class="cover-notice">
+    Este material acompaña a la capacitación interactiva del Portal Interno (misma información, mismo orden). No reemplaza al Kit digital: la venta siempre se registra ahí. No incluye precios — consultalos siempre en el Kit o en el Portal, donde se actualizan automáticamente por mercado.
+  </div>
+  <div class="cover-meta">RiO Impulso Digital · Material interno, uso exclusivo de ejecutivos comerciales</div>
+</section>
+
+<!-- ══════════════ ÍNDICE ══════════════ -->
+<section class="page-break toc">
+  <h2>Índice</h2>
+  <ol>
+    <li><span><b>Así te encuentra un cliente</b><span class="toc-sub">Búsqueda local simulada</span></span></li>
+    <li><span><b>Qué es una Ficha de Google</b><span class="toc-sub">Elemento por elemento</span></span></li>
+    <li><span><b>La oportunidad que falta</b><span class="toc-sub">Ficha sin página propia — ejercicio</span></span></li>
+    <li><span><b>Qué es una Landing Page</b><span class="toc-sub">Una presentación ordenada</span></span></li>
+    <li><span><b>Las preguntas de la Landing</b><span class="toc-sub">Qué preguntamos y para qué sirve cada respuesta</span></span></li>
+    <li><span><b>El ecosistema completo</b><span class="toc-sub">Redes + Google + Landing + WhatsApp</span></span></li>
+    <li><span><b>Comparar escenarios</b><span class="toc-sub">Qué resuelve cada combinación</span></span></li>
+    <li><span><b>Reconocer la urgencia real</b><span class="toc-sub">Se descubre, no se inventa — 4 ejercicios</span></span></li>
+    <li><span><b>Posibles objeciones</b><span class="toc-sub">La mejor respuesta natural — 5 ejercicios</span></span></li>
+    <li><span><b>Los cinco productos de RiO</b><span class="toc-sub">Alcance y condiciones (sin precio — ver Kit/Portal)</span></span></li>
+    <li><span><b>Express versus Premium</b><span class="toc-sub">Una sola diferencia real</span></span></li>
+    <li><span><b>Elegir la solución</b><span class="toc-sub">6 casos para diagnosticar — ejercicios</span></span></li>
+    <li><span><b>Después de la conversación</b><span class="toc-sub">El paso obligatorio por el Portal</span></span></li>
+    <li><span><b>Autoevaluación final</b><span class="toc-sub">10 preguntas de repaso</span></span></li>
+  </ol>
+  <p class="toc-sub" style="margin-top:14px;">Las respuestas de todos los ejercicios y de la autoevaluación están reunidas en el <b>Apéndice</b>, al final de este documento — resolvé primero y comprobá después.</p>
+</section>
+
+<!-- ══════════════ MÓDULO 1 ══════════════ -->
+<section class="page-break module">
+  <div class="module-kicker">Módulo 1 de 14</div>
+  <h2>Así te encuentra un cliente</h2>
+  <p class="module-sub">Búsqueda local simulada</p>
+  <p>Cuando alguien busca "ferretería cerca de mí" en Google, aparece una lista de negocios de la zona — cada uno con su nombre, su calificación y si tiene o no un sitio web propio. No todos los negocios de la lista tienen página propia, aunque todos tengan Ficha de Google activa.</p>
+  <div class="box">
+    <div class="box-title">Ejemplo de resultados para "ferretería cerca de mí"</div>
+    <table class="compare">
+      <tr><th>Negocio</th><th>Calificación</th><th>Sitio web</th></tr>
+      <tr><td><b>Ferretería El Tornillo</b> (nuestro caso)</td><td>★ 4.6</td><td>Sin sitio web</td></tr>
+      <tr><td>Ferretería Don Pedro</td><td>★ 4.2</td><td>Con sitio web</td></tr>
+      <tr><td>Ferretería y Pinturas Sur</td><td>★ 3.9</td><td>Sin sitio web</td></tr>
+      <tr><td>Multiservicio La Llave</td><td>★ 4.8</td><td>Con sitio web</td></tr>
+    </table>
+  </div>
+  <div class="quote">Fijate: no todos tienen sitio web propio, aunque todos tengan Ficha. En el próximo módulo exploramos la Ficha de <b>Ferretería El Tornillo</b>.</div>
+</section>
+
+<!-- ══════════════ MÓDULO 2 ══════════════ -->
+<section class="page-break module">
+  <div class="module-kicker">Módulo 2 de 14</div>
+  <h2>Qué es una Ficha de Google</h2>
+  <p class="module-sub">Elemento por elemento</p>
+  <p>Una <b>Ficha de Google</b> (también llamada Perfil de Empresa en Google) es el perfil gratuito que Google muestra en el buscador y en Google Maps cuando alguien busca un negocio por nombre o por categoría cerca de su ubicación. La crea o reclama el propio negocio — no hay que pagarle nada a Google para tenerla — y funciona, en la práctica, como su carta de presentación en Google.</p>
+  <p><b>Ferretería El Tornillo</b> — ★ 4.6 (89 reseñas) · Abierto ahora</p>
+  <div class="box">
+    <div class="box-title">Los elementos de una Ficha</div>
+    <ul>
+      <li><b>Nombre del negocio</b> — debe coincidir exactamente con el nombre real; Google puede rechazar o suspender fichas con palabras clave o promociones agregadas artificialmente.</li>
+      <li><b>Categoría</b> — define en qué búsquedas aparece ("ferretería cerca de mí"). Mal elegida, el negocio no aparece cuando debería.</li>
+      <li><b>Dirección o zona de atención</b> — dirección exacta si hay local físico, o área de servicio si atiende a domicilio.</li>
+      <li><b>Horarios</b> — muestra "Abierto"/"Cerrado" en tiempo real.</li>
+      <li><b>Teléfono y WhatsApp</b> — para que el cliente contacte directo desde la Ficha.</li>
+      <li><b>Fotografías</b> — generan confianza; un perfil sin fotos transmite menos seriedad.</li>
+      <li><b>Productos o servicios</b> — listado breve para que el cliente confirme rápido si tiene lo que busca.</li>
+      <li><b>Reseñas</b> — uno de los factores que más pesa en la decisión de un cliente nuevo.</li>
+      <li><b>Enlace al sitio web</b> — cuando el negocio tiene página propia. Este negocio todavía no tiene uno (ver módulo 3).</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ══════════════ MÓDULO 3 (ejercicio 1) ══════════════ -->
+<section class="page-break module">
+  <div class="module-kicker">Módulo 3 de 14</div>
+  <h2>La oportunidad que falta</h2>
+  <p class="module-sub">Ficha sin página propia</p>
+  <p>Ferretería El Tornillo tiene Ficha de Google activa — <b>sí aparece</b> cuando lo buscan. Pero mirá bien: no tiene ningún enlace a un sitio web.</p>
+  <div class="exercise avoid-break">
+    <span class="exercise-num">Ejercicio 1</span>
+    <div class="exercise-q">¿Qué le falta a este negocio?</div>
+    <div class="opt"><span class="box-check"></span> Necesita un lugar propio donde presentar ordenadamente su negocio y sus productos.</div>
+    <div class="opt"><span class="box-check"></span> Necesita conseguir más reseñas antes que nada.</div>
+    <div class="opt"><span class="box-check"></span> Necesita eliminar su Ficha y empezar de nuevo.</div>
+    <div class="notes-line"></div>
+  </div>
+</section>
+
+<!-- ══════════════ MÓDULO 4 ══════════════ -->
+<section class="page-break module">
+  <div class="module-kicker">Módulo 4 de 14</div>
+  <h2>Qué es una Landing Page</h2>
+  <p class="module-sub">Una presentación ordenada</p>
+  <p>Una Landing es una página web de una sola sección continua, pensada para un objetivo concreto: que quien la visite entienda rápido qué ofrece el negocio y sepa cómo contactarlo.</p>
+  <div class="rule"><span class="tag">Importante</span><p style="margin:0;">No es un sitio institucional con muchas páginas — es una presentación clara y directa, con un solo objetivo: que te contacten.</p></div>
+</section>
+
+<!-- ══════════════ MÓDULO 5 ══════════════ -->
+<section class="page-break module">
+  <div class="module-kicker">Módulo 5 de 14</div>
+  <h2>Las preguntas de la Landing</h2>
+  <p class="module-sub">Qué preguntamos y para qué sirve cada respuesta</p>
+  <p>Estas son las mismas 7 preguntas que se usan en el Kit real (Paso 1). No son solo para que el cliente responda — hay que entender <b>para qué sirve</b> cada respuesta a la hora de armar su Landing.</p>
+  <div class="box"><div class="box-title">01 — Qué vendés, para quién y el rubro (incluye rango de precio)</div><p style="margin:0;">Define el mensaje central de la Landing y calibra el tono del copy.</p></div>
+  <div class="box"><div class="box-title">02 — Qué te hace diferente de los negocios similares en tu zona</div><p style="margin:0;">Es el diferencial que se destaca en la Landing — sin esta respuesta, la página queda genérica.</p></div>
+  <div class="box"><div class="box-title">03 — Qué objeción te dicen más seguido para no comprar o entrar</div><p style="margin:0;">Permite anticipar esa objeción directamente en el copy de la Landing.</p></div>
+  <div class="box"><div class="box-title">04 — Qué necesitás que haga la persona que vea la página</div><p style="margin:0;">Define el botón principal (CTA) de la Landing.</p></div>
+  <div class="box"><div class="box-title">05 — Tenés fotos buenas del lugar, producto o trabajo terminado</div><p style="margin:0;">Determina si hay material real y propio para usar en el diseño.</p></div>
+  <div class="box"><div class="box-title">06 — Podés conseguir 2-3 reseñas de clientes de confianza esta semana</div><p style="margin:0;">Alimenta la prueba social de la Landing y de la propia Ficha.</p></div>
+  <div class="box"><div class="box-title">07 — Hay algún color que identifiques con tu marca</div><p style="margin:0;">Guía la paleta de diseño para que se sienta parte de la marca del negocio, no una plantilla genérica.</p></div>
+  <div class="rule"><span class="tag">Importante</span><p style="margin:0;">Estas preguntas son sobre la Landing. Si el negocio no tiene Ficha de Google, hay 4 preguntas más (F1 a F4, vistas en el módulo 2) que también aparecen en el Kit.</p></div>
+</section>
+
+<!-- ══════════════ MÓDULO 6 ══════════════ -->
+<section class="page-break module">
+  <div class="module-kicker">Módulo 6 de 14</div>
+  <h2>El ecosistema completo</h2>
+  <p class="module-sub">Redes + Google + Landing + WhatsApp</p>
+  <p>Ninguna de estas herramientas reemplaza a la otra:</p>
+  <div class="box"><div class="box-title">📱 Redes sociales</div><p style="margin:0;">Construyen comunidad con quienes ya siguen al negocio. No están pensadas para que alguien nuevo lo encuentre buscando activamente.</p></div>
+  <div class="box"><div class="box-title">🔍 Google y Google Maps</div><p style="margin:0;">Es donde aparece el negocio cuando una persona busca activamente algo que necesita, en ese momento, cerca de donde está.</p></div>
+  <div class="box"><div class="box-title">🖥️ Landing Page</div><p style="margin:0;">Una vez que alguien te encontró (por Google, por redes o por recomendación), la Landing le presenta ordenadamente qué ofrece el negocio y cómo contactarlo.</p></div>
+  <div class="box"><div class="box-title">💬 WhatsApp</div><p style="margin:0;">Es donde la conversación se vuelve concreta: preguntas, cotización, cierre. Todos los caminos anteriores terminan acá.</p></div>
+  <div class="quote">Cuando falta una pieza, no es que las otras estén mal — es que hay un tramo del camino sin cubrir.</div>
+</section>
+
+<!-- ══════════════ MÓDULO 7 ══════════════ -->
+<section class="page-break module">
+  <div class="module-kicker">Módulo 7 de 14</div>
+  <h2>Comparar escenarios</h2>
+  <p class="module-sub">Qué resuelve cada combinación</p>
+  <table class="compare">
+    <tr><th>Escenario</th><th>Contenido y comunidad</th><th>Descubrimiento en búsqueda</th><th>Presentación ordenada</th><th>Conversación y cierre</th></tr>
+    <tr><td>Solo redes sociales</td><td class="mark-yes">✓</td><td class="mark-no">—</td><td class="mark-no">—</td><td class="mark-yes">✓</td></tr>
+    <tr><td>Redes + Ficha de Google</td><td class="mark-yes">✓</td><td class="mark-yes">✓</td><td class="mark-no">—</td><td class="mark-yes">✓</td></tr>
+    <tr style="background:#faf2fb;"><td><b>Redes + Ficha + Landing</b></td><td class="mark-yes">✓</td><td class="mark-yes">✓</td><td class="mark-yes">✓</td><td class="mark-yes">✓</td></tr>
+    <tr><td>Solo Ficha de Google</td><td class="mark-no">—</td><td class="mark-yes">✓</td><td class="mark-no">—</td><td class="mark-yes">✓</td></tr>
+    <tr><td>Ficha de Google + Landing</td><td class="mark-no">—</td><td class="mark-yes">✓</td><td class="mark-yes">✓</td><td class="mark-yes">✓</td></tr>
+  </table>
+  <p style="font-size:9pt;color:var(--muted);">Ningún escenario es "malo" — cada uno cubre algunas partes del camino. El objetivo es identificar cuál le falta a cada negocio, no vender siempre el pack completo.</p>
+</section>
+
+<!-- ══════════════ MÓDULO 8 (ejercicios 2-5) ══════════════ -->
+<section class="page-break module">
+  <div class="module-kicker">Módulo 8 de 14</div>
+  <h2>Reconocer la urgencia real</h2>
+  <p class="module-sub">Se descubre, no se inventa</p>
+  <div class="quote">La urgencia se descubre haciendo preguntas. No se fabrica para presionar al prospecto.</div>
+  <p style="font-size:9pt;color:var(--muted);">Tipos: <b>A</b> — Capacidad limitada · <b>B</b> — Empeora con el tiempo · <b>C</b> — Estacional / por fecha · <b>D</b> — Sin urgencia real.</p>
+
+  <div class="exercise avoid-break">
+    <span class="exercise-num">Ejercicio 2</span>
+    <div class="exercise-situation"><b>Estudio de Pilates Equilibrio</b> — Las clases tienen cupo máximo de 8 personas y suelen completarse la misma semana.</div>
+    <div class="exercise-q">Pregunta clave: "¿Hay momentos donde se llenan o no dan abasto?" — ¿Qué tipo de urgencia es?</div>
+    <div class="opt"><span class="box-check"></span> A</div><div class="opt"><span class="box-check"></span> B</div><div class="opt"><span class="box-check"></span> C</div><div class="opt"><span class="box-check"></span> D</div>
+  </div>
+  <div class="exercise avoid-break">
+    <span class="exercise-num">Ejercicio 3</span>
+    <div class="exercise-situation"><b>Cerrajería Rápida 24h</b> — Cuando alguien queda afuera de su casa o auto, cada minuto sin encontrar una cerrajería cercana es un cliente que puede terminar llamando a otro.</div>
+    <div class="exercise-q">Pregunta clave: "¿Hay algo que la gente posterga y le sale más caro no resolver a tiempo?" — ¿Qué tipo de urgencia es?</div>
+    <div class="opt"><span class="box-check"></span> A</div><div class="opt"><span class="box-check"></span> B</div><div class="opt"><span class="box-check"></span> C</div><div class="opt"><span class="box-check"></span> D</div>
+  </div>
+  <div class="exercise avoid-break">
+    <span class="exercise-num">Ejercicio 4</span>
+    <div class="exercise-situation"><b>Florería Primavera</b> — La demanda se dispara en fechas puntuales del año y el resto del tiempo es más pareja.</div>
+    <div class="exercise-q">Pregunta clave: "¿Hay fechas o temporadas donde la demanda sube naturalmente?" — ¿Qué tipo de urgencia es?</div>
+    <div class="opt"><span class="box-check"></span> A</div><div class="opt"><span class="box-check"></span> B</div><div class="opt"><span class="box-check"></span> C</div><div class="opt"><span class="box-check"></span> D</div>
+  </div>
+  <div class="exercise avoid-break">
+    <span class="exercise-num">Ejercicio 5</span>
+    <div class="exercise-situation"><b>Muebles a Medida Roble</b> — Es una decisión de largo plazo — el cliente compara opciones durante semanas antes de decidirse, sin una fecha límite real.</div>
+    <div class="exercise-q">Pregunta clave: "¿Por qué alguien debería decidir hoy y no la próxima semana?" — ¿Qué tipo de urgencia es?</div>
+    <div class="opt"><span class="box-check"></span> A</div><div class="opt"><span class="box-check"></span> B</div><div class="opt"><span class="box-check"></span> C</div><div class="opt"><span class="box-check"></span> D</div>
+  </div>
+</section>
+
+<!-- ══════════════ MÓDULO 9 (ejercicios 6-10) ══════════════ -->
+<section class="page-break module">
+  <div class="module-kicker">Módulo 9 de 14</div>
+  <h2>Posibles objeciones</h2>
+  <p class="module-sub">La mejor respuesta natural</p>
+  <p style="font-size:9pt;color:var(--muted);">Elegí, para cada objeción, la respuesta que consideres más adecuada.</p>
+
+  <div class="exercise avoid-break">
+    <span class="exercise-num">Ejercicio 6</span>
+    <div class="exercise-q">"Ya tengo Instagram y Facebook, no necesito nada más."</div>
+    <div class="opt"><span class="box-check"></span> Las redes sirven, pero cuando alguien busca directamente en Google, un negocio sin Ficha ni página no aparece ahí — y el de al lado sí. Las redes complementan, no reemplazan estar en Google.</div>
+    <div class="opt"><span class="box-check"></span> Las redes sociales ya casi no sirven para conseguir clientes nuevos.</div>
+  </div>
+  <div class="exercise avoid-break">
+    <span class="exercise-num">Ejercicio 7</span>
+    <div class="exercise-situation">Esta objeción aparece al principio de la conversación (Paso 0), antes de que el cliente conozca el precio.</div>
+    <div class="exercise-q">"No tengo dinero para esto ahora."</div>
+    <div class="opt"><span class="box-check"></span> Arranca desde un precio de entrada accesible, sin gastos grandes, lista en 48 horas hábiles. No es una inversión grande ni un compromiso a largo plazo. <i>(precio exacto: consultar Kit/Portal)</i></div>
+    <div class="opt"><span class="box-check"></span> Entiendo, te dejo tranquilo entonces — cualquier cosa me escribís.</div>
+  </div>
+  <div class="exercise avoid-break">
+    <span class="exercise-num">Ejercicio 8</span>
+    <div class="exercise-q">"Mandame información por WhatsApp."</div>
+    <div class="opt"><span class="box-check"></span> Dale, te la mando — pero contame primero: ¿qué vendés y para quién es principalmente?</div>
+    <div class="opt"><span class="box-check"></span> Perfecto, te mando ahora mismo un mensaje con todos nuestros precios y planes.</div>
+  </div>
+  <div class="exercise avoid-break">
+    <span class="exercise-num">Ejercicio 9</span>
+    <div class="exercise-q">"No tengo tiempo ahora."</div>
+    <div class="opt"><span class="box-check"></span> No hay problema, ¿te puedo llamar mañana martes o el miércoles?</div>
+    <div class="opt"><span class="box-check"></span> Bueno, te llamo después.</div>
+  </div>
+  <div class="exercise avoid-break">
+    <span class="exercise-num">Ejercicio 10</span>
+    <div class="exercise-q">"No, no me interesa."</div>
+    <div class="opt"><span class="box-check"></span> Entiendo, gracias por tu tiempo. Cualquier cosa, quedo a disposición.</div>
+    <div class="opt"><span class="box-check"></span> Esperá, dejame explicarte una vez más por qué te conviene.</div>
+  </div>
+</section>
+
+<!-- ══════════════ MÓDULO 10 ══════════════ -->
+<section class="page-break module">
+  <div class="module-kicker">Módulo 10 de 14</div>
+  <h2>Los cinco productos de RiO</h2>
+  <p class="module-sub">Alcance y condiciones — los precios vigentes se consultan siempre en el Kit digital o el Portal, nunca en este documento</p>
+
+  <div class="product avoid-break">
+    <div class="product-label">Ficha de Google</div>
+    <p class="meta"><b>Resuelve:</b> el negocio no tiene un perfil propio y verificado en Google ni en Maps.</p>
+    <ul><li>Creación o reclamo del perfil</li><li>Configuración de categoría, horarios, teléfono y ubicación o zona</li><li>Incorporación de fotos y materiales entregados por el cliente</li><li>Carga inicial de productos o servicios</li><li>Acompañamiento durante la verificación</li></ul>
+    <p class="meta"><b>No incluye:</b> página web propia, gestión mensual de publicaciones o reseñas.</p>
+    <p class="meta"><b>Plazo:</b> configuración inicial en 3 días hábiles desde el pago y la información completa.</p>
+    <p class="meta"><b>Revisiones:</b> una ronda de ajustes. <b>Soporte:</b> 15 días corridos por errores atribuibles al trabajo.</p>
+  </div>
+  <div class="product avoid-break">
+    <div class="product-label">Landing Express</div>
+    <p class="meta"><b>Resuelve:</b> el negocio no tiene un lugar propio para presentarse ordenadamente, sin necesitar dominio propio.</p>
+    <ul><li>Diseño responsive de una sola sección continua</li><li>Presentación del negocio, productos o servicios</li><li>Botón de contacto directo por WhatsApp</li><li>Hosting sin mensualidad</li></ul>
+    <p class="meta"><b>No incluye:</b> dominio propio (usa subdominio de RiO), múltiples páginas, tienda en línea.</p>
+    <p class="meta"><b>Plazo:</b> primera versión funcional en 48 horas hábiles desde el pago inicial y los materiales completos.</p>
+    <p class="meta"><b>Revisiones:</b> dos rondas de ajustes. <b>Soporte:</b> 15 días corridos por errores atribuibles al desarrollo.</p>
+  </div>
+  <div class="product avoid-break">
+    <div class="product-label">Landing Premium</div>
+    <p class="meta"><b>Resuelve:</b> igual que Landing Express, para negocios que además quieren una dirección propia.</p>
+    <ul><li>Mismo diseño, desarrollo y plazo que Express</li><li>Dominio propio incluido el primer año, sujeto a disponibilidad</li><li>Hosting sin mensualidad</li></ul>
+    <p class="meta"><b>No incluye:</b> más secciones, funciones o diseño adicional por ser Premium — la única diferencia es el dominio.</p>
+    <p class="meta"><b>Plazo:</b> primera versión funcional en 48 horas hábiles.</p>
+    <p class="meta"><b>Revisiones:</b> dos rondas de ajustes. <b>Soporte:</b> 15 días corridos por errores atribuibles al desarrollo.</p>
+  </div>
+  <div class="product avoid-break">
+    <div class="product-label">Ficha de Google + Landing Express</div>
+    <p class="meta"><b>Resuelve:</b> el negocio no tiene ni Ficha ni presencia propia — resuelve ambas cosas juntas, con descuento respecto de contratarlas por separado.</p>
+    <ul><li>Todo lo de Ficha de Google</li><li>Todo lo de Landing Express</li></ul>
+    <p class="meta"><b>No incluye:</b> dominio propio (queda para la variante Premium del pack).</p>
+    <p class="meta"><b>Plazo:</b> Landing en 48 horas hábiles y Ficha en 3 días hábiles — procesos en paralelo.</p>
+    <p class="meta"><b>Revisiones:</b> dos rondas para la Landing, una para la Ficha. <b>Soporte:</b> 15 días corridos.</p>
+  </div>
+  <div class="product avoid-break">
+    <div class="product-label">Ficha de Google + Landing Premium</div>
+    <p class="meta"><b>Resuelve:</b> igual que el pack anterior, con Landing Premium (dominio propio incluido el primer año).</p>
+    <ul><li>Todo lo de Ficha de Google</li><li>Todo lo de Landing Premium</li></ul>
+    <p class="meta"><b>No incluye:</b> nada adicional por ser Premium más allá del dominio propio.</p>
+    <p class="meta"><b>Plazo:</b> Landing en 48 horas hábiles y Ficha en 3 días hábiles — procesos en paralelo.</p>
+    <p class="meta"><b>Revisiones:</b> dos rondas para la Landing, una para la Ficha. <b>Soporte:</b> 15 días corridos.</p>
+  </div>
+  <p style="font-size:8.5pt;color:var(--muted);">No se garantiza primera posición en Google, aprobación de Google, ni una cantidad determinada de visitas o clientes.</p>
+</section>
+
+<!-- ══════════════ MÓDULO 11 ══════════════ -->
+<section class="page-break module">
+  <div class="module-kicker">Módulo 11 de 14</div>
+  <h2>Express versus Premium</h2>
+  <p class="module-sub">Una sola diferencia real</p>
+  <table class="compare">
+    <tr><th></th><th>Landing Express</th><th>Landing Premium</th></tr>
+    <tr><td>Diseño y desarrollo</td><td>Igual</td><td>Igual</td></tr>
+    <tr><td>Plazo de primera versión</td><td>48 horas hábiles</td><td>48 horas hábiles</td></tr>
+    <tr><td>Revisiones</td><td>2 rondas</td><td>2 rondas</td></tr>
+    <tr><td>Hosting</td><td>Sin mensualidad</td><td>Sin mensualidad</td></tr>
+    <tr><td>Dirección web</td><td>Subdominio <code>tunegocio.rio-landing.com</code></td><td>Dominio propio, incluido el primer año</td></tr>
+    <tr><td>Desde el 2º año</td><td>No aplica</td><td>El cliente renueva su dominio directamente</td></tr>
+  </table>
+  <div class="rule"><span class="tag">Clave</span><p style="margin:0;">Premium no significa más funciones, mejor diseño ni nada adicional por el nombre — significa que el negocio tiene su propia dirección web en vez de compartir la de RiO.</p></div>
+</section>
+
+<!-- ══════════════ MÓDULO 12 (ejercicios 11-16) ══════════════ -->
+<section class="page-break module">
+  <div class="module-kicker">Módulo 12 de 14</div>
+  <h2>Elegir la solución</h2>
+  <p class="module-sub">6 casos para diagnosticar</p>
+  <p style="font-size:9pt;color:var(--muted);">Opciones posibles: Ficha de Google · Landing Express · Landing Premium · Ficha + Landing Express · Ficha + Landing Premium · Agendar un diagnóstico con Brenda · Ninguno (no corresponde ofrecer nada hoy).</p>
+
+  <div class="exercise avoid-break">
+    <span class="exercise-num">Ejercicio 11</span>
+    <div class="exercise-situation"><b>Taller Mecánico El Motor</b> — Negocio nuevo, sin Ficha de Google y sin página web. Quiere empezar a recibir clientes por internet.</div>
+    <div class="exercise-q">¿Qué le recomendás?</div>
+    <div class="notes-line"></div><div class="notes-line"></div>
+  </div>
+  <div class="exercise avoid-break">
+    <span class="exercise-num">Ejercicio 12</span>
+    <div class="exercise-situation"><b>Ferretería El Tornillo</b> — Ya tiene Ficha de Google activa, pero no tiene un lugar propio para presentarse.</div>
+    <div class="exercise-q">¿Qué le recomendás?</div>
+    <div class="notes-line"></div><div class="notes-line"></div>
+  </div>
+  <div class="exercise avoid-break">
+    <span class="exercise-num">Ejercicio 13</span>
+    <div class="exercise-situation"><b>Estudio de Uñas Brillo</b> — Muy activa en Instagram, pero no tiene Ficha de Google, casi no la encuentran buscando "manicura cerca de mí", y tampoco tiene página propia.</div>
+    <div class="exercise-q">¿Qué le recomendás?</div>
+    <div class="notes-line"></div><div class="notes-line"></div>
+  </div>
+  <div class="exercise avoid-break">
+    <span class="exercise-num">Ejercicio 14</span>
+    <div class="exercise-situation"><b>Barbería Central</b> — Ya tiene Ficha de Google. Quiere una página simple y rápida, sin gastar en un dominio propio por ahora.</div>
+    <div class="exercise-q">¿Qué le recomendás?</div>
+    <div class="notes-line"></div><div class="notes-line"></div>
+  </div>
+  <div class="exercise avoid-break">
+    <span class="exercise-num">Ejercicio 15</span>
+    <div class="exercise-situation"><b>Clínica Dental Sonrisa</b> — Ya tiene Ficha de Google. Quiere una dirección web propia y profesional para compartir con sus pacientes.</div>
+    <div class="exercise-q">¿Qué le recomendás?</div>
+    <div class="notes-line"></div><div class="notes-line"></div>
+  </div>
+  <div class="exercise avoid-break">
+    <span class="exercise-num">Ejercicio 16</span>
+    <div class="exercise-situation"><b>Veterinaria Los Amigos</b> — Ya tiene Ficha de Google activa y ya tiene un sitio web propio funcionando.</div>
+    <div class="exercise-q">¿Qué le recomendás?</div>
+    <div class="notes-line"></div><div class="notes-line"></div>
+  </div>
+</section>
+
+<!-- ══════════════ MÓDULO 13 ══════════════ -->
+<section class="page-break module">
+  <div class="module-kicker">Módulo 13 de 14</div>
+  <h2>Después de la conversación</h2>
+  <p class="module-sub">El paso obligatorio por el Portal</p>
+  <div class="quote">El cliente nunca entra al Portal — entrás vos, siempre, apenas termina la conversación.</div>
+  <ol>
+    <li>Conversar con el prospecto.</li>
+    <li>Detectar su necesidad real.</li>
+    <li>Recomendar una solución.</li>
+    <li>Ingresar al Kit digital del Portal.</li>
+    <li>Registrar las respuestas obtenidas.</li>
+    <li>Seleccionar mercado, producto y condiciones.</li>
+    <li>Generar desde el sistema el mensaje oficial de WhatsApp.</li>
+    <li>Enviar el medio de pago correspondiente.</li>
+    <li>Permitir que la información llegue por correo y a HubSpot.</li>
+    <li>Dar paso al trabajo de producción de RiO.</li>
+  </ol>
+  <div class="rule"><span class="tag">Frase clave</span><p style="margin:0;">Registrar correctamente en el Portal la información obtenida durante la conversación, seleccionar la solución acordada y generar desde allí el mensaje de cierre y pago.</p></div>
+</section>
+
+<!-- ══════════════ MÓDULO 14 — AUTOEVALUACIÓN ══════════════ -->
+<section class="page-break module">
+  <div class="module-kicker">Módulo 14 de 14</div>
+  <h2>Autoevaluación final</h2>
+  <p class="module-sub">Repaso de cierre — 10 preguntas</p>
+
+  <div class="quiz-item"><span class="quiz-num">1.</span><b>¿Qué es una Ficha de Google?</b>
+    <div class="opt"><span class="box-check"></span> Una página web con varias secciones.</div>
+    <div class="opt"><span class="box-check"></span> El perfil del negocio que Google muestra en el buscador y en Maps.</div>
+    <div class="opt"><span class="box-check"></span> Una cuenta de Instagram verificada.</div>
+  </div>
+  <div class="quiz-item"><span class="quiz-num">2.</span><b>¿Qué es una Landing Page?</b>
+    <div class="opt"><span class="box-check"></span> Una página de una sola sección, enfocada en presentar el negocio y facilitar el contacto.</div>
+    <div class="opt"><span class="box-check"></span> Un anuncio pago en redes sociales.</div>
+    <div class="opt"><span class="box-check"></span> Un formulario para pedir cotizaciones automáticas.</div>
+  </div>
+  <div class="quiz-item"><span class="quiz-num">3.</span><b>Un negocio nuevo, "Panadería Trigal", no tiene Ficha ni Landing y quiere aparecer en Google y tener su propia página, sin pedir dominio propio. ¿Qué le recomendás?</b>
+    <div class="opt"><span class="box-check"></span> Ficha de Google + Landing Express</div>
+    <div class="opt"><span class="box-check"></span> Solo Landing Premium</div>
+    <div class="opt"><span class="box-check"></span> Solo Ficha de Google</div>
+  </div>
+  <div class="quiz-item"><span class="quiz-num">4.</span><b>¿Cuál de estas afirmaciones sobre redes sociales, Google, Landing y WhatsApp es correcta?</b>
+    <div class="opt"><span class="box-check"></span> Las redes sociales compiten con la Landing — hay que elegir una.</div>
+    <div class="opt"><span class="box-check"></span> Cada una cubre un tramo distinto del camino: comunidad, descubrimiento, presentación y cierre — se complementan.</div>
+    <div class="opt"><span class="box-check"></span> Google reemplaza a WhatsApp para cerrar una venta.</div>
+  </div>
+  <div class="quiz-item"><span class="quiz-num">5.</span><b>Un negocio de mudanzas dice: "no hay una fecha fija, la gente se muda cuando puede". ¿Qué tipo de urgencia es?</b>
+    <div class="opt"><span class="box-check"></span> Tipo A — Capacidad limitada</div>
+    <div class="opt"><span class="box-check"></span> Tipo C — Estacional</div>
+    <div class="opt"><span class="box-check"></span> Tipo D — Sin urgencia real</div>
+  </div>
+  <div class="quiz-item"><span class="quiz-num">6.</span><b>El cliente dice: "mandame información por WhatsApp". ¿Cuál es la mejor respuesta?</b>
+    <div class="opt"><span class="box-check"></span> Enviar de inmediato un mensaje con todos los precios y planes.</div>
+    <div class="opt"><span class="box-check"></span> Preguntar primero qué vende y para quién, antes de mandar algo.</div>
+    <div class="opt"><span class="box-check"></span> Decirle que llame mejor por teléfono.</div>
+  </div>
+  <div class="quiz-item"><span class="quiz-num">7.</span><b>Al principio de la llamada, antes de decir ningún precio, el cliente dice: "no tengo plata para esto ahora". ¿Cuál es la mejor respuesta?</b>
+    <div class="opt"><span class="box-check"></span> Mostrarle el precio de entrada — todavía no lo conoce, y muchas veces "no tengo plata" es en realidad "pensé que era caro".</div>
+    <div class="opt"><span class="box-check"></span> Dejarlo tranquilo y cerrar la conversación sin mostrarle el precio.</div>
+    <div class="opt"><span class="box-check"></span> Insistir explicando de nuevo los beneficios hasta que cambie de opinión, sin mencionar el precio.</div>
+  </div>
+  <div class="quiz-item"><span class="quiz-num">8.</span><b>¿Cuál es la única diferencia entre Landing Express y Landing Premium?</b>
+    <div class="opt"><span class="box-check"></span> Premium tiene más secciones y funciones.</div>
+    <div class="opt"><span class="box-check"></span> Premium incluye dominio propio; Express usa subdominio de RiO.</div>
+    <div class="opt"><span class="box-check"></span> Premium se entrega más rápido.</div>
+  </div>
+  <div class="quiz-item"><span class="quiz-num">9.</span><b>¿Cuál de estas frases NO se debe usar ni prometer nunca?</b>
+    <div class="opt"><span class="box-check"></span> "Tu Ficha queda configurada y enviada a verificación."</div>
+    <div class="opt"><span class="box-check"></span> "Te garantizo la primera posición en Google."</div>
+    <div class="opt"><span class="box-check"></span> "La primera versión de tu Landing está en 48 horas hábiles."</div>
+  </div>
+  <div class="quiz-item"><span class="quiz-num">10.</span><b>Un negocio ya tiene Ficha de Google y ya tiene sitio web propio funcionando. ¿Qué corresponde hacer?</b>
+    <div class="opt"><span class="box-check"></span> Ofrecerle igual un pack para asegurar la venta.</div>
+    <div class="opt"><span class="box-check"></span> No forzar ninguno de los cinco productos, y agendar un diagnóstico con Brenda por si hay algo para mejorar (SEO, cómo lo valora Google).</div>
+    <div class="opt"><span class="box-check"></span> Insistir en que su sitio actual seguro está mal hecho.</div>
+  </div>
+</section>
+
+<!-- ══════════════ APÉNDICE — RESPUESTAS ══════════════ -->
+<section class="page-break answer-key">
+  <div class="module-kicker">Apéndice</div>
+  <h2 style="color:var(--p-dark);font-size:19pt;margin-bottom:6px;">Respuestas y explicaciones</h2>
+  <p style="color:var(--muted);font-size:9pt;margin-bottom:14px;">Resolvé cada ejercicio antes de mirar esta página. El objetivo no es acertar rápido — es entender el porqué de cada respuesta.</p>
+
+  <h3>Módulo 3 — La oportunidad que falta</h3>
+  <div class="answer-row"><b>Ejercicio 1 →</b> Necesita un lugar propio donde presentar ordenadamente su negocio y sus productos. Tiene Ficha, así que <b>sí aparece</b> en Google. Lo que le falta es un lugar propio para presentarse con calma. Nunca digas que "no aparece en Google" si tiene Ficha activa.</div>
+
+  <h3>Módulo 8 — Reconocer la urgencia real</h3>
+  <div class="answer-row"><b>Ejercicio 2 → A — Capacidad limitada.</b> El negocio tiene un límite físico real (cupos por clase), no una fecha ni una urgencia inventada.</div>
+  <div class="answer-row"><b>Ejercicio 3 → B — Empeora con el tiempo.</b> La urgencia es del cliente del negocio, no del negocio en sí: cada minuto sin ser encontrado es una oportunidad perdida.</div>
+  <div class="answer-row"><b>Ejercicio 4 → C — Estacional / por fecha.</b> Conviene mencionar la fecha próxima como contexto real, sin inventar un plazo que no existe.</div>
+  <div class="answer-row"><b>Ejercicio 5 → D — Sin urgencia real.</b> No hay una respuesta honesta a esa pregunta, así que no se le inventa una. Se avanza con otro gancho: garantía, diferenciador, prueba social — nunca presión de tiempo falsa.</div>
+
+  <h3>Módulo 9 — Posibles objeciones</h3>
+  <div class="answer-row"><b>Ejercicio 6 →</b> La primera opción. Conecta con el módulo del ecosistema: ninguna herramienta reemplaza a la otra. Nunca se desacredita una herramienta que el cliente ya usa.</div>
+  <div class="answer-row"><b>Ejercicio 7 →</b> La primera opción. Es la primera vez que el cliente conoce el valor real — no es minimizar su situación, es mostrarle un dato que no tenía.</div>
+  <div class="answer-row"><b>Ejercicio 8 →</b> La primera opción. Primero se diagnostica, después se recomienda. Mandar información sin preguntar antes no es diagnosticar — es repetir lo mismo para cualquiera.</div>
+  <div class="answer-row"><b>Ejercicio 9 →</b> La primera opción. Un horario concreto convierte una postergación en un seguimiento real — "después" no es un horario.</div>
+  <div class="answer-row"><b>Ejercicio 10 →</b> La primera opción. No todas las conversaciones terminan en venta, y un "no" claro se respeta sin insistir.</div>
+
+  <h3>Módulo 12 — Elegir la solución</h3>
+  <div class="answer-row"><b>Ejercicio 11 → Ficha + Landing Express.</b> No tiene ni Ficha ni Landing, así que un pack cubre ambas necesidades a la vez. Como no mencionó querer dominio propio, Express es el punto de partida.</div>
+  <div class="answer-row"><b>Ejercicio 12 → Landing Express.</b> Ya tiene Ficha — no corresponde ofrecerle una nueva. Le falta exactamente lo que resuelve la Landing.</div>
+  <div class="answer-row"><b>Ejercicio 13 → Ficha + Landing Express.</b> La Ficha es la prioridad, pero como tampoco tiene página propia, el diagnóstico completo muestra que el pack es la recomendación real — no solo la pieza más obvia.</div>
+  <div class="answer-row"><b>Ejercicio 14 → Landing Express.</b> Ya tiene Ficha, y pidió explícitamente la opción más económica sin dominio propio.</div>
+  <div class="answer-row"><b>Ejercicio 15 → Landing Premium.</b> Ya tiene Ficha, y pidió explícitamente dominio propio.</div>
+  <div class="answer-row"><b>Ejercicio 16 → Agendar un diagnóstico con Brenda.</b> Ya resolvió lo que ofrecen los cinco productos de RiO, así que no corresponde forzar ninguno. Puede que le falte mejorar el SEO o cómo Google valora su Ficha o su sitio — no todas las conversaciones terminan en venta, pero tampoco todas terminan en un simple "no hay nada para ofrecer".</div>
+
+  <h3>Autoevaluación final</h3>
+  <div class="answer-row"><b>1 →</b> El perfil del negocio que Google muestra en el buscador y en Maps.</div>
+  <div class="answer-row"><b>2 →</b> Una página de una sola sección, enfocada en presentar el negocio y facilitar el contacto.</div>
+  <div class="answer-row"><b>3 →</b> Ficha de Google + Landing Express.</div>
+  <div class="answer-row"><b>4 →</b> Cada una cubre un tramo distinto del camino: comunidad, descubrimiento, presentación y cierre — se complementan.</div>
+  <div class="answer-row"><b>5 →</b> Tipo D — Sin urgencia real.</div>
+  <div class="answer-row"><b>6 →</b> Preguntar primero qué vende y para quién, antes de mandar algo.</div>
+  <div class="answer-row"><b>7 →</b> Mostrarle el precio de entrada — todavía no lo conoce, y muchas veces "no tengo plata" es en realidad "pensé que era caro".</div>
+  <div class="answer-row"><b>8 →</b> Premium incluye dominio propio; Express usa subdominio de RiO.</div>
+  <div class="answer-row"><b>9 →</b> "Te garantizo la primera posición en Google." (nunca se promete esto).</div>
+  <div class="answer-row"><b>10 →</b> No forzar ninguno de los cinco productos, y agendar un diagnóstico con Brenda.</div>
+
+  <p class="footer-note">RiO Impulso Digital · Material interno de capacitación comercial · Uso exclusivo de ejecutivos · No distribuir fuera del equipo</p>
+</section>
+
+</body>
+</html>
