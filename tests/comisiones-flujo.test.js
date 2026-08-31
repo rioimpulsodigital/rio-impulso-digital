@@ -142,6 +142,36 @@ test('comisiones: un supervisor del MISMO mercado pero de OTRO equipo no ve nada
   assert.equal(response.status, 404);
 });
 
+test('comisiones: el supervisor de su equipo NUNCA ve realización, desarrollo ni empresa de sus miembros — solo la comercial y lo propio', async () => {
+  const db = fakeDb();
+  db._state.comisiones.push({ id: 'com-realizacion', venta_id: 'venta-1', tipo: 'realizacion', rol_realizacion: 'responsable', beneficiario_email: 'practicante.equipo@example.com', estado: 'programada' });
+  const supervisor = roleIdentity({ email: 'supervisor@example.com', role: 'supervisor', allowedMarkets: ['CL'], permissions: PERMISSIONS.supervisor });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: supervisor, db }));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.data.comisiones.length, 2, 'comercial del equipo + su propia supervisión, nunca la realización ajena');
+  assert.ok(!body.data.comisiones.some((c) => c.tipo === 'realizacion'), 'la realización de un miembro de su equipo nunca debe filtrarse a través de la vista de supervisión');
+});
+
+test('comisiones: manipular el id de la venta en la ruta hacia una de otro equipo (mismo mercado) no otorga acceso — nunca se confía en datos del cliente para resolver el equipo', async () => {
+  const db = fakeDb();
+  // Segunda venta de OTRO equipo, en el mismo mercado que el del supervisor.
+  db._state.ventas.push({ id: 'venta-2', vendedor_email: 'vendedor.b@example.com', mercado: 'CL', moneda: 'CLP', equipo_id: 'equipo-2' });
+  db._state.comisiones.push({ id: 'com-comercial-2', venta_id: 'venta-2', tipo: 'comercial', beneficiario_email: 'vendedor.b@example.com', estado: 'programada' });
+  const supervisor = roleIdentity({ email: 'supervisor@example.com', role: 'supervisor', allowedMarkets: ['CL'], permissions: PERMISSIONS.supervisor });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: supervisor, db, params: { id: 'venta-2' } }));
+  assert.equal(response.status, 404, 'el equipo se resuelve siempre desde la venta almacenada en el servidor, nunca desde el id que llega en la URL');
+});
+
+test('comisiones: un ejecutivo cambiando el mercado no puede ver comisiones de una venta de otro mercado (aislamiento por mercado también en esta ruta)', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'venta-ar', vendedor_email: 'vendedor.ar@example.com', mercado: 'AR', moneda: 'ARS', equipo_id: 'equipo-ar' });
+  db._state.comisiones.push({ id: 'com-ar', venta_id: 'venta-ar', tipo: 'comercial', beneficiario_email: 'vendedor.ar@example.com', estado: 'programada' });
+  const ejecutivoAjeno = roleIdentity({ email: 'ejecutivo.otro@example.com', allowedMarkets: ['CL'] });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: ejecutivoAjeno, db, params: { id: 'venta-ar' } }));
+  assert.equal(response.status, 404);
+});
+
 test('comisiones: un supervisor de OTRO mercado sigue sin ver nada de esta venta', async () => {
   const db = fakeDb();
   const supervisorAjeno = roleIdentity({ email: 'supervisor.ar@example.com', role: 'supervisor', allowedMarkets: ['AR'], permissions: PERMISSIONS.supervisor });
