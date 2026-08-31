@@ -14,6 +14,7 @@ import { query } from '../../../../../../_shared/db.js';
 import { assertCanAccessOwner, AuthzError } from '../../../../../../_shared/authz.js';
 import { isMethodAllowed, hasExpectedContentType } from '../../../../../../_shared/security.js';
 import { informarPago, acreditarPago, rechazarPago, ProyectoError } from '../../../../../../_shared/proyectos.js';
+import { crearNotificacionSiCorresponde } from '../../../../../../_shared/notificaciones.js';
 
 function errorStatusFor(code) {
   if (code === 'pago_no_encontrado') return 404;
@@ -79,9 +80,24 @@ export async function onRequest(context) {
       return Errors.validation('montoInformado inválido.', requestId);
     }
     try {
-      await informarPago(env.DB, requestId, {
+      const { pagoInformadoId } = await informarPago(env.DB, requestId, {
         ventaId: venta.id, pagoId: params.pagoId, montoInformado: body.montoInformado, comprobanteNota: body.comprobanteNota, actorEmail: roleIdentity.email,
       });
+      // RIO-116 segundo bloque: notificar a administración — nunca
+      // bloquea "informar" si la notificación falla (consecuencia
+      // informativa, no un requisito del informe en sí).
+      try {
+        const clienteRows = await query(env.DB, requestId, 'SELECT c.negocio FROM ventas v JOIN clientes c ON c.id = v.cliente_id WHERE v.id = ?', [venta.id]);
+        await crearNotificacionSiCorresponde(env.DB, requestId, {
+          tipo: 'pago_informado',
+          claveIdempotencia: `pago_informado:${pagoInformadoId}`,
+          ventaId: venta.id, pagoId: params.pagoId, mercado: venta.mercado,
+          clienteNegocio: clienteRows[0]?.negocio || null, vendedorEmail: venta.vendedor_email,
+          rutaPortal: `/interno/index.html?venta=${venta.id}&pago=${params.pagoId}`,
+        });
+      } catch (e) {
+        console.error(JSON.stringify({ requestId, scope: 'notificaciones', reason: 'creacion_fallida' }));
+      }
       return ok({ action: 'informar' }, requestId);
     } catch (e) {
       if (e instanceof ProyectoError) {

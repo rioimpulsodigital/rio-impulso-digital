@@ -19,6 +19,7 @@ import { ok, Errors } from '../../../../../../../_shared/response.js';
 import { query } from '../../../../../../../_shared/db.js';
 import { isMethodAllowed } from '../../../../../../../_shared/security.js';
 import { validarComprobante, guardarComprobante, obtenerComprobanteVigente, ArchivoError, MAX_COMPROBANTE_BYTES } from '../../../../../../../_shared/comprobantes.js';
+import { crearNotificacionSiCorresponde } from '../../../../../../../_shared/notificaciones.js';
 
 function serialize(c) {
   return {
@@ -30,6 +31,9 @@ function serialize(c) {
     hashSha256: c.hash_sha256,
     subidoPor: c.subido_por,
     createdAt: c.created_at,
+    rechazadoPor: c.rechazado_por || null,
+    rechazadoEn: c.rechazado_en || null,
+    motivoRechazo: c.motivo_rechazo || null,
   };
 }
 
@@ -114,6 +118,23 @@ export async function onRequest(context) {
   const { id, version } = await guardarComprobante(env.DB, env.COMPROBANTES, requestId, {
     tipo: 'pago', referenciaId: pagoInformado.id, ventaId: venta.id, archivo: validado, subidoPor: roleIdentity.email,
   });
+
+  // RIO-116 segundo bloque: notificar a administración que hay un
+  // comprobante nuevo para revisar — nunca bloquea la subida si falla
+  // (consecuencia informativa, no un requisito de la subida en sí, mismo
+  // criterio que la generación de comisiones al registrar una venta).
+  try {
+    const clienteRows = await query(env.DB, requestId, 'SELECT c.negocio FROM ventas v JOIN clientes c ON c.id = v.cliente_id WHERE v.id = ?', [venta.id]);
+    await crearNotificacionSiCorresponde(env.DB, requestId, {
+      tipo: 'comprobante_nueva_version',
+      claveIdempotencia: `comprobante:${id}`,
+      ventaId: venta.id, pagoId: pago.id, mercado: venta.mercado,
+      clienteNegocio: clienteRows[0]?.negocio || null, vendedorEmail: venta.vendedor_email,
+      rutaPortal: `/interno/index.html?venta=${venta.id}&pago=${pago.id}`,
+    });
+  } catch (e) {
+    console.error(JSON.stringify({ requestId, scope: 'notificaciones', reason: 'creacion_fallida' }));
+  }
 
   return ok({ id, version }, requestId, 201);
 }

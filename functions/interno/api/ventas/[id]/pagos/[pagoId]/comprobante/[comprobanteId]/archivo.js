@@ -9,6 +9,7 @@
 import { Errors } from '../../../../../../../../_shared/response.js';
 import { query } from '../../../../../../../../_shared/db.js';
 import { isMethodAllowed } from '../../../../../../../../_shared/security.js';
+import { respuestaArchivoSeguro } from '../../../../../../../../_shared/comprobantes.js';
 
 export async function onRequest(context) {
   const { request, env, params, data } = context;
@@ -50,12 +51,5 @@ export async function onRequest(context) {
     return Errors.internal(requestId);
   }
 
-  return new Response(object.body, {
-    status: 200,
-    headers: {
-      'Content-Type': comprobante.mime_type,
-      'Content-Disposition': `inline; filename="${comprobante.nombre_original.replace(/"/g, '')}"`,
-      'Cache-Control': 'private, no-store',
-    },
-  });
+  return respuestaArchivoSeguro(object, comprobante);
 }

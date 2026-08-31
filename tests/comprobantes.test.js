@@ -117,7 +117,7 @@ function fakeDbComprobantes() {
     };
   }
   function runSelect(sql, p) {
-    if (sql.startsWith('SELECT id, version FROM comprobantes WHERE tipo = ? AND referencia_id = ? AND vigente = 1')) {
+    if (sql.startsWith('SELECT id, version, hash_sha256, r2_key FROM comprobantes WHERE tipo = ? AND referencia_id = ? AND vigente = 1')) {
       return state.comprobantes.filter((c) => c.tipo === p[0] && c.referencia_id === p[1] && c.vigente === 1);
     }
     if (sql.startsWith('SELECT * FROM comprobantes WHERE tipo = ? AND referencia_id = ? AND vigente = 1')) {
@@ -177,6 +177,39 @@ test('guardarComprobante() — una re-subida crea la versión 2 y NUNCA sobrescr
   assert.equal(vigente.id, segunda.id);
 });
 
+test('guardarComprobante() — un reintento con el MISMO contenido (mismo hash) no duplica el archivo ni crea una versión nueva', async () => {
+  const db = fakeDbComprobantes();
+  const bucket = fakeR2();
+  const archivo = await validarComprobante(makeFile(PDF_BYTES, 'comprobante.pdf', 'application/pdf'));
+  const primero = await guardarComprobante(db, bucket, 'req-1', { tipo: 'pago', referenciaId: 'pi-1', ventaId: 'v1', archivo, subidoPor: 'vendedor@example.com' });
+
+  // Simula un reintento de red: se vuelve a validar y subir EXACTAMENTE el mismo archivo.
+  const archivoReintento = await validarComprobante(makeFile(PDF_BYTES, 'comprobante.pdf', 'application/pdf'));
+  const reintento = await guardarComprobante(db, bucket, 'req-2', { tipo: 'pago', referenciaId: 'pi-1', ventaId: 'v1', archivo: archivoReintento, subidoPor: 'vendedor@example.com' });
+
+  assert.equal(reintento.id, primero.id, 'devuelve la misma versión, nunca crea una segunda');
+  assert.equal(reintento.version, 1);
+  assert.equal(db._state.comprobantes.length, 1, 'ninguna fila nueva');
+  assert.equal(bucket._objetos.size, 1, 'ningún objeto R2 nuevo');
+});
+
+test('nuevaClaveR2 — la clave nunca incluye el nombre aportado por el usuario, y no es predecible entre dos subidas del mismo contenido', async () => {
+  const db = fakeDbComprobantes();
+  const bucket = fakeR2();
+  const nombrePeligroso = '../../etc/passwd o "cualquier cosa"\ncon saltos de línea.pdf';
+  const archivo = await validarComprobante(makeFile(PDF_BYTES, nombrePeligroso, 'application/pdf'));
+  const { r2Key } = await guardarComprobante(db, bucket, 'req-1', { tipo: 'pago', referenciaId: 'pi-2', ventaId: 'v1', archivo, subidoPor: 'vendedor@example.com' });
+
+  assert.doesNotMatch(r2Key, /etc|passwd|\.\.|"|\n/, 'la clave física en R2 nunca deriva del nombre del archivo');
+  assert.doesNotMatch(archivo.nombreOriginal, /[\r\n"\\/]/, 'el nombre VISIBLE queda saneado (sin saltos de línea, comillas ni separadores de ruta)');
+
+  // Dos subidas de contenido idéntico a referencias DISTINTAS deben tener
+  // claves distintas — no hay forma de adivinar una a partir de la otra.
+  const archivo2 = await validarComprobante(makeFile(PDF_BYTES, 'otro.pdf', 'application/pdf'));
+  const { r2Key: r2Key2 } = await guardarComprobante(db, bucket, 'req-2', { tipo: 'pago', referenciaId: 'pi-3', ventaId: 'v1', archivo: archivo2, subidoPor: 'vendedor@example.com' });
+  assert.notEqual(r2Key, r2Key2);
+});
+
 // --- Rutas: control de acceso ---
 
 const VENDEDOR = 'vendedor.a@example.com';
@@ -216,7 +249,7 @@ function fakeDbRuta({ pagoEstado = 'informado', conInformado = true } = {}) {
     if (sql.startsWith('SELECT id FROM pagos_informados WHERE pago_esperado_id')) {
       return state.pagos_informados.filter((x) => x.pago_esperado_id === p[0]).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     }
-    if (sql.startsWith('SELECT id, version FROM comprobantes WHERE tipo = ? AND referencia_id = ? AND vigente = 1')) {
+    if (sql.startsWith('SELECT id, version, hash_sha256, r2_key FROM comprobantes WHERE tipo = ? AND referencia_id = ? AND vigente = 1')) {
       return state.comprobantes.filter((c) => c.tipo === p[0] && c.referencia_id === p[1] && c.vigente === 1);
     }
     if (sql.startsWith('SELECT * FROM comprobantes WHERE tipo = ? AND referencia_id = ? AND vigente = 1')) {

@@ -252,10 +252,11 @@ export async function informarPago(db, requestId, { ventaId, pagoId, montoInform
     throw new ProyectoError('ya_acreditado', 'Este pago ya está acreditado.');
   }
 
+  const pagoInformadoId = crypto.randomUUID();
   await execute(
     db, requestId,
     'INSERT INTO pagos_informados (id, pago_esperado_id, monto_informado, informado_por, comprobante_nota) VALUES (?, ?, ?, ?, ?)',
-    [crypto.randomUUID(), pagoId, montoInformado, actorEmail, comprobanteNota || null]
+    [pagoInformadoId, pagoId, montoInformado, actorEmail, comprobanteNota || null]
   );
   await execute(db, requestId, "UPDATE pagos_esperados SET estado = 'informado' WHERE id = ?", [pagoId]);
   await logEvento(db, requestId, {
@@ -263,6 +264,7 @@ export async function informarPago(db, requestId, { ventaId, pagoId, montoInform
     estadoAnterior: pago.estado, estadoNuevo: 'informado', usuarioEmail: actorEmail,
     proximaAccion: 'Verificar acreditación bancaria', responsableProximaAccion: null,
   });
+  return { pagoInformadoId };
 }
 
 // Acreditar un pago (admin únicamente — se valida en el endpoint, esta
