@@ -51,7 +51,10 @@
   }
 
   /* ── Índice ── */
-  .toc { padding: 4mm 0; }
+  .toc {
+    padding: 4mm 0; page-break-inside: avoid; break-inside: avoid;
+    page-break-after: always; break-after: page;
+  }
   .toc h2 { color: var(--p-dark); font-size: 15pt; margin-bottom: 14px; }
   .toc ol { list-style: none; padding: 0; counter-reset: toc; }
   .toc li {
@@ -67,7 +70,11 @@
   /* ── Encabezado de módulo ── */
   .module { padding-top: 10mm; margin-top: 10mm; border-top: 1.5px solid var(--border); }
   .module--first { border-top: none; margin-top: 0; padding-top: 2mm; }
-  .module-head { page-break-after: avoid; break-after: avoid; }
+  /* Solo evita que el encabezado se parta a la mitad (kicker/título/subtítulo
+     separados por un salto de página) — a propósito NO evita el salto
+     inmediatamente después, porque eso arrastraba la primera tarjeta del
+     módulo (ejercicio o producto) y a veces dejaba media hoja en blanco. */
+  .module-head { page-break-inside: avoid; break-inside: avoid; }
   .module-kicker {
     font-family: var(--ff-mono); font-size: 8.5pt; letter-spacing: .06em; color: var(--coral);
     text-transform: uppercase; margin-bottom: 4px;
