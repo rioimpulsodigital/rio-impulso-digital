@@ -307,6 +307,31 @@ export async function acreditarPago(db, requestId, { ventaId, pagoId, montoAcred
   return { gate };
 }
 
+// Rechaza un pago informado (RIO-116, admin únicamente — verificado en el
+// endpoint) — vuelve a 'pendiente' para que el vendedor pueda informar de
+// nuevo (y subir un comprobante nuevo, que queda como una versión más,
+// nunca reemplaza en silencio la anterior). Nunca borra el pago informado
+// ni el comprobante ya subido — quedan en el historial, solo se abre la
+// puerta a una corrección.
+export async function rechazarPago(db, requestId, { ventaId, pagoId, motivo, actorEmail }) {
+  const { pagos } = await loadVentaFull(db, requestId, ventaId);
+  const pago = pagos.find((p) => p.id === pagoId);
+  if (!pago) throw new ProyectoError('pago_no_encontrado', 'Pago esperado no encontrado.');
+  if (pago.estado === 'acreditado') {
+    throw new ProyectoError('ya_acreditado', 'Este pago ya está acreditado — no se puede rechazar.');
+  }
+  if (pago.estado !== 'informado') {
+    throw new ProyectoError('sin_informar', 'Este pago todavía no fue informado — no hay nada que rechazar.');
+  }
+
+  await execute(db, requestId, "UPDATE pagos_esperados SET estado = 'pendiente' WHERE id = ?", [pagoId]);
+  await logEvento(db, requestId, {
+    ventaId, entidad: 'pago', entidadId: pagoId,
+    estadoAnterior: 'informado', estadoNuevo: 'pendiente', usuarioEmail: actorEmail,
+    motivoNota: motivo, proximaAccion: 'Informar el pago nuevamente con un comprobante válido', responsableProximaAccion: null,
+  });
+}
+
 // Antecedente u observación libre sobre una venta (RIO-113 corrección,
 // Brenda sección 3: "agregar antecedentes u observaciones" es una
 // capacidad explícita del vendedor). Nunca cambia ningún estado oficial

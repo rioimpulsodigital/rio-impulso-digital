@@ -11,6 +11,16 @@ database_name = "rio-ventas-preview"
 database_id = "1aed8e43-6e47-40c9-9770-1c50f6586d20"
 migrations_dir = "migrations"
 
+# R2 — RIO-116 sección "archivos y comprobantes seguros". Bucket privado
+# (creado el 31/08/2026, `wrangler r2 bucket create`) — sin dominio
+# personalizado ni r2.dev habilitado, así que no existe ninguna URL pública:
+# todo archivo se sirve exclusivamente por una ruta autenticada de este
+# Worker (nunca un link directo al bucket). Solo Preview — Producción no
+# tiene bucket propio todavía y requiere aprobación expresa de Brenda.
+[[r2_buckets]]
+binding = "COMPROBANTES"
+bucket_name = "rio-comprobantes-preview"
+
 # Variables públicas — no son secretos (confirmado en la auditoría RIO-108:
 # el dominio de equipo de Access es un dato público, no un identificador de
 # validación de tokens). El AUD de la aplicación de Access SÍ es sensible y

@@ -13,7 +13,7 @@ import { ok, Errors } from '../../../../../../_shared/response.js';
 import { query } from '../../../../../../_shared/db.js';
 import { assertCanAccessOwner, AuthzError } from '../../../../../../_shared/authz.js';
 import { isMethodAllowed, hasExpectedContentType } from '../../../../../../_shared/security.js';
-import { informarPago, acreditarPago, ProyectoError } from '../../../../../../_shared/proyectos.js';
+import { informarPago, acreditarPago, rechazarPago, ProyectoError } from '../../../../../../_shared/proyectos.js';
 
 function errorStatusFor(code) {
   if (code === 'pago_no_encontrado') return 404;
@@ -92,5 +92,26 @@ export async function onRequest(context) {
     }
   }
 
-  return Errors.validation('action inválida. Valores permitidos: informar, acreditar.', requestId);
+  if (body?.action === 'rechazar') {
+    // RIO-116: rechazar un comprobante/pago informado — solo admin, mismo
+    // permiso que acreditar (verifyPayments), nunca el vendedor.
+    if (!roleIdentity.permissions.verifyPayments) {
+      return Errors.forbidden(requestId);
+    }
+    if (typeof body.motivo !== 'string' || !body.motivo.trim()) {
+      return Errors.validation('Falta motivo.', requestId);
+    }
+    try {
+      await rechazarPago(env.DB, requestId, { ventaId: venta.id, pagoId: params.pagoId, motivo: body.motivo.trim(), actorEmail: roleIdentity.email });
+      return ok({ action: 'rechazar' }, requestId);
+    } catch (e) {
+      if (e instanceof ProyectoError) {
+        const status = errorStatusFor(e.code);
+        return status === 404 ? Errors.notFound(requestId) : Errors.conflict(e.code.toUpperCase(), e.message, requestId);
+      }
+      throw e;
+    }
+  }
+
+  return Errors.validation('action inválida. Valores permitidos: informar, acreditar, rechazar.', requestId);
 }
