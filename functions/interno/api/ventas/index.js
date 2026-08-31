@@ -24,7 +24,7 @@ import { query, transaction } from '../../../_shared/db.js';
 import { assertMarketAllowed, AuthzError } from '../../../_shared/authz.js';
 import { isMethodAllowed, hasExpectedContentType, isBodyTooLarge } from '../../../_shared/security.js';
 import { isValidPrice, splitPackPrice, CURRENCY_BY_MARKET } from '../../../_shared/pricing.js';
-import { generarComisionesParaVenta } from '../../../_shared/comisiones.js';
+import { generarComisionesParaVenta, resolverEquipoVigenteDeVendedor } from '../../../_shared/comisiones.js';
 
 const PACK_LANDING_PRODUCT = {
   ficha_generico: 'generico',
@@ -55,6 +55,7 @@ function serializeVenta(row) {
     tipoPrecio: row.tipo_precio,
     precioPactado: row.precio_pactado,
     vendedorEmail: row.vendedor_email,
+    equipoId: row.equipo_id || null,
     estadoActual: row.estado_actual,
     createdAt: row.created_at,
   };
@@ -203,11 +204,20 @@ async function handleCreate(context) {
     : [{ tipo: 'total', monto: precioPactado }];
 
   const db = env.DB;
+
+  // RIO-115 (consolidación, Brenda 31/08/2026): equipo_id es una
+  // fotografía inmutable del equipo vigente del vendedor AL MOMENTO DE
+  // LA VENTA — se resuelve acá y nunca se recalcula después, para que un
+  // cambio de equipo futuro no reescriba a quién le tocó supervisión en
+  // ventas ya cerradas. Puede ser null (vendedor sin equipo asignado):
+  // la venta igual se registra, pero no genera comisión de supervisión.
+  const equipoId = await resolverEquipoVigenteDeVendedor(db, requestId, roleIdentity.email);
+
   const statements = [
     db.prepare('INSERT INTO clientes (id, negocio, contacto_nombre, telefono, email, mercado, datos_facturacion_ar, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(clienteId, cliente.negocio.trim(), cliente.contactoNombre || null, cliente.telefono || null, cliente.email || null, mercado, cliente.datosFacturacionAr || null, roleIdentity.email),
-    db.prepare('INSERT INTO ventas (id, codigo_venta, cliente_id, mercado, producto, moneda, tipo_precio, precio_pactado, vendedor_email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(ventaId, codigoVenta, clienteId, mercado, producto, moneda, tipoPrecio, precioPactado, roleIdentity.email),
+    db.prepare('INSERT INTO ventas (id, codigo_venta, cliente_id, mercado, producto, moneda, tipo_precio, precio_pactado, vendedor_email, equipo_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(ventaId, codigoVenta, clienteId, mercado, producto, moneda, tipoPrecio, precioPactado, roleIdentity.email, equipoId),
     db.prepare('INSERT INTO proyectos (id, venta_id, codigo_proyecto) VALUES (?, ?, ?)')
       .bind(proyectoId, ventaId, codigoProyecto),
     ...componentesPlan.map((c) =>
@@ -232,7 +242,7 @@ async function handleCreate(context) {
     // igual (es una consecuencia contable, no un requisito para vender) y
     // el error queda solo en el log técnico.
     await generarComisionesParaVenta(db, requestId, {
-      ventaId, vendedorEmail: roleIdentity.email, mercado, producto, moneda,
+      ventaId, vendedorEmail: roleIdentity.email, mercado, producto, moneda, equipoId,
       componentes: componentesPlan.map((c) => ({ id: c.id, precio_atribuido: c.precioAtribuido })),
     });
   } catch (e) {

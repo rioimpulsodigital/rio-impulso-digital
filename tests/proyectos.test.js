@@ -26,7 +26,7 @@ function fakeDb() {
     eventos_historial: [],
     incidencias: [],
     comisiones: [], // RIO-114: acreditarPago() ahora también consulta comisiones — ninguna se siembra en este suite (fuera de su alcance), así que siempre vacío.
-    asignaciones_produccion: [], // RIO-114 (corrección): aprobarComponente() consulta si hay un asistente asignado — ninguno en este suite.
+    asignaciones_realizacion: [], // RIO-115 (consolidación): aprobarComponente() consulta si hay responsable/practicante asignado — ninguno en este suite.
   };
 
   function makeStatement(sql) {
@@ -72,6 +72,11 @@ function fakeDb() {
       state.acreditaciones.push({ id: p[0], pago_informado_id: p[1], monto_acreditado: p[2], verificado_por: p[3], nota: p[4], created_at: nowIso() });
     } else if (sql.startsWith('INSERT INTO incidencias')) {
       state.incidencias.push({ id: p[0], venta_id: p[1], tipo: p[2], motivo: p[3], estado: 'abierta', registrado_por: p[4], created_at: nowIso() });
+    } else if (sql.startsWith('INSERT INTO comisiones')) {
+      state.comisiones.push({
+        id: p[0], tipo: p[1], rol_realizacion: p[2], venta_id: p[3], componente_id: p[4], beneficiario_email: p[5], plan_id: p[6], asignacion_plan_id: p[7],
+        porcentaje_snapshot: p[8], base_snapshot: p[9], monto_base: p[10], moneda: p[11], monto_comision: p[12], estado: 'calculada_provisional',
+      });
     } else {
       throw new Error('mutación inesperada en test: ' + sql);
     }
@@ -89,8 +94,30 @@ function fakeDb() {
       return state.pagos_informados.filter((x) => x.pago_esperado_id === p[0]).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     }
     if (sql.includes('FROM comisiones WHERE venta_id')) return state.comisiones.filter((c) => c.venta_id === p[0]);
-    if (sql.startsWith('SELECT usuario_email FROM asignaciones_produccion WHERE componente_id')) {
-      return state.asignaciones_produccion.filter((a) => a.componente_id === p[0]);
+    if (sql.startsWith('SELECT usuario_email, rol FROM asignaciones_realizacion WHERE componente_id')) {
+      return state.asignaciones_realizacion.filter((a) => a.componente_id === p[0]);
+    }
+    if (sql.startsWith('SELECT monto FROM costos_directos WHERE componente_id')) {
+      return (state.costos_directos || []).filter((c) => c.componente_id === p[0]);
+    }
+    if (sql.includes('FROM usuarios u') && sql.includes('JOIN asignaciones_plan_comision ap') && sql.includes('JOIN planes_comision pl')) {
+      const usuario = (state.usuarios || []).find((u) => u.email === p[0]);
+      if (!usuario) return [];
+      return (state.asignaciones_plan_comision || [])
+        .filter((ap) => ap.usuario_id === usuario.id && !ap.valid_until)
+        .map((ap) => ({ asignacion: ap, plan: (state.planes_comision || []).find((pl) => pl.id === ap.plan_id) }))
+        .filter((x) => x.plan && x.plan.tipo === p[1] && x.plan.estado === 'activo' && !x.plan.valid_until)
+        .map((x) => ({
+          asignacion_id: x.asignacion.id, plan_id: x.plan.id, porcentaje: x.plan.porcentaje, base: x.plan.base,
+          productos_alcanzados: x.plan.productos_alcanzados, mercados_alcanzados: x.plan.mercados_alcanzados,
+          contexto_realizacion: x.plan.contexto_realizacion,
+        }));
+    }
+    if (sql.includes('FROM usuarios u JOIN asignaciones_rol a')) {
+      const usuario = (state.usuarios || []).find((u) => u.email === p[0]);
+      if (!usuario) return [];
+      const asignacion = (state.asignaciones_rol || []).find((a) => a.usuario_id === usuario.id && !a.valid_until);
+      return asignacion ? [{ user_status: asignacion.user_status }] : [];
     }
     throw new Error('consulta inesperada en test: ' + sql);
   }
@@ -309,6 +336,109 @@ test('acreditarPago() — rechaza acreditar dos veces el mismo pago', async () =
     () => acreditarPago(db, 'req-14c', { ventaId, pagoId: 'pago-total', montoAcreditado: 50000, actorEmail: 'admin@example.com' }),
     (e) => { assert.equal(e.code, 'ya_acreditado'); return true; }
   );
+});
+
+// --- Realización (RIO-115 consolidación, 31/08/2026): 30% pool, solo o
+// responsable+practicante, requiere asignación expresa y usuario activo ---
+
+function seedRealizacionFixtures(db) {
+  // aprobarComponente() llama a generarComisionesRealizacionSiCorresponde(),
+  // que a su vez resuelve planes vigentes (crearComisionSiCorresponde) y
+  // usuarioActivo() — ambos ausentes del fakeDb liviano de este archivo, así
+  // que estos escenarios necesitan sembrar las tablas que faltan.
+  db._state.usuarios = db._state.usuarios || [];
+  db._state.asignaciones_rol = db._state.asignaciones_rol || [];
+  db._state.planes_comision = db._state.planes_comision || [];
+  db._state.asignaciones_plan_comision = db._state.asignaciones_plan_comision || [];
+  db._state.costos_directos = db._state.costos_directos || [];
+}
+
+function setProductoVenta(db, ventaId, producto = 'ficha') {
+  db._state.ventas.find((v) => v.id === ventaId).producto = producto;
+}
+
+function seedUsuarioActivo(db, email, activo = true) {
+  const id = db._state.usuarios.length + 1;
+  db._state.usuarios.push({ id, email });
+  db._state.asignaciones_rol.push({ usuario_id: id, user_status: activo ? 'activo' : 'inactivo', valid_until: null });
+  return id;
+}
+
+function seedPlanRealizacion(db, { email, porcentaje, contexto }) {
+  const usuario = db._state.usuarios.find((u) => u.email === email) || { id: seedUsuarioActivo(db, email) };
+  const planId = `plan-realizacion-${contexto}-${porcentaje}-${usuario.id}`;
+  db._state.planes_comision.push({
+    id: planId, tipo: 'realizacion', contexto_realizacion: contexto, porcentaje, base: 'utilidad_neta_componente',
+    productos_alcanzados: JSON.stringify(['ficha', 'generico', 'personalizado', 'ficha_generico', 'ficha_personalizado']),
+    mercados_alcanzados: JSON.stringify(['CL', 'AR']), estado: 'activo', valid_until: null,
+  });
+  db._state.asignaciones_plan_comision.push({ id: `asig-${planId}`, usuario_id: usuario.id, plan_id: planId, valid_until: null });
+}
+
+test('aprobarComponente() — sin asignación de responsable, no genera ninguna comisión de realización (nunca automática)', async () => {
+  const db = fakeDb();
+  seedRealizacionFixtures(db);
+  const { ventaId } = seedIndividual(db);
+  db._state.componentes.find((c) => c.id === 'comp-solo').estado_actual = 'entregada';
+  await aprobarComponente(db, 'req-real-1', { ventaId, componenteId: 'comp-solo', actorEmail: 'admin@example.com' });
+  assert.equal(db._state.comisiones.length, 0);
+});
+
+test('aprobarComponente() — responsable sin practicante recibe el 30% completo (contexto "solo")', async () => {
+  const db = fakeDb();
+  seedRealizacionFixtures(db);
+  const { ventaId } = seedIndividual(db);
+  setProductoVenta(db, ventaId);
+  db._state.componentes.find((c) => c.id === 'comp-solo').estado_actual = 'entregada';
+  db._state.componentes.find((c) => c.id === 'comp-solo').precio_atribuido = 50000;
+  seedUsuarioActivo(db, 'responsable@example.com');
+  seedPlanRealizacion(db, { email: 'responsable@example.com', porcentaje: 30, contexto: 'solo' });
+  db._state.asignaciones_realizacion.push({ componente_id: 'comp-solo', usuario_email: 'responsable@example.com', rol: 'responsable' });
+
+  await aprobarComponente(db, 'req-real-2', { ventaId, componenteId: 'comp-solo', actorEmail: 'admin@example.com' });
+  assert.equal(db._state.comisiones.length, 1);
+  const c = db._state.comisiones[0];
+  assert.equal(c.beneficiario_email, 'responsable@example.com');
+  assert.equal(c.porcentaje_snapshot, 30);
+  assert.equal(c.monto_comision, 15000);
+});
+
+test('aprobarComponente() — con practicante, el responsable pasa a 20% y el practicante recibe 10% (dos filas, nunca 30+10)', async () => {
+  const db = fakeDb();
+  seedRealizacionFixtures(db);
+  const { ventaId } = seedIndividual(db);
+  setProductoVenta(db, ventaId);
+  db._state.componentes.find((c) => c.id === 'comp-solo').estado_actual = 'entregada';
+  db._state.componentes.find((c) => c.id === 'comp-solo').precio_atribuido = 50000;
+  seedUsuarioActivo(db, 'responsable@example.com');
+  seedUsuarioActivo(db, 'practicante@example.com');
+  seedPlanRealizacion(db, { email: 'responsable@example.com', porcentaje: 20, contexto: 'responsable_con_practicante' });
+  seedPlanRealizacion(db, { email: 'practicante@example.com', porcentaje: 10, contexto: 'practicante' });
+  db._state.asignaciones_realizacion.push({ componente_id: 'comp-solo', usuario_email: 'responsable@example.com', rol: 'responsable' });
+  db._state.asignaciones_realizacion.push({ componente_id: 'comp-solo', usuario_email: 'practicante@example.com', rol: 'practicante' });
+
+  await aprobarComponente(db, 'req-real-3', { ventaId, componenteId: 'comp-solo', actorEmail: 'admin@example.com' });
+  assert.equal(db._state.comisiones.length, 2);
+  const responsable = db._state.comisiones.find((c) => c.beneficiario_email === 'responsable@example.com');
+  const practicante = db._state.comisiones.find((c) => c.beneficiario_email === 'practicante@example.com');
+  assert.equal(responsable.porcentaje_snapshot, 20);
+  assert.equal(responsable.monto_comision, 10000);
+  assert.equal(practicante.porcentaje_snapshot, 10);
+  assert.equal(practicante.monto_comision, 5000);
+  assert.equal(responsable.monto_comision + practicante.monto_comision, 15000, 'nunca supera el 30% del componente entre ambos');
+});
+
+test('aprobarComponente() — un responsable inactivo no genera su comisión, aunque tenga plan vigente', async () => {
+  const db = fakeDb();
+  seedRealizacionFixtures(db);
+  const { ventaId } = seedIndividual(db);
+  db._state.componentes.find((c) => c.id === 'comp-solo').estado_actual = 'entregada';
+  seedUsuarioActivo(db, 'responsable@example.com', false);
+  seedPlanRealizacion(db, { email: 'responsable@example.com', porcentaje: 30, contexto: 'solo' });
+  db._state.asignaciones_realizacion.push({ componente_id: 'comp-solo', usuario_email: 'responsable@example.com', rol: 'responsable' });
+
+  await aprobarComponente(db, 'req-real-4', { ventaId, componenteId: 'comp-solo', actorEmail: 'admin@example.com' });
+  assert.equal(db._state.comisiones.length, 0);
 });
 
 // --- Historial e incidencias ---

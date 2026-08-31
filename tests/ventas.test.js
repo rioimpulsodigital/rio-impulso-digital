@@ -49,7 +49,9 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
   seed.eventos_historial = seed.eventos_historial || [];
   seed.usuarios = seed.usuarios || [];
   seed.asignaciones_rol = seed.asignaciones_rol || [];
-  seed.asignaciones_produccion = seed.asignaciones_produccion || [];
+  seed.asignaciones_realizacion = seed.asignaciones_realizacion || [];
+  seed.equipo_miembros = seed.equipo_miembros || [];
+  seed.equipo_supervisores = seed.equipo_supervisores || [];
   const state = seed;
 
   function makeStatement(sql) {
@@ -76,7 +78,7 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
     } else if (sql.startsWith('INSERT INTO ventas')) {
       state.ventas.push({
         id: p[0], codigo_venta: p[1], cliente_id: p[2], mercado: p[3], producto: p[4], moneda: p[5],
-        tipo_precio: p[6], precio_pactado: p[7], vendedor_email: p[8], estado_actual: 'registrada', created_at: '2026-08-28 00:00:00',
+        tipo_precio: p[6], precio_pactado: p[7], vendedor_email: p[8], equipo_id: p[9] || null, estado_actual: 'registrada', created_at: '2026-08-28 00:00:00',
       });
     } else if (sql.startsWith('INSERT INTO proyectos')) {
       state.proyectos.push({ id: p[0], venta_id: p[1], codigo_proyecto: p[2], estado_actual: 'registrado' });
@@ -86,8 +88,8 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
       state.pagos_esperados.push({ id: p[0], venta_id: p[1], tipo: p[2], monto: p[3], moneda: p[4], estado: 'pendiente' });
     } else if (sql.startsWith('INSERT INTO comisiones')) {
       state.comisiones.push({
-        id: p[0], tipo: p[1], venta_id: p[2], componente_id: p[3], beneficiario_email: p[4], plan_id: p[5], asignacion_plan_id: p[6],
-        porcentaje_snapshot: p[7], base_snapshot: p[8], monto_base: p[9], moneda: p[10], monto_comision: p[11], estado: 'calculada_provisional',
+        id: p[0], tipo: p[1], rol_realizacion: p[2], venta_id: p[3], componente_id: p[4], beneficiario_email: p[5], plan_id: p[6], asignacion_plan_id: p[7],
+        porcentaje_snapshot: p[8], base_snapshot: p[9], monto_base: p[10], moneda: p[11], monto_comision: p[12], estado: 'calculada_provisional',
       });
     } else if (sql.startsWith('INSERT INTO eventos_historial')) {
       state.eventos_historial.push({ id: p[0], venta_id: p[1], entidad: p[2], entidad_id: p[3] });
@@ -135,14 +137,14 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
           productos_alcanzados: x.plan.productos_alcanzados, mercados_alcanzados: x.plan.mercados_alcanzados,
         }));
     }
-    if (sql.includes('FROM usuarios u JOIN asignaciones_rol a')) {
-      return state.usuarios
-        .map((u) => ({ u, a: state.asignaciones_rol.find((a) => a.usuario_id === u.id && a.role === 'supervisor' && !a.valid_until) }))
-        .filter((x) => x.a)
-        .map((x) => ({ email: x.u.email, allowed_markets: x.a.allowed_markets }));
+    if (sql.startsWith('SELECT equipo_id FROM equipo_miembros')) {
+      return state.equipo_miembros.filter((m) => m.usuario_email === p[0] && !m.valid_until);
     }
-    if (sql.startsWith('SELECT usuario_email FROM asignaciones_produccion WHERE componente_id')) {
-      return state.asignaciones_produccion.filter((a) => a.componente_id === p[0]);
+    if (sql.startsWith('SELECT usuario_email FROM equipo_supervisores')) {
+      return state.equipo_supervisores.filter((s) => s.equipo_id === p[0] && !s.valid_until);
+    }
+    if (sql.startsWith('SELECT usuario_email, rol FROM asignaciones_realizacion WHERE componente_id')) {
+      return state.asignaciones_realizacion.filter((a) => a.componente_id === p[0]);
     }
     throw new Error('SELECT inesperado en test: ' + sql);
   }
@@ -241,13 +243,24 @@ test('POST /ventas — un plan cuyos productos_alcanzados no incluyen este produ
   assert.equal(db._state.comisiones.length, 0);
 });
 
-test('POST /ventas — genera además una comisión de supervisión (10% confirmado) por cada supervisor activo del mercado, con su propio plan', async () => {
+// RIO-115 (consolidación 31/08/2026): "mercado no equivale a equipo" — la
+// comisión de supervisión ahora depende de un equipo explícito
+// (equipo_miembros / equipo_supervisores), snapshotteado en ventas.equipo_id
+// al momento de la venta, nunca de "todos los supervisores del mercado".
+function seedEquipo(db, { equipoId = `equipo-${Math.random().toString(36).slice(2)}`, mercado, miembroEmail, supervisorEmail }) {
+  db._state.equipo_miembros.push({ equipo_id: equipoId, usuario_email: miembroEmail, valid_until: null });
+  if (supervisorEmail) {
+    db._state.equipo_supervisores.push({ equipo_id: equipoId, usuario_email: supervisorEmail, valid_until: null });
+  }
+  return equipoId;
+}
+
+test('POST /ventas — genera además una comisión de supervisión (10% confirmado) para el supervisor VIGENTE del equipo del vendedor, con su propio plan', async () => {
   const db = fakeDb();
   const ri = roleIdentity();
   seedAsignacionPlan(db, { email: ri.email, tipo: 'comercial', porcentaje: 40 });
-
-  const supervisorId = seedAsignacionPlan(db, { email: 'supervisor.cl@example.com', tipo: 'supervision', porcentaje: 10 });
-  db._state.asignaciones_rol.push({ usuario_id: supervisorId, role: 'supervisor', allowed_markets: '["CL"]', valid_until: null });
+  seedAsignacionPlan(db, { email: 'supervisor.cl@example.com', tipo: 'supervision', porcentaje: 10 });
+  seedEquipo(db, { mercado: 'CL', miembroEmail: ri.email, supervisorEmail: 'supervisor.cl@example.com' });
 
   const response = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }));
   assert.equal(response.status, 201);
@@ -260,12 +273,42 @@ test('POST /ventas — genera además una comisión de supervisión (10% confirm
   assert.equal(supervision.moneda, 'CLP', 'la comisión conserva la moneda original de la venta (CL -> CLP)');
 });
 
+test('POST /ventas — un vendedor SIN equipo asignado no genera comisión de supervisión (nunca "todos los supervisores del mercado")', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  seedAsignacionPlan(db, { email: ri.email, tipo: 'comercial', porcentaje: 40 });
+  seedAsignacionPlan(db, { email: 'supervisor.cl@example.com', tipo: 'supervision', porcentaje: 10 });
+  // Hay un supervisor con plan vigente en el mercado, pero NINGÚN equipo lo
+  // vincula al vendedor — no debe generarse comisión de supervisión.
+
+  const response = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }));
+  assert.equal(response.status, 201);
+  assert.equal(db._state.comisiones.length, 1, 'solo la comercial — sin equipo, no hay a quién pagarle supervisión');
+  assert.equal(db._state.comisiones[0].tipo, 'comercial');
+});
+
+test('POST /ventas — dos supervisores del mismo mercado con equipos distintos: la supervisión va SOLO al supervisor del equipo del vendedor', async () => {
+  const db = fakeDb();
+  const vendedorEquipoA = roleIdentity({ email: 'ejecutivo.equipoA@example.com' });
+  seedAsignacionPlan(db, { email: vendedorEquipoA.email, tipo: 'comercial', porcentaje: 40 });
+  seedAsignacionPlan(db, { email: 'supervisor.a@example.com', tipo: 'supervision', porcentaje: 10 });
+  seedAsignacionPlan(db, { email: 'supervisor.b@example.com', tipo: 'supervision', porcentaje: 10 });
+  seedEquipo(db, { equipoId: 'equipo-a', mercado: 'CL', miembroEmail: vendedorEquipoA.email, supervisorEmail: 'supervisor.a@example.com' });
+  seedEquipo(db, { equipoId: 'equipo-b', mercado: 'CL', miembroEmail: 'otro.vendedor@example.com', supervisorEmail: 'supervisor.b@example.com' });
+
+  const response = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: vendedorEquipoA, db }));
+  assert.equal(response.status, 201);
+  const supervision = db._state.comisiones.find((c) => c.tipo === 'supervision');
+  assert.ok(supervision);
+  assert.equal(supervision.beneficiario_email, 'supervisor.a@example.com', 'nunca el supervisor de otro equipo del mismo mercado');
+});
+
 test('POST /ventas en AR — la comisión de supervisión se genera en ARS, nunca convertida', async () => {
   const db = fakeDb();
   const ri = roleIdentity({ allowedMarkets: ['AR'] });
   seedAsignacionPlan(db, { email: ri.email, tipo: 'comercial', porcentaje: 40 });
-  const supervisorId = seedAsignacionPlan(db, { email: 'supervisor.ar@example.com', tipo: 'supervision', porcentaje: 10 });
-  db._state.asignaciones_rol.push({ usuario_id: supervisorId, role: 'supervisor', allowed_markets: '["AR"]', valid_until: null });
+  seedAsignacionPlan(db, { email: 'supervisor.ar@example.com', tipo: 'supervision', porcentaje: 10 });
+  seedEquipo(db, { mercado: 'AR', miembroEmail: ri.email, supervisorEmail: 'supervisor.ar@example.com' });
 
   const AR_INDIVIDUAL = { mercado: 'AR', cliente: { negocio: 'Estudio Uñas' }, producto: 'ficha', tipoPrecio: 'lanzamiento', precioPactado: 125000 };
   const response = await ventasHandler(fakeContext({ method: 'POST', body: AR_INDIVIDUAL, roleIdentity: ri, db }));

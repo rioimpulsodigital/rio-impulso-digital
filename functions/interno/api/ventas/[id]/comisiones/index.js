@@ -1,22 +1,26 @@
 // GET /interno/api/ventas/:id/comisiones — RIO-114, visibilidad de
-// supervisor corregida en RIO-115 (31/08/2026). Lista las comisiones
-// (comercial/supervisión/producción/desarrollo) generadas para esta
-// venta.
+// supervisor consolidada en RIO-115 (31/08/2026, corrección sobre
+// equipos). Lista las comisiones (comercial/supervisión/realización) de
+// esta venta.
 //
 // Decisión CONFIRMADA por Brenda: esta información solo la ve
-// administración en su totalidad; un ejecutivo/asistente ve únicamente el
-// cálculo completo de SU PROPIA comisión (beneficiario_email = su email);
-// un supervisor ve su propia comisión Y la de su equipo (antes se
-// documentaba como "decisión abierta" en RIO-97 v2 sección 18 — ya no lo
-// es). El administrador consulta todas las comisiones dentro de sus
-// mercados autorizados.
+// administración en su totalidad, dentro de sus mercados autorizados. Un
+// ejecutivo/asistente ve únicamente el cálculo completo de SU PROPIA
+// comisión (beneficiario_email = su email). Un supervisor ve su propia
+// comisión Y solo las comerciales de SU EQUIPO — nunca por mercado
+// ("mercado no equivale a equipo"): dos supervisores del mismo mercado NO
+// acceden automáticamente al equipo del otro. Sin acceso por supervisión
+// a participaciones de realización/desarrollo/empresa de su equipo, ni a
+// comprobantes bancarios ajenos (esas rutas ya están cerradas a
+// administración vía manageProduccionOficial, sin excepción de
+// supervisor).
 //
-// "Su equipo", hoy: no existe todavía una tabla de asignación de equipo
-// independiente del mercado (RIO-97 v2 nunca la definió) — con un único
-// supervisor por mercado, su mercado autorizado ES su equipo. Brenda ya
-// avisó que esto cambia el día que haya más de un supervisor en el mismo
-// mercado, cada uno con su propio equipo — ese día hace falta una tabla
-// de equipo real; hoy sería prematuro inventarla sin uso.
+// "Su equipo" se resuelve por `ventas.equipo_id` — la fotografía inmutable
+// del equipo del vendedor al momento de la venta — contra
+// `equipo_supervisores` VIGENTE para este supervisor. Una venta sin
+// equipo_id (vendedor sin equipo asignado) nunca es visible por esta vía,
+// solo por la rama de "propias" si el supervisor mismo generó una
+// comisión sobre ella.
 
 import { ok, Errors } from '../../../../../_shared/response.js';
 import { query } from '../../../../../_shared/db.js';
@@ -52,7 +56,7 @@ export async function onRequest(context) {
     return Errors.methodNotAllowed(requestId);
   }
 
-  const ventaRows = await query(env.DB, requestId, 'SELECT id, vendedor_email, mercado FROM ventas WHERE id = ?', [params.id]);
+  const ventaRows = await query(env.DB, requestId, 'SELECT id, vendedor_email, mercado, equipo_id FROM ventas WHERE id = ?', [params.id]);
   const venta = ventaRows[0];
   if (!venta) return Errors.notFound(requestId);
 
@@ -62,13 +66,24 @@ export async function onRequest(context) {
     return ok({ comisiones: comisiones.map(serialize) }, requestId);
   }
 
-  const esSupervisorDeSuMercado = roleIdentity.role === 'supervisor' && roleIdentity.allowedMarkets.includes(venta.mercado);
-  if (esSupervisorDeSuMercado) {
-    // Ve la suya y la de su equipo (hoy, su equipo = su mercado — ver nota
-    // arriba). Nunca el detalle de un mercado que no supervisa.
-    const comisiones = await query(env.DB, requestId, 'SELECT * FROM comisiones WHERE venta_id = ? ORDER BY tipo', [venta.id]);
-    if (comisiones.length === 0) return Errors.notFound(requestId);
-    return ok({ comisiones: comisiones.map(serialize) }, requestId);
+  if (roleIdentity.role === 'supervisor' && venta.equipo_id) {
+    const esSupervisorDelEquipo = await query(
+      env.DB, requestId,
+      `SELECT 1 FROM equipo_supervisores WHERE equipo_id = ? AND usuario_email = ?
+       AND (valid_until IS NULL OR valid_until > datetime('now')) AND valid_from <= datetime('now')`,
+      [venta.equipo_id, roleIdentity.email]
+    );
+    if (esSupervisorDelEquipo[0]) {
+      // Su propia comisión (cualquier tipo) + la comercial de su equipo —
+      // nunca realización/desarrollo/empresa ajenas.
+      const comisiones = await query(
+        env.DB, requestId,
+        `SELECT * FROM comisiones WHERE venta_id = ? AND (tipo = 'comercial' OR beneficiario_email = ?) ORDER BY tipo`,
+        [venta.id, roleIdentity.email]
+      );
+      if (comisiones.length === 0) return Errors.notFound(requestId);
+      return ok({ comisiones: comisiones.map(serialize) }, requestId);
+    }
   }
 
   // Ejecutivo/asistente (o supervisor de OTRO mercado): cada quien ve solo

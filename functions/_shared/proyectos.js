@@ -16,7 +16,7 @@
 
 import { query, execute } from './db.js';
 import { logEvento } from './historial.js';
-import { procesarPagoAcreditadoParaComisiones, generarComisionesTrabajoComponenteSiCorresponde, retenerComisionesPorDisputa } from './comisiones.js';
+import { procesarPagoAcreditadoParaComisiones, generarComisionesRealizacionSiCorresponde, retenerComisionesPorDisputa } from './comisiones.js';
 
 export class ProyectoError extends Error {
   constructor(code, message) {
@@ -162,7 +162,7 @@ export async function aprobarComponente(db, requestId, { ventaId, componenteId, 
     estadoAnterior: 'entregada', estadoNuevo: 'aprobada', usuarioEmail: actorEmail,
   });
 
-  await generarComisionesTrabajoComponenteSiCorresponde(db, requestId, {
+  await generarComisionesRealizacionSiCorresponde(db, requestId, {
     ventaId, componente, producto: venta.producto, mercado: venta.mercado, moneda: venta.moneda,
   });
 

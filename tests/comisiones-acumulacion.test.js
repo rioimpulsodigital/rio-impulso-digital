@@ -10,13 +10,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  generarComisionesParaVenta, generarComisionesTrabajoComponenteSiCorresponde,
+  generarComisionesParaVenta, generarComisionesRealizacionSiCorresponde,
 } from '../functions/_shared/comisiones.js';
 
 function fakeDb() {
   const state = {
-    comisiones: [], planes_comision: [], asignaciones_plan_comision: [], asignaciones_produccion: [],
+    comisiones: [], planes_comision: [], asignaciones_plan_comision: [], asignaciones_realizacion: [],
     costos_directos: [], usuarios: [], asignaciones_rol: [], eventos_historial: [],
+    equipo_miembros: [], equipo_supervisores: [],
   };
 
   function makeStatement(sql) {
@@ -41,13 +42,8 @@ function fakeDb() {
         .map((x) => ({
           asignacion_id: x.asignacion.id, plan_id: x.plan.id, porcentaje: x.plan.porcentaje, base: x.plan.base,
           productos_alcanzados: x.plan.productos_alcanzados, mercados_alcanzados: x.plan.mercados_alcanzados,
+          contexto_realizacion: x.plan.contexto_realizacion,
         }));
-    }
-    if (sql.includes('FROM usuarios u JOIN asignaciones_rol a') && sql.includes("role = 'supervisor'")) {
-      return state.usuarios
-        .map((u) => ({ u, a: state.asignaciones_rol.find((a) => a.usuario_id === u.id && a.role === 'supervisor' && !a.valid_until) }))
-        .filter((x) => x.a)
-        .map((x) => ({ email: x.u.email, allowed_markets: x.a.allowed_markets }));
     }
     if (sql.includes('FROM usuarios u JOIN asignaciones_rol a')) {
       const usuario = state.usuarios.find((u) => u.email === p[0]);
@@ -58,8 +54,14 @@ function fakeDb() {
     if (sql.startsWith('SELECT monto FROM costos_directos WHERE componente_id')) {
       return state.costos_directos.filter((c) => c.componente_id === p[0]);
     }
-    if (sql.startsWith('SELECT usuario_email FROM asignaciones_produccion WHERE componente_id')) {
-      return state.asignaciones_produccion.filter((a) => a.componente_id === p[0] && a.rol === p[1]);
+    if (sql.startsWith('SELECT usuario_email, rol FROM asignaciones_realizacion WHERE componente_id')) {
+      return state.asignaciones_realizacion.filter((a) => a.componente_id === p[0]);
+    }
+    if (sql.startsWith('SELECT equipo_id FROM equipo_miembros')) {
+      return state.equipo_miembros.filter((m) => m.usuario_email === p[0] && !m.valid_until);
+    }
+    if (sql.startsWith('SELECT usuario_email FROM equipo_supervisores')) {
+      return state.equipo_supervisores.filter((s) => s.equipo_id === p[0] && !s.valid_until);
     }
     throw new Error('consulta inesperada en test: ' + sql);
   }
@@ -67,8 +69,8 @@ function fakeDb() {
   function runMutation(sql, p) {
     if (sql.startsWith('INSERT INTO comisiones')) {
       state.comisiones.push({
-        id: p[0], tipo: p[1], venta_id: p[2], componente_id: p[3], beneficiario_email: p[4], plan_id: p[5], asignacion_plan_id: p[6],
-        porcentaje_snapshot: p[7], base_snapshot: p[8], monto_base: p[9], moneda: p[10], monto_comision: p[11], estado: 'calculada_provisional',
+        id: p[0], tipo: p[1], rol_realizacion: p[2], venta_id: p[3], componente_id: p[4], beneficiario_email: p[5], plan_id: p[6], asignacion_plan_id: p[7],
+        porcentaje_snapshot: p[8], base_snapshot: p[9], monto_base: p[10], moneda: p[11], monto_comision: p[12], estado: 'calculada_provisional',
       });
     } else if (sql.startsWith('INSERT INTO eventos_historial')) {
       state.eventos_historial.push({ id: p[0], venta_id: p[1], entidad: p[2], entidad_id: p[3] });
@@ -79,7 +81,7 @@ function fakeDb() {
 }
 
 let nextUsuarioId = 1;
-function seedAsignacionPlan(db, { email, tipo, porcentaje, base, productos = ['ficha', 'generico', 'personalizado', 'ficha_generico', 'ficha_personalizado'], mercados = ['CL', 'AR'], planEstado = 'activo', planValidUntil = null, asignacionValidUntil = null } = {}) {
+function seedAsignacionPlan(db, { email, tipo, porcentaje, base, contexto = null, productos = ['ficha', 'generico', 'personalizado', 'ficha_generico', 'ficha_personalizado'], mercados = ['CL', 'AR'], planEstado = 'activo', planValidUntil = null, asignacionValidUntil = null } = {}) {
   let usuario = db._state.usuarios.find((u) => u.email === email);
   if (!usuario) {
     usuario = { id: nextUsuarioId++, email };
@@ -87,11 +89,19 @@ function seedAsignacionPlan(db, { email, tipo, porcentaje, base, productos = ['f
   }
   const planId = `plan-${tipo}-${porcentaje}-${usuario.id}-${db._state.planes_comision.length}`;
   db._state.planes_comision.push({
-    id: planId, tipo, porcentaje, base: base || (tipo === 'produccion' ? 'utilidad_neta_componente' : 'utilidad_neta_venta'),
+    id: planId, tipo, porcentaje, contexto_realizacion: contexto, base: base || (tipo === 'realizacion' ? 'utilidad_neta_componente' : 'utilidad_neta_venta'),
     productos_alcanzados: JSON.stringify(productos), mercados_alcanzados: JSON.stringify(mercados), estado: planEstado, valid_until: planValidUntil,
   });
   db._state.asignaciones_plan_comision.push({ id: `asig-${planId}`, usuario_id: usuario.id, plan_id: planId, valid_until: asignacionValidUntil });
   return usuario.id;
+}
+
+function seedEquipo(db, { equipoId = `equipo-${Math.random().toString(36).slice(2)}`, miembroEmail, supervisorEmail } = {}) {
+  db._state.equipo_miembros.push({ equipo_id: equipoId, usuario_email: miembroEmail, valid_until: null });
+  if (supervisorEmail) {
+    db._state.equipo_supervisores.push({ equipo_id: equipoId, usuario_email: supervisorEmail, valid_until: null });
+  }
+  return equipoId;
 }
 
 const VENTA_BASE = { ventaId: 'v1', mercado: 'CL', producto: 'ficha', moneda: 'CLP', componentes: [{ id: 'comp-1', precio_atribuido: 50000 }] };
@@ -128,23 +138,23 @@ test('3) La regla de 0% proviene del plan asignado, no del rol "admin" ni del no
 
 // --- 4-6: Supervisor que vende ---
 
-test('4) Supervisor vendiendo SIN plan comercial: genera solamente supervisión sobre su propia venta', async () => {
+test('4) Supervisor vendiendo SIN plan comercial: genera solamente supervisión sobre su propia venta (su equipo lo tiene a él mismo como supervisor)', async () => {
   const db = fakeDb();
-  const supId = seedAsignacionPlan(db, { email: 'supervisor.sin.comercial@example.com', tipo: 'supervision', porcentaje: 10 });
-  db._state.asignaciones_rol.push({ usuario_id: supId, role: 'supervisor', allowed_markets: '["CL"]', valid_until: null });
+  seedAsignacionPlan(db, { email: 'supervisor.sin.comercial@example.com', tipo: 'supervision', porcentaje: 10 });
+  const equipoId = seedEquipo(db, { miembroEmail: 'supervisor.sin.comercial@example.com', supervisorEmail: 'supervisor.sin.comercial@example.com' });
 
-  const ids = await generarComisionesParaVenta(db, 'req-4', { ...VENTA_BASE, vendedorEmail: 'supervisor.sin.comercial@example.com' });
+  const ids = await generarComisionesParaVenta(db, 'req-4', { ...VENTA_BASE, vendedorEmail: 'supervisor.sin.comercial@example.com', equipoId });
   assert.equal(ids.length, 1);
   assert.equal(db._state.comisiones[0].tipo, 'supervision');
 });
 
 test('5) Supervisor vendiendo CON plan comercial y de supervisión: genera dos comisiones independientes, 40% + 10%, nunca sumadas en una fila', async () => {
   const db = fakeDb();
-  const supId = seedAsignacionPlan(db, { email: 'supervisor.completo@example.com', tipo: 'comercial', porcentaje: 40 });
+  seedAsignacionPlan(db, { email: 'supervisor.completo@example.com', tipo: 'comercial', porcentaje: 40 });
   seedAsignacionPlan(db, { email: 'supervisor.completo@example.com', tipo: 'supervision', porcentaje: 10 });
-  db._state.asignaciones_rol.push({ usuario_id: supId, role: 'supervisor', allowed_markets: '["CL"]', valid_until: null });
+  const equipoId = seedEquipo(db, { miembroEmail: 'supervisor.completo@example.com', supervisorEmail: 'supervisor.completo@example.com' });
 
-  const ids = await generarComisionesParaVenta(db, 'req-5', { ...VENTA_BASE, vendedorEmail: 'supervisor.completo@example.com' });
+  const ids = await generarComisionesParaVenta(db, 'req-5', { ...VENTA_BASE, vendedorEmail: 'supervisor.completo@example.com', equipoId });
   assert.equal(ids.length, 2, 'dos filas — nunca una sola con 50%');
   const comercial = db._state.comisiones.find((c) => c.tipo === 'comercial');
   const supervision = db._state.comisiones.find((c) => c.tipo === 'supervision');
@@ -158,11 +168,11 @@ test('5) Supervisor vendiendo CON plan comercial y de supervisión: genera dos c
 
 test('6) Modificar o retirar uno de los dos planes del supervisor no altera las comisiones históricas ya generadas', async () => {
   const db = fakeDb();
-  const supId = seedAsignacionPlan(db, { email: 'supervisor.completo@example.com', tipo: 'comercial', porcentaje: 40 });
+  seedAsignacionPlan(db, { email: 'supervisor.completo@example.com', tipo: 'comercial', porcentaje: 40 });
   seedAsignacionPlan(db, { email: 'supervisor.completo@example.com', tipo: 'supervision', porcentaje: 10 });
-  db._state.asignaciones_rol.push({ usuario_id: supId, role: 'supervisor', allowed_markets: '["CL"]', valid_until: null });
+  const equipoId = seedEquipo(db, { miembroEmail: 'supervisor.completo@example.com', supervisorEmail: 'supervisor.completo@example.com' });
 
-  await generarComisionesParaVenta(db, 'req-6a', { ...VENTA_BASE, vendedorEmail: 'supervisor.completo@example.com' });
+  await generarComisionesParaVenta(db, 'req-6a', { ...VENTA_BASE, vendedorEmail: 'supervisor.completo@example.com', equipoId });
   const comercialOriginal = db._state.comisiones.find((c) => c.tipo === 'comercial');
   const supervisionOriginal = db._state.comisiones.find((c) => c.tipo === 'supervision');
 
@@ -174,7 +184,7 @@ test('6) Modificar o retirar uno de los dos planes del supervisor no altera las 
   assert.equal(supervisionOriginal.porcentaje_snapshot, 10, 'tampoco la de supervisión, que ni se tocó');
 
   // Una venta NUEVA del mismo supervisor ya no genera comercial (plan retirado), pero sí supervisión.
-  const idsNueva = await generarComisionesParaVenta(db, 'req-6b', { ...VENTA_BASE, ventaId: 'v2', vendedorEmail: 'supervisor.completo@example.com' });
+  const idsNueva = await generarComisionesParaVenta(db, 'req-6b', { ...VENTA_BASE, ventaId: 'v2', vendedorEmail: 'supervisor.completo@example.com', equipoId });
   assert.equal(idsNueva.length, 1);
   assert.equal(db._state.comisiones.find((c) => c.venta_id === 'v2').tipo, 'supervision');
 });
@@ -199,51 +209,51 @@ test('7) Asistente autorizado para vender, con plan comercial vigente: genera co
   assert.equal(db._state.comisiones[0].tipo, 'comercial');
 });
 
-test('8) Asistente asignado a un componente Landing, con plan de producción vigente: genera comisión de producción', async () => {
+test('8) Asistente asignado como responsable de un componente Landing, con plan de realización vigente: genera comisión de realización (30%, sin practicante)', async () => {
   const db = fakeDb();
-  const id = seedAsignacionPlan(db, { email: 'asistente.produce@example.com', tipo: 'produccion', porcentaje: 10 });
+  const id = seedAsignacionPlan(db, { email: 'asistente.produce@example.com', tipo: 'realizacion', porcentaje: 30, contexto: 'solo' });
   db._state.asignaciones_rol.push({ usuario_id: id, role: 'asistente', user_status: 'activo', valid_until: null });
-  db._state.asignaciones_produccion.push({ componente_id: 'comp-1', usuario_email: 'asistente.produce@example.com', rol: 'produccion' });
+  db._state.asignaciones_realizacion.push({ componente_id: 'comp-1', usuario_email: 'asistente.produce@example.com', rol: 'responsable' });
 
-  const ids = await generarComisionesTrabajoComponenteSiCorresponde(db, 'req-8', {
+  const ids = await generarComisionesRealizacionSiCorresponde(db, 'req-8', {
     ventaId: 'v1', componente: { id: 'comp-1', tipo: 'landing', precio_atribuido: 50000 }, producto: 'generico', mercado: 'CL', moneda: 'CLP',
   });
   assert.equal(ids.length, 1);
-  assert.equal(db._state.comisiones.find((c) => c.id === ids[0]).tipo, 'produccion');
+  assert.equal(db._state.comisiones.find((c) => c.id === ids[0]).tipo, 'realizacion');
 });
 
-test('9) Asistente que vende y produce una Landing: genera ambas comisiones, comercial y producción, como filas separadas', async () => {
+test('9) Asistente que vende y realiza una Landing: genera ambas comisiones, comercial y realización, como filas separadas', async () => {
   const db = fakeDb();
   const email = 'asistente.completo@example.com';
   const id = seedAsignacionPlan(db, { email, tipo: 'comercial', porcentaje: 40 });
-  seedAsignacionPlan(db, { email, tipo: 'produccion', porcentaje: 10 });
+  seedAsignacionPlan(db, { email, tipo: 'realizacion', porcentaje: 30, contexto: 'solo' });
   db._state.asignaciones_rol.push({ usuario_id: id, role: 'asistente', user_status: 'activo', valid_until: null });
-  db._state.asignaciones_produccion.push({ componente_id: 'comp-1', usuario_email: email, rol: 'produccion' });
+  db._state.asignaciones_realizacion.push({ componente_id: 'comp-1', usuario_email: email, rol: 'responsable' });
 
   const idsComercial = await generarComisionesParaVenta(db, 'req-9a', { ...VENTA_BASE, vendedorEmail: email, producto: 'generico' });
-  const idsProduccion = await generarComisionesTrabajoComponenteSiCorresponde(db, 'req-9b', {
+  const idsRealizacion = await generarComisionesRealizacionSiCorresponde(db, 'req-9b', {
     ventaId: 'v1', componente: { id: 'comp-1', tipo: 'landing', precio_atribuido: 50000 }, producto: 'generico', mercado: 'CL', moneda: 'CLP',
   });
 
   assert.equal(idsComercial.length, 1);
-  assert.equal(idsProduccion.length, 1);
-  assert.notEqual(idsComercial[0], idsProduccion[0]);
+  assert.equal(idsRealizacion.length, 1);
+  assert.notEqual(idsComercial[0], idsRealizacion[0]);
   assert.equal(db._state.comisiones.filter((c) => c.beneficiario_email === email).length, 2);
   assert.equal(db._state.comisiones.find((c) => c.tipo === 'comercial').componente_id, null, 'la comercial se vincula con la venta, no con un componente');
-  assert.equal(db._state.comisiones.find((c) => c.tipo === 'produccion').componente_id, 'comp-1', 'la de producción se vincula con el componente trabajado');
+  assert.equal(db._state.comisiones.find((c) => c.tipo === 'realizacion').componente_id, 'comp-1', 'la de realización se vincula con el componente trabajado');
 });
 
-test('10) Asistente que vende pero NO está asignado al componente Landing: no genera producción (solo comercial)', async () => {
+test('10) Asistente que vende pero NO está asignado como responsable del componente Landing: no genera realización (solo comercial)', async () => {
   const db = fakeDb();
   const email = 'asistente.sin.asignar@example.com';
   const id = seedAsignacionPlan(db, { email, tipo: 'comercial', porcentaje: 40 });
-  seedAsignacionPlan(db, { email, tipo: 'produccion', porcentaje: 10 }); // tiene el plan, pero no la asignación al componente.
+  seedAsignacionPlan(db, { email, tipo: 'realizacion', porcentaje: 30, contexto: 'solo' }); // tiene el plan, pero no la asignación al componente.
   db._state.asignaciones_rol.push({ usuario_id: id, role: 'asistente', user_status: 'activo', valid_until: null });
 
-  const ids = await generarComisionesTrabajoComponenteSiCorresponde(db, 'req-10', {
+  const ids = await generarComisionesRealizacionSiCorresponde(db, 'req-10', {
     ventaId: 'v1', componente: { id: 'comp-1', tipo: 'landing', precio_atribuido: 50000 }, producto: 'generico', mercado: 'CL', moneda: 'CLP',
   });
-  assert.deepEqual(ids, [], 'sin asignación expresa al componente, nunca se genera producción aunque tenga el plan y venda');
+  assert.deepEqual(ids, [], 'sin asignación expresa al componente, nunca se genera realización aunque tenga el plan y venda');
 });
 
 test('11) Asistente asignado DESPUÉS de aprobar el componente (o con plan fuera de vigencia): no genera comisión retroactiva', async () => {
@@ -251,59 +261,58 @@ test('11) Asistente asignado DESPUÉS de aprobar el componente (o con plan fuera
   const email = 'asistente.tarde@example.com';
 
   // Caso A: la asignación llega después de que ya se evaluó (no retroactiva).
-  const idsAntes = await generarComisionesTrabajoComponenteSiCorresponde(db, 'req-11a', {
+  const idsAntes = await generarComisionesRealizacionSiCorresponde(db, 'req-11a', {
     ventaId: 'v1', componente: { id: 'comp-1', tipo: 'landing', precio_atribuido: 50000 }, producto: 'generico', mercado: 'CL', moneda: 'CLP',
   });
   assert.deepEqual(idsAntes, []);
-  const id = seedAsignacionPlan(db, { email, tipo: 'produccion', porcentaje: 10 });
+  const id = seedAsignacionPlan(db, { email, tipo: 'realizacion', porcentaje: 30, contexto: 'solo' });
   db._state.asignaciones_rol.push({ usuario_id: id, role: 'asistente', user_status: 'activo', valid_until: null });
-  db._state.asignaciones_produccion.push({ componente_id: 'comp-1', usuario_email: email, rol: 'produccion' });
+  db._state.asignaciones_realizacion.push({ componente_id: 'comp-1', usuario_email: email, rol: 'responsable' });
   assert.equal(db._state.comisiones.length, 0, 'la asignación tardía no dispara nada por sí sola');
 
-  // Caso B: la asignación existe, pero el plan de producción ya venció.
+  // Caso B: la asignación existe, pero el plan de realización ya venció.
   const email2 = 'asistente.plan.vencido@example.com';
-  const id2 = seedAsignacionPlan(db, { email: email2, tipo: 'produccion', porcentaje: 10, planValidUntil: '2020-01-01 00:00:00' });
+  const id2 = seedAsignacionPlan(db, { email: email2, tipo: 'realizacion', porcentaje: 30, contexto: 'solo', planValidUntil: '2020-01-01 00:00:00' });
   db._state.asignaciones_rol.push({ usuario_id: id2, role: 'asistente', user_status: 'activo', valid_until: null });
-  db._state.asignaciones_produccion.push({ componente_id: 'comp-2', usuario_email: email2, rol: 'produccion' });
-  const idsVencido = await generarComisionesTrabajoComponenteSiCorresponde(db, 'req-11b', {
+  db._state.asignaciones_realizacion.push({ componente_id: 'comp-2', usuario_email: email2, rol: 'responsable' });
+  const idsVencido = await generarComisionesRealizacionSiCorresponde(db, 'req-11b', {
     ventaId: 'v1', componente: { id: 'comp-2', tipo: 'landing', precio_atribuido: 50000 }, producto: 'generico', mercado: 'CL', moneda: 'CLP',
   });
   assert.deepEqual(idsVencido, [], 'un plan vencido no genera comisión, aunque la asignación exista');
 });
 
-// --- 12: Pack — producción usa solo la utilidad del componente asignado ---
+// --- 12: Pack — realización usa solo la utilidad del componente asignado ---
 
-test('12) En un pack, la comisión de producción de la Landing usa ÚNICAMENTE la utilidad neta atribuible a la Landing, no la de la Ficha ni la del pack completo', async () => {
+test('12) En un pack, la comisión de realización de la Landing usa ÚNICAMENTE la utilidad neta atribuible a la Landing, no la de la Ficha ni la del pack completo', async () => {
   const db = fakeDb();
-  const id = seedAsignacionPlan(db, { email: 'asistente.landing@example.com', tipo: 'produccion', porcentaje: 10 });
+  const id = seedAsignacionPlan(db, { email: 'asistente.landing@example.com', tipo: 'realizacion', porcentaje: 30, contexto: 'solo' });
   db._state.asignaciones_rol.push({ usuario_id: id, role: 'asistente', user_status: 'activo', valid_until: null });
-  db._state.asignaciones_produccion.push({ componente_id: 'comp-landing', usuario_email: 'asistente.landing@example.com', rol: 'produccion' });
+  db._state.asignaciones_realizacion.push({ componente_id: 'comp-landing', usuario_email: 'asistente.landing@example.com', rol: 'responsable' });
   db._state.costos_directos.push({ componente_id: 'comp-landing', monto: 5000 }); // costo propio de la Landing, no afecta a la Ficha.
 
-  const ids = await generarComisionesTrabajoComponenteSiCorresponde(db, 'req-12', {
+  const ids = await generarComisionesRealizacionSiCorresponde(db, 'req-12', {
     ventaId: 'v1', componente: { id: 'comp-landing', tipo: 'landing', precio_atribuido: 45000 }, producto: 'ficha_generico', mercado: 'CL', moneda: 'CLP',
   });
   const c = db._state.comisiones.find((x) => x.id === ids[0]);
   assert.equal(c.monto_base, 40000, '45000 (precio atribuido a la Landing) - 5000 (su propio costo) = 40000, nunca el total del pack');
-  assert.equal(c.monto_comision, 4000);
+  assert.equal(c.monto_comision, 12000); // 30% de 40000.
 });
 
 // --- 13: Sin plan vigente correspondiente, ninguna comisión ---
 
-test('13) Ningún usuario genera una comisión de un tipo si no tiene el plan vigente correspondiente — comprobado para comercial, supervisión y producción', async () => {
+test('13) Ningún usuario genera una comisión de un tipo si no tiene el plan vigente correspondiente — comprobado para comercial, supervisión y realización', async () => {
   const db = fakeDb();
   const idsComercial = await generarComisionesParaVenta(db, 'req-13a', { ...VENTA_BASE, vendedorEmail: 'nadie.tiene.plan@example.com' });
   assert.equal(idsComercial.length, 0);
 
-  const idsProduccion = await generarComisionesTrabajoComponenteSiCorresponde(db, 'req-13b', {
+  const idsRealizacion = await generarComisionesRealizacionSiCorresponde(db, 'req-13b', {
     ventaId: 'v1', componente: { id: 'comp-1', tipo: 'landing', precio_atribuido: 50000 }, producto: 'generico', mercado: 'CL', moneda: 'CLP',
   });
-  assert.deepEqual(idsProduccion, []);
+  assert.deepEqual(idsRealizacion, []);
 
-  // Supervisor con rol pero sin ningún plan asignado: tampoco genera supervisión.
-  const supId = (() => { const u = { id: nextUsuarioId++, email: 'supervisor.sin.plan@example.com' }; db._state.usuarios.push(u); return u.id; })();
-  db._state.asignaciones_rol.push({ usuario_id: supId, role: 'supervisor', allowed_markets: '["CL"]', valid_until: null });
-  const idsConSupervisorSinPlan = await generarComisionesParaVenta(db, 'req-13c', { ...VENTA_BASE, ventaId: 'v3', vendedorEmail: 'otro.sin.plan@example.com' });
+  // Equipo con supervisor pero sin ningún plan asignado: tampoco genera supervisión.
+  const equipoId = seedEquipo(db, { miembroEmail: 'otro.sin.plan@example.com', supervisorEmail: 'supervisor.sin.plan@example.com' });
+  const idsConSupervisorSinPlan = await generarComisionesParaVenta(db, 'req-13c', { ...VENTA_BASE, ventaId: 'v3', vendedorEmail: 'otro.sin.plan@example.com', equipoId });
   assert.equal(idsConSupervisorSinPlan.length, 0);
 });
 
@@ -311,12 +320,12 @@ test('13) Ningún usuario genera una comisión de un tipo si no tiene el plan vi
 
 test('14) Las comisiones acumuladas (comercial + supervisión) conservan moneda, base y estados completamente independientes', async () => {
   const db = fakeDb();
-  const supId = seedAsignacionPlan(db, { email: 'supervisor.ar@example.com', tipo: 'comercial', porcentaje: 40 });
+  seedAsignacionPlan(db, { email: 'supervisor.ar@example.com', tipo: 'comercial', porcentaje: 40 });
   seedAsignacionPlan(db, { email: 'supervisor.ar@example.com', tipo: 'supervision', porcentaje: 10 });
-  db._state.asignaciones_rol.push({ usuario_id: supId, role: 'supervisor', allowed_markets: '["AR"]', valid_until: null });
+  const equipoId = seedEquipo(db, { miembroEmail: 'supervisor.ar@example.com', supervisorEmail: 'supervisor.ar@example.com' });
 
   await generarComisionesParaVenta(db, 'req-14', {
-    ventaId: 'v1', vendedorEmail: 'supervisor.ar@example.com', mercado: 'AR', producto: 'ficha', moneda: 'ARS',
+    ventaId: 'v1', vendedorEmail: 'supervisor.ar@example.com', mercado: 'AR', producto: 'ficha', moneda: 'ARS', equipoId,
     componentes: [{ id: 'comp-1', precio_atribuido: 125000 }],
   });
   const comercial = db._state.comisiones.find((c) => c.tipo === 'comercial');

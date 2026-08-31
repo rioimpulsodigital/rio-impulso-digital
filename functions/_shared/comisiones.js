@@ -71,10 +71,15 @@ async function utilidadNetaComponente(db, requestId, componente) {
 // aplica en código a cada una — quedarse con la primera fila antes de
 // filtrar (como hacía la versión anterior) podía descartar por accidente
 // la asignación que sí correspondía a este producto.
-async function resolverAsignacionVigente(db, requestId, { usuarioEmail, tipo, producto, mercado }) {
+// `contextoRealizacion` solo aplica cuando tipo = 'realizacion' — distingue
+// cuál de los 3 escenarios del pool de 30% corresponde ('solo' |
+// 'responsable_con_practicante' | 'practicante', RIO-115 consolidación
+// 31/08/2026). Para el resto de los tipos se ignora (esos planes siempre
+// tienen contexto_realizacion NULL, sin ambigüedad).
+async function resolverAsignacionVigente(db, requestId, { usuarioEmail, tipo, producto, mercado, contextoRealizacion }) {
   const rows = await query(
     db, requestId,
-    `SELECT ap.id AS asignacion_id, pl.id AS plan_id, pl.porcentaje, pl.base, pl.productos_alcanzados, pl.mercados_alcanzados
+    `SELECT ap.id AS asignacion_id, pl.id AS plan_id, pl.porcentaje, pl.base, pl.productos_alcanzados, pl.mercados_alcanzados, pl.contexto_realizacion
      FROM usuarios u
      JOIN asignaciones_plan_comision ap ON ap.usuario_id = u.id
      JOIN planes_comision pl ON pl.id = ap.plan_id
@@ -86,22 +91,24 @@ async function resolverAsignacionVigente(db, requestId, { usuarioEmail, tipo, pr
     [usuarioEmail, tipo]
   );
   const coincide = rows.find((row) =>
-    parseJsonArray(row.productos_alcanzados).includes(producto) && parseJsonArray(row.mercados_alcanzados).includes(mercado)
+    parseJsonArray(row.productos_alcanzados).includes(producto)
+    && parseJsonArray(row.mercados_alcanzados).includes(mercado)
+    && (!contextoRealizacion || row.contexto_realizacion === contextoRealizacion)
   );
   return coincide || null;
 }
 
-async function crearComisionSiCorresponde(db, requestId, { tipo, ventaId, componenteId, beneficiarioEmail, producto, mercado, moneda, montoBase }) {
-  const asignacion = await resolverAsignacionVigente(db, requestId, { usuarioEmail: beneficiarioEmail, tipo, producto, mercado });
+async function crearComisionSiCorresponde(db, requestId, { tipo, ventaId, componenteId, beneficiarioEmail, producto, mercado, moneda, montoBase, contextoRealizacion, rolRealizacion }) {
+  const asignacion = await resolverAsignacionVigente(db, requestId, { usuarioEmail: beneficiarioEmail, tipo, producto, mercado, contextoRealizacion });
   if (!asignacion) return null;
 
   const id = crypto.randomUUID();
   const montoComision = Math.round((montoBase * asignacion.porcentaje) / 100);
   await execute(
     db, requestId,
-    `INSERT INTO comisiones (id, tipo, venta_id, componente_id, beneficiario_email, plan_id, asignacion_plan_id, porcentaje_snapshot, base_snapshot, monto_base, moneda, monto_comision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, tipo, ventaId, componenteId || null, beneficiarioEmail, asignacion.plan_id, asignacion.asignacion_id, asignacion.porcentaje, asignacion.base, montoBase, moneda, montoComision]
+    `INSERT INTO comisiones (id, tipo, rol_realizacion, venta_id, componente_id, beneficiario_email, plan_id, asignacion_plan_id, porcentaje_snapshot, base_snapshot, monto_base, moneda, monto_comision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, tipo, rolRealizacion || null, ventaId, componenteId || null, beneficiarioEmail, asignacion.plan_id, asignacion.asignacion_id, asignacion.porcentaje, asignacion.base, montoBase, moneda, montoComision]
   );
   await logEvento(db, requestId, {
     ventaId, entidad: 'comision', entidadId: id, estadoNuevo: 'calculada_provisional', usuarioEmail: beneficiarioEmail,
@@ -109,13 +116,46 @@ async function crearComisionSiCorresponde(db, requestId, { tipo, ventaId, compon
   return id;
 }
 
+// Resuelve el equipo VIGENTE de un vendedor — se llama al REGISTRAR la
+// venta (ventas/index.js) para dejar un snapshot inmutable en
+// ventas.equipo_id (RIO-115 consolidación, 31/08/2026: "mercado no
+// equivale a equipo"). Si la persona no está en ningún equipo, devuelve
+// null — la venta queda sin equipo, y por lo tanto sin comisión de
+// supervisión, en vez de inventar un supervisor "del mercado".
+export async function resolverEquipoVigenteDeVendedor(db, requestId, usuarioEmail) {
+  const rows = await query(
+    db, requestId,
+    `SELECT equipo_id FROM equipo_miembros
+     WHERE usuario_email = ? AND (valid_until IS NULL OR valid_until > datetime('now')) AND valid_from <= datetime('now')
+     ORDER BY valid_from DESC LIMIT 1`,
+    [usuarioEmail]
+  );
+  return rows[0]?.equipo_id || null;
+}
+
+// Resuelve el supervisor VIGENTE de un equipo — nunca "todos los
+// supervisores del mercado" (Brenda: "no pagar automáticamente a todos
+// los supervisores de un mercado. Debe corresponder al supervisor
+// asignado al equipo de la venta").
+async function resolverSupervisorVigenteDeEquipo(db, requestId, equipoId) {
+  const rows = await query(
+    db, requestId,
+    `SELECT usuario_email FROM equipo_supervisores
+     WHERE equipo_id = ? AND (valid_until IS NULL OR valid_until > datetime('now')) AND valid_from <= datetime('now')
+     ORDER BY valid_from DESC LIMIT 1`,
+    [equipoId]
+  );
+  return rows[0]?.usuario_email || null;
+}
+
 // Genera la comisión comercial (si el vendedor tiene un plan comercial
-// vigente que alcance este producto/mercado) y una comisión de supervisión
-// por cada supervisor activo cuyo mercado autorizado incluya el de esta
-// venta Y tenga un plan de supervisión vigente que la alcance. Ninguna de
-// las dos se genera "a la fuerza" — sin plan, no hay fila (ver principio
-// central arriba del archivo).
-export async function generarComisionesParaVenta(db, requestId, { ventaId, vendedorEmail, mercado, producto, moneda, componentes }) {
+// vigente que alcance este producto/mercado) y la comisión de supervisión
+// del supervisor VIGENTE del equipo snapshotteado en la venta (nunca de
+// "todos los supervisores del mercado" — RIO-115 consolidación,
+// 31/08/2026). Sin equipo snapshotteado, o sin supervisor vigente en ese
+// equipo, o sin plan vigente de ese supervisor: no se genera comisión de
+// supervisión — nunca se inventa (ver principio central arriba).
+export async function generarComisionesParaVenta(db, requestId, { ventaId, vendedorEmail, mercado, producto, moneda, componentes, equipoId }) {
   let utilidadNetaVenta = 0;
   for (const c of componentes) {
     utilidadNetaVenta += await utilidadNetaComponente(db, requestId, c);
@@ -127,58 +167,44 @@ export async function generarComisionesParaVenta(db, requestId, { ventaId, vende
   });
   if (comercialId) ids.push(comercialId);
 
-  const supervisoresActivos = await query(
-    db, requestId,
-    `SELECT u.email, a.allowed_markets FROM usuarios u JOIN asignaciones_rol a ON a.usuario_id = u.id
-     WHERE a.role = 'supervisor' AND a.user_status = 'activo'
-       AND (a.valid_until IS NULL OR a.valid_until > datetime('now')) AND a.valid_from <= datetime('now')`,
-    []
-  );
-  for (const s of supervisoresActivos) {
-    if (!parseJsonArray(s.allowed_markets).includes(mercado)) continue;
-    const id = await crearComisionSiCorresponde(db, requestId, {
-      tipo: 'supervision', ventaId, componenteId: null, beneficiarioEmail: s.email, producto, mercado, moneda, montoBase: utilidadNetaVenta,
-    });
-    if (id) ids.push(id);
+  if (equipoId) {
+    const supervisorEmail = await resolverSupervisorVigenteDeEquipo(db, requestId, equipoId);
+    if (supervisorEmail) {
+      const id = await crearComisionSiCorresponde(db, requestId, {
+        tipo: 'supervision', ventaId, componenteId: null, beneficiarioEmail: supervisorEmail, producto, mercado, moneda, montoBase: utilidadNetaVenta,
+      });
+      if (id) ids.push(id);
+    }
   }
 
   return ids;
 }
 
-// Distribución de participaciones de trabajo por componente — RIO-115
-// (corrección, Brenda 30/08/2026, extendida 31/08/2026): 40% comercial +
-// 10% supervisión + 10% producción + 20% desarrollo + 20% empresa para
-// Landing; para Ficha, lo mismo MENOS desarrollo (Brenda: "en el caso de
-// la ficha es lo mismo, no hay desarrollo, pero alguien tiene que
-// hacerla, y quien la haga tiene que tener su % — los mismos que para la
-// Landing") — así que Ficha reparte comercial 40 + supervisión 10 +
-// producción 10, y el 40% restante (sin un rol de desarrollo que lo
-// reclame) queda como remanente de empresa. Todos sobre la misma base
-// (utilidad neta del componente) — nunca en cascada sobre el saldo de
-// otra comisión. Comercial y supervisión ya se generan a nivel de venta
-// (arriba, generarComisionesParaVenta) — acá solo se agregan producción
-// (Ficha y Landing) y desarrollo (exclusivo de Landing, "no hay
-// desarrollo" para Ficha). El 20%/40% de empresa NO se modela como fila:
-// no es una comisión personal ni utilidad final confirmada (Brenda:
-// "todavía debe cubrir los gastos generales") — es el remanente
-// implícito, mismo criterio que ya regía cuando no había nadie asignado.
+// Realización — RIO-115 (consolidación, Brenda 31/08/2026), reemplaza la
+// distribución anterior de producción(10%)+desarrollo(20%) como roles
+// siempre independientes. Landing, Ficha y cada componente de un Pack
+// reparten un único pool de 30% de "realización":
+//   - Sin practicante: el responsable se lleva el 30% entero.
+//   - Con practicante: responsable 20% + practicante 10% — el practicante
+//     participa DENTRO del 30%, nunca por encima (nunca 30+10=40%).
+// El 40% comercial y el 20% empresa completan el 100% junto al 10% de
+// supervisión (ya generados a nivel de venta, arriba) — el empresa NO se
+// modela como fila, es el remanente implícito, nunca una comisión
+// personal (Brenda: "todavía debe cubrir los gastos generales e
+// impuestos").
 //
-// Cada rol requiere sus propias 3 condiciones, igual que antes: (1) una
+// Requiere, para cada persona, sus propias 3 condiciones: (1) una
 // asignación EXPRESA del componente a esa persona PARA ESE ROL en
-// `asignaciones_produccion` (RIO-97 v2: "hoy sin nadie asignado" — nunca
-// se inventa un beneficiario; la ausencia de un practicante no le asigna
-// automáticamente el % a nadie más); (2) que esa persona esté activa; (3)
-// un plan vigente de ese tipo que alcance este producto/mercado. Una
-// misma persona puede tener ambos roles sobre el mismo componente Landing
-// (ej. Brenda produce Y desarrolla) — cada uno genera su propia fila,
-// nunca sumadas. Se llama al aprobar oficialmente el componente
-// (proyectos.js) — nunca antes, y nunca retroactiva: si la asignación
-// llega después de aprobado, no hay a qué "aprobar" de nuevo.
-const ROLES_POR_TIPO_COMPONENTE = {
-  ficha: ['produccion'],
-  landing: ['produccion', 'desarrollo'],
-};
-
+// `asignaciones_realizacion` (RIO-97 v2: "hoy sin nadie asignado" — nunca
+// se inventa un beneficiario, y "no asignar porcentajes automáticamente a
+// Brenda por ser administradora" — ni a nadie más); (2) que esté activa;
+// (3) un plan de 'realizacion' vigente CON EL CONTEXTO correcto (solo /
+// responsable_con_practicante / practicante) que alcance este
+// producto/mercado — el contexto lo decide el código según si hay o no
+// practicante asignado en este componente, nunca una persona por sí sola.
+// Se llama al aprobar oficialmente el componente (proyectos.js) — nunca
+// antes, y nunca retroactiva: si la asignación llega después de aprobado,
+// no hay a qué "aprobar" de nuevo.
 async function usuarioActivo(db, requestId, email) {
   const rows = await query(
     db, requestId,
@@ -190,27 +216,38 @@ async function usuarioActivo(db, requestId, email) {
   return rows[0]?.user_status === 'activo';
 }
 
-async function generarComisionPorRolComponente(db, requestId, { rol, ventaId, componente, producto, mercado, moneda }) {
-  const asignaciones = await query(db, requestId, 'SELECT usuario_email FROM asignaciones_produccion WHERE componente_id = ? AND rol = ?', [componente.id, rol]);
-  const asignacion = asignaciones[0];
-  if (!asignacion) return null; // sin asignación expresa para ESTE rol.
-
-  if (!(await usuarioActivo(db, requestId, asignacion.usuario_email))) return null;
+export async function generarComisionesRealizacionSiCorresponde(db, requestId, { ventaId, componente, producto, mercado, moneda }) {
+  const asignaciones = await query(db, requestId, 'SELECT usuario_email, rol FROM asignaciones_realizacion WHERE componente_id = ?', [componente.id]);
+  const responsable = asignaciones.find((a) => a.rol === 'responsable');
+  const practicante = asignaciones.find((a) => a.rol === 'practicante');
+  if (!responsable) return []; // sin responsable asignado, no se genera nada — nunca automático.
 
   const utilidad = await utilidadNetaComponente(db, requestId, componente);
-  return crearComisionSiCorresponde(db, requestId, {
-    tipo: rol, ventaId, componenteId: componente.id, beneficiarioEmail: asignacion.usuario_email,
-    producto, mercado, moneda, montoBase: utilidad,
-  });
-}
-
-export async function generarComisionesTrabajoComponenteSiCorresponde(db, requestId, { ventaId, componente, producto, mercado, moneda }) {
-  const roles = ROLES_POR_TIPO_COMPONENTE[componente.tipo] || [];
   const ids = [];
-  for (const rol of roles) {
-    const id = await generarComisionPorRolComponente(db, requestId, { rol, ventaId, componente, producto, mercado, moneda });
+
+  if (practicante) {
+    if (await usuarioActivo(db, requestId, responsable.usuario_email)) {
+      const id = await crearComisionSiCorresponde(db, requestId, {
+        tipo: 'realizacion', rolRealizacion: 'responsable', contextoRealizacion: 'responsable_con_practicante',
+        ventaId, componenteId: componente.id, beneficiarioEmail: responsable.usuario_email, producto, mercado, moneda, montoBase: utilidad,
+      });
+      if (id) ids.push(id);
+    }
+    if (await usuarioActivo(db, requestId, practicante.usuario_email)) {
+      const id = await crearComisionSiCorresponde(db, requestId, {
+        tipo: 'realizacion', rolRealizacion: 'practicante', contextoRealizacion: 'practicante',
+        ventaId, componenteId: componente.id, beneficiarioEmail: practicante.usuario_email, producto, mercado, moneda, montoBase: utilidad,
+      });
+      if (id) ids.push(id);
+    }
+  } else if (await usuarioActivo(db, requestId, responsable.usuario_email)) {
+    const id = await crearComisionSiCorresponde(db, requestId, {
+      tipo: 'realizacion', rolRealizacion: 'responsable', contextoRealizacion: 'solo',
+      ventaId, componenteId: componente.id, beneficiarioEmail: responsable.usuario_email, producto, mercado, moneda, montoBase: utilidad,
+    });
     if (id) ids.push(id);
   }
+
   return ids;
 }
 

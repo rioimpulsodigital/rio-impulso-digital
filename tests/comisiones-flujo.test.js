@@ -24,13 +24,14 @@ function admin(overrides = {}) {
 
 function fakeDb() {
   const state = {
-    ventas: [{ id: 'venta-1', vendedor_email: VENDEDOR, mercado: 'CL', moneda: 'CLP' }],
+    ventas: [{ id: 'venta-1', vendedor_email: VENDEDOR, mercado: 'CL', moneda: 'CLP', equipo_id: 'equipo-1' }],
     componentes: [{ id: 'comp-x', proyecto_id: 'proyecto-1' }],
     proyectos: [{ id: 'proyecto-1', venta_id: 'venta-1' }],
     comisiones: [
       { id: 'com-comercial', venta_id: 'venta-1', tipo: 'comercial', beneficiario_email: VENDEDOR, estado: 'programada' },
       { id: 'com-supervision', venta_id: 'venta-1', tipo: 'supervision', beneficiario_email: 'supervisor@example.com', estado: 'programada' },
     ],
+    equipo_supervisores: [{ equipo_id: 'equipo-1', usuario_email: 'supervisor@example.com', valid_until: null }],
     costos_directos: [],
     incidencias: [{ id: 'inc-1', venta_id: 'venta-1', tipo: 'disputa', estado: 'abierta', motivo: 'x' }],
     eventos_historial: [],
@@ -50,11 +51,17 @@ function fakeDb() {
     if (sql.includes('FROM ventas WHERE id')) {
       return state.ventas.filter((v) => v.id === p[0]);
     }
+    if (sql.startsWith('SELECT * FROM comisiones WHERE venta_id') && sql.includes("tipo = 'comercial' OR beneficiario_email")) {
+      return state.comisiones.filter((c) => c.venta_id === p[0] && (c.tipo === 'comercial' || c.beneficiario_email === p[1]));
+    }
     if (sql.startsWith('SELECT * FROM comisiones WHERE venta_id') && sql.includes('beneficiario_email')) {
       return state.comisiones.filter((c) => c.venta_id === p[0] && c.beneficiario_email === p[1]);
     }
     if (sql.startsWith('SELECT * FROM comisiones WHERE venta_id')) return state.comisiones.filter((c) => c.venta_id === p[0]);
     if (sql.startsWith('SELECT * FROM comisiones WHERE id')) return state.comisiones.filter((c) => c.id === p[0]);
+    if (sql.startsWith('SELECT 1 FROM equipo_supervisores')) {
+      return state.equipo_supervisores.filter((s) => s.equipo_id === p[0] && s.usuario_email === p[1] && !s.valid_until);
+    }
     if (sql.includes('FROM componentes WHERE id') && sql.includes('proyecto_id IN')) {
       return state.componentes.filter((c) => c.id === p[0]).filter(() => state.proyectos.some((pr) => pr.id === state.componentes.find((x) => x.id === p[0])?.proyecto_id && pr.venta_id === p[1]));
     }
@@ -119,13 +126,20 @@ test('comisiones: un ejecutivo totalmente ajeno (ni vendedor ni beneficiario) re
   assert.equal(response.status, 404);
 });
 
-test('comisiones: un supervisor de SU mercado ve la propia Y la de su equipo — decisión confirmada por Brenda (ya no es "abierta")', async () => {
+test('comisiones: el supervisor VIGENTE del equipo de la venta ve la comercial de su equipo Y la propia de supervisión (RIO-115: equipo, no mercado)', async () => {
   const db = fakeDb();
   const supervisor = roleIdentity({ email: 'supervisor@example.com', role: 'supervisor', allowedMarkets: ['CL'], permissions: PERMISSIONS.supervisor });
   const response = await comisionesListHandler(fakeContext({ roleIdentity: supervisor, db }));
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.data.comisiones.length, 2, 've la comercial del vendedor de su equipo Y la propia de supervisión');
+});
+
+test('comisiones: un supervisor del MISMO mercado pero de OTRO equipo no ve nada de esta venta (dos supervisores del mismo mercado no acceden automáticamente al equipo del otro)', async () => {
+  const db = fakeDb();
+  const supervisorOtroEquipo = roleIdentity({ email: 'supervisor.b@example.com', role: 'supervisor', allowedMarkets: ['CL'], permissions: PERMISSIONS.supervisor });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: supervisorOtroEquipo, db }));
+  assert.equal(response.status, 404);
 });
 
 test('comisiones: un supervisor de OTRO mercado sigue sin ver nada de esta venta', async () => {
