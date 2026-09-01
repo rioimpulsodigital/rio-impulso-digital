@@ -413,6 +413,31 @@
     font-size: .9rem; color: var(--muted); line-height: 1.65;
   }
 
+  /* ── RIO-117 (segundo bloque): confirmación antes de cerrar la venta ── */
+  .venta-confirm-overlay {
+    position: fixed; inset: 0; background: rgba(13,0,19,.45);
+    z-index: 300; display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  .venta-confirm-overlay.show { display: flex; }
+  .venta-confirm-modal {
+    background: var(--white, #fff); border-radius: var(--r-m); padding: 28px 30px;
+    max-width: 440px; width: 100%; box-shadow: 0 12px 40px rgba(0,0,0,.25);
+  }
+  .venta-confirm-title {
+    font-family: var(--ff-head); font-size: 1.15rem; font-weight: 800;
+    color: var(--ink, #1a0d24); margin: 0 0 16px;
+  }
+  .venta-confirm-summary { list-style: none; margin: 0 0 20px; padding: 0; font-size: .88rem; }
+  .venta-confirm-summary li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid rgba(0,0,0,.08); }
+  .venta-confirm-summary li span:first-child { color: var(--muted); }
+  .venta-confirm-summary li span:last-child { font-weight: 700; text-align: right; }
+  .venta-confirm-actions { display: flex; gap: 10px; }
+  .venta-confirm-actions button { flex: 1; }
+  .venta-confirm-btn-back {
+    background: none; border: 1.5px solid rgba(0,0,0,.15); border-radius: 100px;
+    padding: 10px 16px; font-size: .85rem; font-weight: 600; cursor: pointer; color: var(--muted);
+  }
+
   @media(max-width:640px) {
     .send-step { flex-direction: column; align-items: center; text-align: center; }
     .send-step .ss-info { justify-content: center; }
@@ -877,11 +902,23 @@
       <div id="saleSuccess">
         <div class="sale-success-card">
           <p class="sale-success-title" id="saleSuccessTitle">¡Excelente trabajo!</p>
-          <p class="sale-success-msg">Venta realizada con éxito. No olvides recordarle al cliente que debe enviarnos sus fotos y logo (si tiene).</p>
+          <p class="sale-success-msg" id="saleSuccessMsg">Venta realizada con éxito. No olvides recordarle al cliente que debe enviarnos sus fotos y logo (si tiene). Ya podés verla en tu <a href="./panel-vendedor.html" target="_blank" rel="noopener">Panel del Vendedor</a>, como "En espera de pago".</p>
           <button class="seq-btn" style="margin-top:20px;" onclick="nextProspect()">Siguiente prospecto →</button>
         </div>
       </div>
     </section>
+
+    <!-- RIO-117 (segundo bloque): confirmación antes de registrar la venta en D1 -->
+    <div class="venta-confirm-overlay" id="ventaConfirmOverlay" role="dialog" aria-modal="true" aria-labelledby="ventaConfirmTitle">
+      <div class="venta-confirm-modal">
+        <p class="venta-confirm-title" id="ventaConfirmTitle">Confirmá antes de cerrar la venta</p>
+        <ul class="venta-confirm-summary" id="ventaConfirmSummary"></ul>
+        <div class="venta-confirm-actions">
+          <button type="button" class="venta-confirm-btn-back" onclick="cerrarConfirmacionVenta()">Volver a revisar</button>
+          <button type="button" class="seq-btn" id="ventaConfirmBtn" onclick="confirmarYCerrarVenta()">Confirmar y cerrar venta</button>
+        </div>
+      </div>
+    </div>
 
     <!-- FLOW RECAP -->
     <section class="block">
@@ -1106,9 +1143,10 @@
     });
   }
 
-  const HUBSPOT_PORTAL_ID  = '51671122';
-  const HUBSPOT_FORM_GUID  = 'cb4cb2df-ca0f-42ee-bf54-a0830e8ba6a5';
-  const HUBSPOT_ENDPOINT   = `https://api.hsforms.com/submissions/v3/integration/submit/${HUBSPOT_PORTAL_ID}/${HUBSPOT_FORM_GUID}`;
+  // RIO-117 (segundo bloque): el envío a HubSpot ya no sale del navegador
+  // — lo hace el backend, después de crear la venta en D1 (ver
+  // buildHubSpotFields()/confirmarYCerrarVenta() más abajo y
+  // functions/_shared/hubspot.js).
 
   function normalizePhone(raw){ return raw.replace(/[^\d]/g, ''); }
 
@@ -1326,14 +1364,19 @@
     }
   }
 
-  async function doCloseVenta(){
-    if(!currentExecutive || !currentMarket){
-      throw new Error('No hay mercado autorizado para registrar esta venta.');
-    }
-    if(currentExecutive.allowedMarkets.indexOf(currentMarket) === -1){
-      throw new Error('El mercado activo no está autorizado para este usuario.');
-    }
+  // ── RIO-117 (segundo bloque, 01/09/2026): "Cerrar venta" ahora registra
+  // la venta real en D1 (fuente de verdad operativa — aparece de inmediato
+  // en el Panel del Vendedor) y, recién si eso tuvo éxito, reintenta lo
+  // mismo que este botón ya hacía: un envío a HubSpot Forms API. Nunca dos
+  // escrituras independientes sin control desde el navegador — una sola
+  // solicitud al backend, que coordina ambas (ver
+  // functions/interno/api/ventas/index.js y functions/_shared/hubspot.js).
+  //
+  // El vendedor se resuelve en el servidor desde la sesión de Cloudflare
+  // Access — el campo "execName" de acá es solo un dato visible para
+  // HubSpot (etiqueta), nunca la fuente de autoridad de quién vendió.
 
+  function buildHubSpotFields(){
     const activeProduct = document.querySelector('.domain-choice-card.active');
     const productLabel  = activeProduct ? getProductLabel(activeProduct.dataset.domain, false) : '—';
     const clientName    = (document.getElementById('pclientname').value || '').trim();
@@ -1341,10 +1384,13 @@
     const firstname     = nameParts[0] || '';
     const lastname      = nameParts.slice(1).join(' ') || '';
 
-    // mercado_comercial NO se envía (decisión de Brenda, 22 ago 2026 — reemplaza la
-    // autorización de RIO-91): no se confirmó que la propiedad exista en HubSpot, y
-    // enviar un campo inexistente podría rechazar el registro completo. El mercado se
-    // identifica igual por país + teléfono, ya presentes en company/hs_whatsapp_phone_number.
+    // mercado_comercial NO se envía (decisión de Brenda, 22 ago 2026): no se
+    // confirmó que la propiedad exista en HubSpot. Ídem clave canónica del
+    // producto, snapshot de precio, moneda o plan de pago — HOY siguen sin
+    // enviarse a HubSpot (mismos campos que ya se auditaron funcionando),
+    // hasta que RIO-120 confirme qué propiedades reales existen en el
+    // portal antes de agregar más. Esos datos SÍ quedan guardados,
+    // estructurados, en D1 — ver buildVentaPayload().
     const fields = [
       { objectTypeId: '0-1', name: 'company',               value: document.getElementById('pname').value    || '—' },
       { objectTypeId: '0-1', name: 'producto_elegido',      value: productLabel },
@@ -1364,48 +1410,162 @@
     if(!hasFicha){
       fields.push({ objectTypeId: '0-1', name: 'respuestas_ficha', value: buildFichaAnswersText() });
     }
-
-    const payload = {
-      fields,
-      context: { pageUri: window.location.href, pageName: document.title }
-    };
-
-    const res = await fetch(HUBSPOT_ENDPOINT, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload)
-    });
-
-    if(!res.ok){
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `HTTP ${res.status}`);
-    }
+    return fields;
   }
 
-  async function runCloseVenta(){
+  // Clave de idempotencia estable — sobrevive a clics repetidos, un
+  // timeout de red o una recarga de página, siempre que sea la MISMA
+  // venta en curso. Se limpia recién cuando la venta quedó confirmada, o
+  // cuando el vendedor arranca explícitamente un prospecto nuevo
+  // (resetForm) — nunca antes.
+  const IDEMPOTENCY_STORAGE_KEY = 'rio_kit_cierre_idempotency_key';
+  function getIdempotencyKey(){
+    let key = null;
+    try { key = window.sessionStorage.getItem(IDEMPOTENCY_STORAGE_KEY); } catch(e){ key = null; }
+    if(!key){
+      key = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : ('k-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+      try { window.sessionStorage.setItem(IDEMPOTENCY_STORAGE_KEY, key); } catch(e){ /* sessionStorage no disponible — sigue funcionando en memoria durante esta carga de página */ }
+    }
+    return key;
+  }
+  function clearIdempotencyKey(){
+    try { window.sessionStorage.removeItem(IDEMPOTENCY_STORAGE_KEY); } catch(e){ /* no-op */ }
+  }
+
+  // Campos mínimos para poder registrar la venta — si falta alguno, se
+  // pide específicamente ESE dato (Brenda: "no obligar a repetir toda la
+  // información"), nunca un mensaje genérico de "completá el formulario".
+  function validarCamposMinimos(){
+    const negocio = (document.getElementById('pname').value || '').trim();
+    if(!negocio) return 'Falta el nombre del negocio (arriba de todo).';
+    const activeProduct = document.querySelector('.domain-choice-card.active');
+    if(!activeProduct) return 'Todavía no se seleccionó qué producto compró el cliente.';
+    return null;
+  }
+
+  function buildVentaPayload(){
+    const activeProduct = document.querySelector('.domain-choice-card.active');
+    const productKey    = activeProduct.dataset.domain;
+    const tipoPrecio     = isPromoActive() ? 'lanzamiento' : 'regular';
+    const precioPactado  = getActivePrice(currentMarket, productKey);
+    const config         = MARKETS[currentMarket];
+    const isPack         = productKey === 'ficha_generico' || productKey === 'ficha_personalizado';
+
+    const cliente = {
+      negocio: (document.getElementById('pname').value || '').trim(),
+      contactoNombre: (document.getElementById('pclientname').value || '').trim() || null,
+      telefono: (document.getElementById('pclientwa').value || '').trim() || null,
+      email: (document.getElementById('pclientemail').value || '').trim() || null,
+    };
+    if(currentMarket === 'AR'){
+      const partes = [
+        (document.getElementById('pclientbillingname').value || '').trim(),
+        (document.getElementById('pclientcuit').value || '').trim(),
+        (document.getElementById('pclientaddress').value || '').trim(),
+        (document.getElementById('pclientfiscal').value || '').trim(),
+      ].filter(Boolean);
+      if(partes.length) cliente.datosFacturacionAr = partes.join(' | ');
+    }
+
+    const payload = {
+      mercado: currentMarket,
+      cliente,
+      producto: productKey,
+      tipoPrecio,
+      precioPactado,
+      origen: 'kit_comercial',
+      antecedentesTexto: hasFicha ? buildLandingAnswersText() : (buildLandingAnswersText() + '\n\n' + buildFichaAnswersText()),
+      hubspot: { fields: buildHubSpotFields(), context: { pageUri: window.location.href, pageName: document.title } },
+    };
+    if(isPack){
+      const landingKey = productKey === 'ficha_generico' ? 'generico' : 'personalizado';
+      payload.precioFichaIndividual = getActivePrice(currentMarket, 'ficha');
+      payload.precioLandingIndividual = getActivePrice(currentMarket, landingKey);
+    }
+    return { payload, resumen: { negocio: cliente.negocio, productLabel: getProductLabel(productKey, false), mercado: currentMarket, precioPactado, moneda: config.currency, formaPago: config.paymentMethod === 'bank_transfer' ? 'Transferencia bancaria' : 'Mercado Pago (link)' } };
+  }
+
+  let pendingVentaPayload = null;
+
+  function runCloseVenta(){
+    if(!currentExecutive || !currentMarket){ alert('No hay mercado autorizado para registrar esta venta.'); return; }
+    if(currentExecutive.allowedMarkets.indexOf(currentMarket) === -1){ alert('El mercado activo no está autorizado para este usuario.'); return; }
+
+    const faltante = validarCamposMinimos();
+    if(faltante){ alert('⚠️ ' + faltante); return; }
+
+    const { payload, resumen } = buildVentaPayload();
+    pendingVentaPayload = payload;
+
+    document.getElementById('ventaConfirmSummary').innerHTML = [
+      ['Cliente', resumen.negocio],
+      ['Producto', resumen.productLabel],
+      ['Mercado', resumen.mercado],
+      ['Precio acordado', resumen.moneda + ' ' + resumen.precioPactado.toLocaleString('es-CL')],
+      ['Moneda', resumen.moneda],
+      ['Forma de pago', resumen.formaPago],
+    ].map(([k, v]) => `<li><span>${k}</span><span>${(v || '—').toString().replace(/</g,'&lt;')}</span></li>`).join('');
+    document.getElementById('ventaConfirmOverlay').classList.add('show');
+  }
+
+  function cerrarConfirmacionVenta(){
+    document.getElementById('ventaConfirmOverlay').classList.remove('show');
+  }
+
+  async function confirmarYCerrarVenta(){
+    if(!pendingVentaPayload) return;
+    const confirmBtn = document.getElementById('ventaConfirmBtn');
+    const originalText = confirmBtn.textContent;
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Registrando...';
+
     const closeStep = document.querySelectorAll('#sendSequence .send-step')[1];
     const closeBtn  = closeStep.querySelector('.seq-btn');
-    const originalText = closeBtn.textContent;
-    closeBtn.disabled = true;
-    closeBtn.textContent = 'Registrando...';
 
     try {
-      await doCloseVenta();
+      const res = await fetch('/interno/api/ventas', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': getIdempotencyKey() },
+        body: JSON.stringify(pendingVentaPayload)
+      });
+      const body = await res.json().catch(() => null);
+      if(!res.ok || !body || !body.ok){
+        throw new Error((body && body.error && body.error.message) || `HTTP ${res.status}`);
+      }
+
+      cerrarConfirmacionVenta();
+      pendingVentaPayload = null;
+      clearIdempotencyKey();
 
       closeStep.classList.add('done');
+      closeBtn.disabled = true;
       closeBtn.textContent = 'Registrada';
       closeStep.querySelector('.ss-num').textContent = '✓';
-      flashStatus('✓ Venta registrada en CRM');
+
+      const hubspotEstado = body.data.hubspotSync ? body.data.hubspotSync.estado : null;
+      flashStatus(hubspotEstado === 'fallido' ? '✓ Venta registrada (CRM pendiente de reintentar)' : '✓ Venta registrada');
 
       const execName = document.getElementById('execName').value || '';
       document.getElementById('saleSuccessTitle').textContent = execName ? `¡Excelente trabajo, ${execName}!` : '¡Excelente trabajo!';
+      if(hubspotEstado === 'fallido'){
+        document.getElementById('saleSuccessMsg').innerHTML = 'Venta registrada con éxito y ya está en tu <a href="./panel-vendedor.html" target="_blank" rel="noopener">Panel del Vendedor</a> como "En espera de pago". El registro en HubSpot CRM no se pudo completar todavía — la venta NO se pierde, queda pendiente de reintentar automáticamente. No olvides recordarle al cliente que debe enviarnos sus fotos y logo (si tiene).';
+      } else {
+        document.getElementById('saleSuccessMsg').innerHTML = 'Venta realizada con éxito. No olvides recordarle al cliente que debe enviarnos sus fotos y logo (si tiene). Ya podés verla en tu <a href="./panel-vendedor.html" target="_blank" rel="noopener">Panel del Vendedor</a>, como "En espera de pago".';
+      }
       document.getElementById('saleSuccess').style.display = 'block';
       document.getElementById('saleSuccess').scrollIntoView({ behavior: 'smooth', block: 'center' });
     } catch(err) {
-      console.error('HubSpot CRM error:', err);
-      closeBtn.disabled = false;
-      closeBtn.textContent = originalText;
-      alert('⚠️ No se pudo registrar la venta en CRM. Revisa tu conexión e inténtalo nuevamente.');
+      console.error('Cierre de venta — error:', err);
+      // La clave de idempotencia NUNCA se limpia acá — un reintento (el
+      // vendedor pulsa de nuevo) usa la misma clave, así que si la
+      // primera solicitud en realidad sí se procesó del lado del
+      // servidor (ej. la respuesta se perdió por un timeout de red), el
+      // reintento devuelve la venta ya creada en vez de duplicarla.
+      alert('⚠️ No se pudo registrar la venta. Revisá tu conexión y volvé a intentar — no se va a duplicar.');
+    } finally {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = originalText;
     }
   }
 
@@ -1437,6 +1597,13 @@
 
     document.getElementById('saleSuccess').style.display = 'none';
     document.getElementById('saleSuccessTitle').textContent = '¡Excelente trabajo!';
+
+    // RIO-117 (segundo bloque): un reset explícito significa "prospecto
+    // nuevo" — recién acá se libera la clave de idempotencia de la venta
+    // anterior (nunca antes, para que un reintento de red no duplique).
+    pendingVentaPayload = null;
+    clearIdempotencyKey();
+    document.getElementById('ventaConfirmOverlay').classList.remove('show');
 
     applyFichaState();
     updateScript();

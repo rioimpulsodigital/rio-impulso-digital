@@ -40,8 +40,18 @@
     entregada: 'Entregada', aprobada: 'Aprobada',
   };
   var PAGO_ESTADO_LABEL = { pendiente: 'Pendiente', informado: 'Informado', acreditado: 'Acreditado' };
-  var PROYECTO_ESTADO_LABEL = { registrado: 'Registrado', en_produccion: 'En producción', completado: 'Completado' };
-  var PROYECTO_ESTADO_BADGE = { registrado: 'neutral', en_produccion: 'blue', completado: 'green' };
+  // RIO-117 (segundo bloque): "estado operativo" es el que ya calcula el
+  // backend a partir de hechos reales (pago acreditado, cancelación) —
+  // nunca una transición nueva. Incluye los dos casos que proyectoEstado
+  // solo no puede distinguir: recién cerrada sin pago, y cancelada.
+  var ESTADO_OPERATIVO_LABEL = {
+    en_espera_pago: 'En espera de pago', registrado: 'Registrado',
+    en_produccion: 'En producción', completado: 'Completado', cancelada: 'Cancelada',
+  };
+  var ESTADO_OPERATIVO_BADGE = {
+    en_espera_pago: 'amber', registrado: 'neutral',
+    en_produccion: 'blue', completado: 'green', cancelada: 'red',
+  };
   var COMISION_ESTADO_LABEL = {
     calculada_provisional: 'Estimada', retenida: 'Retenida', habilitada: 'Habilitada',
     programada: 'Programada', pagada: 'Pagada',
@@ -169,7 +179,7 @@
       if (cliente && (!v.cliente || !v.cliente.negocio || v.cliente.negocio.toLowerCase().indexOf(cliente) === -1)) return false;
       if (mercado && v.mercado !== mercado) return false;
       if (producto && v.producto !== producto) return false;
-      if (estado && v.proyectoEstado !== estado) return false;
+      if (estado && v.estadoOperativo !== estado) return false;
       var fechaVenta = (v.createdAt || '').slice(0, 10);
       if (desde && fechaVenta < desde) return false;
       if (hasta && fechaVenta > hasta) return false;
@@ -195,7 +205,7 @@
             '<span class="pv-mono">' + escapeHtml(v.codigoVenta) + '</span></td>' +
           '<td>' + escapeHtml(PRODUCTO_LABEL[v.producto] || v.producto) + '<br><span class="pv-badge pv-badge--neutral">' + escapeHtml(v.mercado) + '</span></td>' +
           '<td>' + fmtMoneda(v.precioPactado, v.moneda) + '</td>' +
-          '<td><span class="pv-badge pv-badge--' + (PROYECTO_ESTADO_BADGE[v.proyectoEstado] || 'neutral') + '">' + escapeHtml(PROYECTO_ESTADO_LABEL[v.proyectoEstado] || v.proyectoEstado || '—') + '</span></td>' +
+          '<td><span class="pv-badge pv-badge--' + (ESTADO_OPERATIVO_BADGE[v.estadoOperativo] || 'neutral') + '">' + escapeHtml(ESTADO_OPERATIVO_LABEL[v.estadoOperativo] || v.estadoOperativo || '—') + '</span></td>' +
           '<td>' + fmtFecha(v.createdAt) + '</td>' +
         '</tr>'
       );
