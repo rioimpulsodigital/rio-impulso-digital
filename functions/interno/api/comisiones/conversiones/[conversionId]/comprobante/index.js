@@ -12,7 +12,7 @@
 import { ok, Errors } from '../../../../../../_shared/response.js';
 import { query } from '../../../../../../_shared/db.js';
 import { isMethodAllowed } from '../../../../../../_shared/security.js';
-import { validarComprobante, guardarComprobante, obtenerComprobanteVigente, ArchivoError, MAX_COMPROBANTE_BYTES } from '../../../../../../_shared/comprobantes.js';
+import { validarComprobante, guardarComprobante, obtenerComprobanteVigente, ArchivoError, ComprobanteError, MAX_COMPROBANTE_BYTES } from '../../../../../../_shared/comprobantes.js';
 
 function serialize(c) {
   return {
@@ -91,8 +91,13 @@ export async function onRequest(context) {
     throw e;
   }
 
-  const { id, version } = await guardarComprobante(env.DB, env.COMPROBANTES, requestId, {
-    tipo: 'conversion', referenciaId: conversion.id, ventaId: null, archivo: validado, subidoPor: roleIdentity.email,
-  });
-  return ok({ id, version }, requestId, 201);
+  try {
+    const { id, version } = await guardarComprobante(env.DB, env.COMPROBANTES, requestId, {
+      tipo: 'conversion', referenciaId: conversion.id, ventaId: null, archivo: validado, subidoPor: roleIdentity.email,
+    });
+    return ok({ id, version }, requestId, 201);
+  } catch (e) {
+    if (e instanceof ComprobanteError) return Errors.internal(requestId);
+    throw e;
+  }
 }

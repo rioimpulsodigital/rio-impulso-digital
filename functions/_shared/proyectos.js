@@ -326,12 +326,16 @@ export async function rechazarPago(db, requestId, { ventaId, pagoId, motivo, act
     throw new ProyectoError('sin_informar', 'Este pago todavía no fue informado — no hay nada que rechazar.');
   }
 
+  const informados = await query(db, requestId, 'SELECT id FROM pagos_informados WHERE pago_esperado_id = ? ORDER BY created_at DESC LIMIT 1', [pagoId]);
+  const pagoInformadoId = informados[0]?.id || null;
+
   await execute(db, requestId, "UPDATE pagos_esperados SET estado = 'pendiente' WHERE id = ?", [pagoId]);
   await logEvento(db, requestId, {
     ventaId, entidad: 'pago', entidadId: pagoId,
     estadoAnterior: 'informado', estadoNuevo: 'pendiente', usuarioEmail: actorEmail,
     motivoNota: motivo, proximaAccion: 'Informar el pago nuevamente con un comprobante válido', responsableProximaAccion: null,
   });
+  return { pagoInformadoId };
 }
 
 // Antecedente u observación libre sobre una venta (RIO-113 corrección,

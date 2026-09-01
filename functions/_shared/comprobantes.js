@@ -11,12 +11,20 @@
 // ejecutable no pasa, aunque el navegador diga application/pdf).
 
 import { logEvento } from './historial.js';
-import { execute, query } from './db.js';
+import { execute, query, transaction } from './db.js';
 
 export class ArchivoError extends Error {
   constructor(code, message) {
     super(message);
     this.name = 'ArchivoError';
+    this.code = code;
+  }
+}
+
+export class ComprobanteError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = 'ComprobanteError';
     this.code = code;
   }
 }
@@ -133,9 +141,31 @@ function nuevaClaveR2({ tipo, referenciaId, version }) {
 // duplicar archivos"): si el archivo recién validado tiene EXACTAMENTE el
 // mismo hash que la versión vigente, no se sube un objeto nuevo a R2 ni
 // se inserta una fila nueva — se asume que es el mismo intento repetido
-// (ej. un reintento de red), y se devuelve la versión ya existente tal
-// cual. Un archivo con contenido distinto (aunque sea una corrección
-// mínima) sí genera una versión nueva, como corresponde.
+// (ej. un reintento de red, o un reintento después de que la notificación
+// interna haya fallado), y se devuelve la versión ya existente tal cual.
+// Un archivo con contenido distinto (aunque sea una corrección mínima) sí
+// genera una versión nueva, como corresponde.
+//
+// CONSISTENCIA R2 <-> D1 (RIO-116, verificación final, Brenda 31/08/2026):
+// R2 y D1 son dos sistemas distintos — Cloudflare no ofrece una
+// transacción real entre ambos, y acá NUNCA se afirma que la hay. El
+// mecanismo real es:
+//   1) Se escribe primero en R2. Si falla, la función corta ahí mismo —
+//      nunca se toca D1, así que nunca puede quedar una fila apuntando a
+//      un objeto que no existe.
+//   2) Recién si R2 tuvo éxito, se registra en D1 — y las DOS escrituras
+//      de D1 (marcar la versión anterior no vigente + insertar la nueva)
+//      van en una sola transacción (`db.batch()`), así que nunca puede
+//      quedar "sin ninguna vigente" a mitad de camino si la segunda
+//      escritura fallara sola.
+//   3) Si la transacción de D1 falla DESPUÉS de que R2 ya tiene el
+//      objeto, se intenta una COMPENSACIÓN: borrar el objeto recién
+//      subido, para no dejar basura. Si la compensación también falla
+//      (ej. R2 no responde en ese momento), el objeto queda huérfano en
+//      R2 — sin ninguna fila de D1 que lo referencie —, pero NUNCA queda
+//      invisible sin rastro: se registra un log estructurado con su
+//      clave exacta y la razón, para una limpieza manual o un job de
+//      reconciliación futuro (fuera del alcance de este bloque).
 export async function guardarComprobante(db, bucket, requestId, { tipo, referenciaId, ventaId, archivo, subidoPor }) {
   const anteriores = await query(
     db, requestId,
@@ -147,27 +177,44 @@ export async function guardarComprobante(db, bucket, requestId, { tipo, referenc
     return { id: anterior.id, version: anterior.version, r2Key: anterior.r2_key };
   }
   const version = anterior ? anterior.version + 1 : 1;
-
   const r2Key = nuevaClaveR2({ tipo, referenciaId, version });
-  await bucket.put(r2Key, archivo.buffer, {
-    httpMetadata: { contentType: archivo.mimeType },
-  });
 
-  if (anterior) {
-    await execute(db, requestId, 'UPDATE comprobantes SET vigente = 0 WHERE id = ?', [anterior.id]);
+  try {
+    await bucket.put(r2Key, archivo.buffer, { httpMetadata: { contentType: archivo.mimeType } });
+  } catch (e) {
+    console.error(JSON.stringify({ requestId, scope: 'comprobantes', reason: 'r2_put_fallido', tipo, referenciaId }));
+    throw new ComprobanteError('r2_put_fallido', 'No se pudo guardar el archivo. Intentá de nuevo.');
   }
 
   const id = crypto.randomUUID();
-  await execute(
-    db, requestId,
-    `INSERT INTO comprobantes (id, tipo, referencia_id, venta_id, version, vigente, r2_key, nombre_original, mime_type, tamano_bytes, hash_sha256, subido_por)
-     VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
-    [id, tipo, referenciaId, ventaId || null, version, r2Key, archivo.nombreOriginal, archivo.mimeType, archivo.tamanoBytes, archivo.hashSha256, subidoPor]
+  const statements = [];
+  if (anterior) {
+    statements.push(db.prepare('UPDATE comprobantes SET vigente = 0 WHERE id = ?').bind(anterior.id));
+  }
+  statements.push(
+    db.prepare(
+      `INSERT INTO comprobantes (id, tipo, referencia_id, venta_id, version, vigente, r2_key, nombre_original, mime_type, tamano_bytes, hash_sha256, subido_por)
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`
+    ).bind(id, tipo, referenciaId, ventaId || null, version, r2Key, archivo.nombreOriginal, archivo.mimeType, archivo.tamanoBytes, archivo.hashSha256, subidoPor)
   );
-  await logEvento(db, requestId, {
-    ventaId: ventaId || null, entidad: 'comprobante', entidadId: id,
-    estadoAnterior: anterior ? `version_${anterior.version}` : null, estadoNuevo: `version_${version}`, usuarioEmail: subidoPor,
-  });
+  statements.push(
+    db.prepare(
+      `INSERT INTO eventos_historial (id, venta_id, entidad, entidad_id, estado_anterior, estado_nuevo, usuario_email)
+       VALUES (?, ?, 'comprobante', ?, ?, ?, ?)`
+    ).bind(crypto.randomUUID(), ventaId || null, id, anterior ? `version_${anterior.version}` : null, `version_${version}`, subidoPor)
+  );
+
+  try {
+    await transaction(db, requestId, statements);
+  } catch (e) {
+    try {
+      await bucket.delete(r2Key);
+      console.error(JSON.stringify({ requestId, scope: 'comprobantes', reason: 'd1_fallo_tras_r2_compensado', tipo, referenciaId, r2Key }));
+    } catch (e2) {
+      console.error(JSON.stringify({ requestId, scope: 'comprobantes', reason: 'd1_fallo_tras_r2_huerfano_sin_compensar', tipo, referenciaId, r2Key }));
+    }
+    throw new ComprobanteError('registro_fallido', 'No se pudo registrar el comprobante. Intentá de nuevo.');
+  }
 
   return { id, version, r2Key };
 }
@@ -202,14 +249,6 @@ export function respuestaArchivoSeguro(object, comprobante) {
       'Cache-Control': 'private, no-store, no-cache, must-revalidate',
     },
   });
-}
-
-export class ComprobanteError extends Error {
-  constructor(code, message) {
-    super(message);
-    this.name = 'ComprobanteError';
-    this.code = code;
-  }
 }
 
 // Rechaza el comprobante VIGENTE de una referencia (RIO-116, segundo

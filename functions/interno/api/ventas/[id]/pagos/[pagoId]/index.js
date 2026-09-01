@@ -15,6 +15,7 @@ import { assertCanAccessOwner, AuthzError } from '../../../../../../_shared/auth
 import { isMethodAllowed, hasExpectedContentType } from '../../../../../../_shared/security.js';
 import { informarPago, acreditarPago, rechazarPago, ProyectoError } from '../../../../../../_shared/proyectos.js';
 import { crearNotificacionSiCorresponde } from '../../../../../../_shared/notificaciones.js';
+import { rechazarComprobante, ComprobanteError } from '../../../../../../_shared/comprobantes.js';
 
 function errorStatusFor(code) {
   if (code === 'pago_no_encontrado') return 404;
@@ -118,7 +119,23 @@ export async function onRequest(context) {
       return Errors.validation('Falta motivo.', requestId);
     }
     try {
-      await rechazarPago(env.DB, requestId, { ventaId: venta.id, pagoId: params.pagoId, motivo: body.motivo.trim(), actorEmail: roleIdentity.email });
+      const { pagoInformadoId } = await rechazarPago(env.DB, requestId, { ventaId: venta.id, pagoId: params.pagoId, motivo: body.motivo.trim(), actorEmail: roleIdentity.email });
+      // RIO-116 (verificación final): además de revertir el pago a
+      // 'pendiente', marcar el comprobante de PAGO vigente (si había uno
+      // subido) como rechazado — así el vendedor lo ve reflejado al
+      // consultar GET .../comprobante, con el mismo motivo, sin tener que
+      // ir a buscarlo al historial. Puede no haber ningún comprobante
+      // todavía (el admin puede rechazar solo por el monto informado, sin
+      // archivo) — eso es válido, no es un error.
+      if (pagoInformadoId) {
+        try {
+          await rechazarComprobante(env.DB, requestId, { tipo: 'pago', referenciaId: pagoInformadoId, motivo: body.motivo.trim(), actorEmail: roleIdentity.email });
+        } catch (e) {
+          if (!(e instanceof ComprobanteError)) throw e;
+          // 'comprobante_no_encontrado' es esperable (rechazo sin archivo
+          // subido todavía) — no es un error a propagar.
+        }
+      }
       return ok({ action: 'rechazar' }, requestId);
     } catch (e) {
       if (e instanceof ProyectoError) {

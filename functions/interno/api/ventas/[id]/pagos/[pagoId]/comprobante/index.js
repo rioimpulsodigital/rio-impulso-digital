@@ -18,7 +18,7 @@
 import { ok, Errors } from '../../../../../../../_shared/response.js';
 import { query } from '../../../../../../../_shared/db.js';
 import { isMethodAllowed } from '../../../../../../../_shared/security.js';
-import { validarComprobante, guardarComprobante, obtenerComprobanteVigente, ArchivoError, MAX_COMPROBANTE_BYTES } from '../../../../../../../_shared/comprobantes.js';
+import { validarComprobante, guardarComprobante, obtenerComprobanteVigente, ArchivoError, ComprobanteError, MAX_COMPROBANTE_BYTES } from '../../../../../../../_shared/comprobantes.js';
 import { crearNotificacionSiCorresponde } from '../../../../../../../_shared/notificaciones.js';
 
 function serialize(c) {
@@ -115,9 +115,15 @@ export async function onRequest(context) {
     throw e;
   }
 
-  const { id, version } = await guardarComprobante(env.DB, env.COMPROBANTES, requestId, {
-    tipo: 'pago', referenciaId: pagoInformado.id, ventaId: venta.id, archivo: validado, subidoPor: roleIdentity.email,
-  });
+  let id, version;
+  try {
+    ({ id, version } = await guardarComprobante(env.DB, env.COMPROBANTES, requestId, {
+      tipo: 'pago', referenciaId: pagoInformado.id, ventaId: venta.id, archivo: validado, subidoPor: roleIdentity.email,
+    }));
+  } catch (e) {
+    if (e instanceof ComprobanteError) return Errors.internal(requestId);
+    throw e;
+  }
 
   // RIO-116 segundo bloque: notificar a administración que hay un
   // comprobante nuevo para revisar — nunca bloquea la subida si falla

@@ -42,6 +42,7 @@ function fakeR2() {
       if (!obj) return null;
       return { body: obj.buffer, httpMetadata: { contentType: obj.contentType } };
     },
+    delete: async (key) => { objetos.delete(key); },
   };
 }
 
@@ -151,7 +152,18 @@ function fakeDbLiquidaciones() {
       throw new Error('mutación inesperada en test: ' + sql);
     }
   }
-  return { _state: state, prepare: (sql) => makeStatement(sql) };
+  return {
+    _state: state,
+    prepare: (sql) => makeStatement(sql),
+    batch: async (statements) => {
+      if (state._failNextBatch) {
+        state._failNextBatch = false;
+        throw new Error('batch simulado: fallo de D1');
+      }
+      for (const stmt of statements) await stmt.run();
+      return statements.map(() => ({ success: true }));
+    },
+  };
 }
 
 function fakeContext({ method = 'GET', roleIdentity: ri, db, bucket, params, formFile, body } = {}) {
