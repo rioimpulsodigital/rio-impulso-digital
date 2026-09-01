@@ -57,6 +57,12 @@ function serializeVenta(row) {
     vendedorEmail: row.vendedor_email,
     equipoId: row.equipo_id || null,
     estadoActual: row.estado_actual,
+    // RIO-117: ventas.estado_actual es un placeholder que nunca transiciona
+    // (RIO-113 solo actualiza proyectos.estado_actual) — el avance real de
+    // una venta para mostrar en un listado es el de su proyecto, no el de
+    // la venta en sí. Nunca null salvo el caso imposible de una venta sin
+    // proyecto (no ocurre: se crean juntos, en el mismo batch).
+    proyectoEstado: row.proyecto_estado || null,
     createdAt: row.created_at,
   };
 }
@@ -77,7 +83,8 @@ async function handleList(context) {
     rows = await query(
       env.DB,
       requestId,
-      `SELECT v.*, c.negocio FROM ventas v JOIN clientes c ON c.id = v.cliente_id
+      `SELECT v.*, c.negocio, p.estado_actual AS proyecto_estado FROM ventas v JOIN clientes c ON c.id = v.cliente_id
+       LEFT JOIN proyectos p ON p.venta_id = v.id
        WHERE v.mercado IN (${placeholders}) ORDER BY v.created_at DESC`,
       roleIdentity.allowedMarkets
     );
@@ -88,7 +95,8 @@ async function handleList(context) {
     rows = await query(
       env.DB,
       requestId,
-      `SELECT v.*, c.negocio FROM ventas v JOIN clientes c ON c.id = v.cliente_id
+      `SELECT v.*, c.negocio, p.estado_actual AS proyecto_estado FROM ventas v JOIN clientes c ON c.id = v.cliente_id
+       LEFT JOIN proyectos p ON p.venta_id = v.id
        WHERE v.vendedor_email = ? ORDER BY v.created_at DESC`,
       [roleIdentity.email]
     );

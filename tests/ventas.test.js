@@ -100,10 +100,16 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
 
   function runSelect(sql, p) {
     if (sql.includes('FROM ventas v JOIN clientes c') && sql.includes('WHERE v.vendedor_email')) {
-      return state.ventas.filter((v) => v.vendedor_email === p[0]).map((v) => ({ ...v, negocio: state.clientes.find((c) => c.id === v.cliente_id)?.negocio }));
+      return state.ventas.filter((v) => v.vendedor_email === p[0]).map((v) => ({
+        ...v, negocio: state.clientes.find((c) => c.id === v.cliente_id)?.negocio,
+        proyecto_estado: state.proyectos.find((pr) => pr.venta_id === v.id)?.estado_actual,
+      }));
     }
     if (sql.includes('FROM ventas v JOIN clientes c') && sql.includes('WHERE v.mercado IN')) {
-      return state.ventas.filter((v) => p.includes(v.mercado)).map((v) => ({ ...v, negocio: state.clientes.find((c) => c.id === v.cliente_id)?.negocio }));
+      return state.ventas.filter((v) => p.includes(v.mercado)).map((v) => ({
+        ...v, negocio: state.clientes.find((c) => c.id === v.cliente_id)?.negocio,
+        proyecto_estado: state.proyectos.find((pr) => pr.venta_id === v.id)?.estado_actual,
+      }));
     }
     if (sql.includes('FROM ventas v JOIN clientes c') && sql.includes('WHERE v.id = ?')) {
       const v = state.ventas.find((x) => x.id === p[0]);
@@ -382,6 +388,22 @@ test('GET /ventas — un ejecutivo solo ve sus propias ventas, nunca las de otro
   const bodyB = await responseB.json();
   assert.equal(bodyB.data.ventas.length, 1);
   assert.equal(bodyB.data.ventas[0].vendedorEmail, 'ejecutivo.b@example.com');
+});
+
+test('GET /ventas — expone el avance real del proyecto (RIO-117: ventas.estadoActual nunca transiciona, el que importa es el del proyecto)', async () => {
+  const db = fakeDb();
+  const a = roleIdentity({ email: 'ejecutivo.a@example.com' });
+  await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: a, db }));
+  assert.equal(db._state.proyectos[0].estado_actual, 'registrado');
+
+  const response = await ventasHandler(fakeContext({ roleIdentity: a, db }));
+  const body = await response.json();
+  assert.equal(body.data.ventas[0].proyectoEstado, 'registrado');
+
+  db._state.proyectos[0].estado_actual = 'completado';
+  const response2 = await ventasHandler(fakeContext({ roleIdentity: a, db }));
+  const body2 = await response2.json();
+  assert.equal(body2.data.ventas[0].proyectoEstado, 'completado', 'el listado refleja el avance real, no el placeholder fijo de ventas.estado_actual');
 });
 
 test('GET /ventas — un admin/supervisor solo ve ventas de SUS mercados autorizados, no de otros', async () => {

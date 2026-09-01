@@ -45,6 +45,7 @@ function serialize(c) {
     fechaProgramadaOriginal: c.fecha_programada_original,
     fechaProgramadaEfectiva: c.fecha_programada_efectiva,
     fechaPagoReal: c.fecha_pago_real,
+    motivoRetencionOReprogramacion: c.motivo_retencion_o_reprogramacion,
   };
 }
 

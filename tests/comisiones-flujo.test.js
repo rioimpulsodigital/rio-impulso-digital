@@ -102,6 +102,16 @@ function fakeContext({ method = 'GET', body, roleIdentity: ri, db, params = { id
 
 // --- Comisiones: listar ---
 
+test('comisiones: el motivo de retención/reprogramación se expone al vendedor (RIO-117: necesario para "Mis comisiones")', async () => {
+  const db = fakeDb();
+  db._state.comisiones[0].estado = 'retenida';
+  db._state.comisiones[0].motivo_retencion_o_reprogramacion = 'Disputa abierta por el cliente.';
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: roleIdentity(), db }));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.data.comisiones[0].motivoRetencionOReprogramacion, 'Disputa abierta por el cliente.');
+});
+
 test('comisiones: el vendedor ve su propia comisión comercial, no la de supervisión de otro', async () => {
   const db = fakeDb();
   const response = await comisionesListHandler(fakeContext({ roleIdentity: roleIdentity(), db }));
