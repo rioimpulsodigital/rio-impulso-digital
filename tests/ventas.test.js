@@ -52,6 +52,8 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
   seed.asignaciones_realizacion = seed.asignaciones_realizacion || [];
   seed.equipo_miembros = seed.equipo_miembros || [];
   seed.equipo_supervisores = seed.equipo_supervisores || [];
+  seed.materiales_informados_detalle = seed.materiales_informados_detalle || [];
+  seed.materiales_confirmaciones = seed.materiales_confirmaciones || [];
   const state = seed;
 
   function makeStatement(sql) {
@@ -78,7 +80,9 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
     } else if (sql.startsWith('INSERT INTO ventas')) {
       state.ventas.push({
         id: p[0], codigo_venta: p[1], cliente_id: p[2], mercado: p[3], producto: p[4], moneda: p[5],
-        tipo_precio: p[6], precio_pactado: p[7], vendedor_email: p[8], equipo_id: p[9] || null, estado_actual: 'registrada', created_at: '2026-08-28 00:00:00',
+        tipo_precio: p[6], precio_pactado: p[7], vendedor_email: p[8], equipo_id: p[9] || null,
+        idempotency_key: p[10] || null, origen: p[11] || null, es_demo: p[12] || 0, antecedentes_kit_json: p[13] || null,
+        estado_actual: 'registrada', created_at: '2026-08-28 00:00:00',
       });
     } else if (sql.startsWith('INSERT INTO proyectos')) {
       state.proyectos.push({ id: p[0], venta_id: p[1], codigo_proyecto: p[2], estado_actual: 'registrado' });
@@ -128,6 +132,29 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
     }
     if (sql.startsWith('SELECT monto FROM costos_directos WHERE componente_id')) {
       return state.costos_directos.filter((c) => c.componente_id === p[0]);
+    }
+    if (sql.startsWith("SELECT monto, nota FROM costos_directos WHERE componente_id")) {
+      return state.costos_directos.filter((c) => c.componente_id === p[0] && c.tipo === 'dominio');
+    }
+    if (sql.startsWith("SELECT id FROM costos_directos WHERE componente_id")) {
+      return state.costos_directos.filter((c) => c.componente_id === p[0] && c.tipo === 'dominio');
+    }
+    if (sql.startsWith('SELECT producto FROM ventas WHERE id')) {
+      const v = state.ventas.find((x) => x.id === p[0]);
+      return v ? [{ producto: v.producto }] : [];
+    }
+    if (sql.startsWith('SELECT id, tipo FROM componentes WHERE id')) {
+      const c = state.componentes.find((x) => x.id === p[0]);
+      return c ? [{ id: c.id, tipo: c.tipo }] : [];
+    }
+    if (sql.startsWith("SELECT id FROM componentes WHERE proyecto_id") && sql.includes("tipo = 'landing'")) {
+      return state.componentes.filter((c) => c.proyecto_id === p[0] && c.tipo === 'landing');
+    }
+    if (sql.startsWith('SELECT * FROM materiales_informados_detalle WHERE componente_id')) {
+      return state.materiales_informados_detalle.filter((m) => m.componente_id === p[0]);
+    }
+    if (sql.startsWith('SELECT * FROM materiales_confirmaciones WHERE componente_id')) {
+      return state.materiales_confirmaciones.filter((m) => m.componente_id === p[0]);
     }
     if (sql.includes('FROM usuarios u') && sql.includes('JOIN asignaciones_plan_comision ap') && sql.includes('JOIN planes_comision pl')) {
       // resolverAsignacionVigente(): bind = [usuarioEmail, tipo].
@@ -487,6 +514,38 @@ test('GET /ventas/:id — un supervisor del MISMO mercado sí puede ver la venta
   const supervisorCl = roleIdentity({ email: 'supervisor.cl@example.com', role: 'supervisor', allowedMarkets: ['CL'], permissions: PERMISSIONS.supervisor });
   const response = await ventaDetailHandler(fakeContext({ roleIdentity: supervisorCl, db, params: { id: created.id } }));
   assert.equal(response.status, 200);
+});
+
+test('GET /ventas/:id — un supervisor del mismo mercado NO recibe datos tributarios/de facturación ni la categoría "facturacion" de los antecedentes del Kit', async () => {
+  const db = fakeDb();
+  const a = roleIdentity({ email: 'ejecutivo.ar@example.com', allowedMarkets: ['AR'] });
+  const AR_CON_FACTURACION = {
+    mercado: 'AR', cliente: { negocio: 'Estudio Uñas', datosFacturacionAr: 'Razón social: Uñas SRL | CUIT: 20-12345678-9' },
+    producto: 'ficha', tipoPrecio: 'lanzamiento', precioPactado: 125000,
+    antecedentesKit: { diagnosticoComercial: null, datosLanding: null, datosFicha: null, facturacion: { 'CUIT/CUIL/DNI': '20-12345678-9' }, productoCondiciones: { 'Forma de pago': 'Transferencia bancaria' } },
+  };
+  const createResponse = await ventasHandler(fakeContext({ method: 'POST', body: AR_CON_FACTURACION, roleIdentity: a, db }));
+  const created = (await createResponse.json()).data.venta;
+
+  const supervisorAr = roleIdentity({ email: 'supervisor.ar@example.com', role: 'supervisor', allowedMarkets: ['AR'], permissions: PERMISSIONS.supervisor });
+  const responseSupervisor = await ventaDetailHandler(fakeContext({ roleIdentity: supervisorAr, db, params: { id: created.id } }));
+  assert.equal(responseSupervisor.status, 200);
+  const bodySupervisor = await responseSupervisor.json();
+  assert.equal(bodySupervisor.data.cliente.datosFacturacionAr, null, 'un supervisor nunca ve CUIT/domicilio/condición fiscal automáticamente');
+  assert.equal(bodySupervisor.data.venta.antecedentesKit.facturacion, undefined, 'la categoría "facturacion" desaparece para el supervisor');
+  assert.ok(bodySupervisor.data.venta.antecedentesKit.productoCondiciones, 'el resto de las categorías sigue visible');
+
+  // El dueño de la venta y un admin sí ven todo.
+  const responseDueño = await ventaDetailHandler(fakeContext({ roleIdentity: a, db, params: { id: created.id } }));
+  const bodyDueño = await responseDueño.json();
+  assert.equal(bodyDueño.data.cliente.datosFacturacionAr, 'Razón social: Uñas SRL | CUIT: 20-12345678-9');
+  assert.ok(bodyDueño.data.venta.antecedentesKit.facturacion);
+
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL', 'AR'], permissions: PERMISSIONS.admin });
+  const responseAdmin = await ventaDetailHandler(fakeContext({ roleIdentity: admin, db, params: { id: created.id } }));
+  const bodyAdmin = await responseAdmin.json();
+  assert.equal(bodyAdmin.data.cliente.datosFacturacionAr, 'Razón social: Uñas SRL | CUIT: 20-12345678-9');
+  assert.ok(bodyAdmin.data.venta.antecedentesKit.facturacion);
 });
 
 test('GET /ventas/:id — id inexistente devuelve 404 igual para cualquier rol', async () => {

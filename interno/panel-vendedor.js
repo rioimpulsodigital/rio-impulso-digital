@@ -40,6 +40,11 @@
     entregada: 'Entregada', aprobada: 'Aprobada',
   };
   var PAGO_ESTADO_LABEL = { pendiente: 'Pendiente', informado: 'Informado', acreditado: 'Acreditado' };
+  var MATERIALES_ESTADO_LABEL = { pendiente: 'Pendiente', informados: 'Informados (sin confirmar)', completos: 'Completos' };
+  var MATERIALES_ESTADO_BADGE = { pendiente: 'neutral', informados: 'amber', completos: 'green' };
+  var ELEMENTOS_MATERIALES = [
+    ['logo', 'Logo'], ['fotos', 'Fotos'], ['textos', 'Textos'], ['otros', 'Otros'],
+  ];
   // RIO-117 (segundo bloque): "estado operativo" es el que ya calcula el
   // backend a partir de hechos reales (pago acreditado, cancelación) —
   // nunca una transición nueva. Incluye los dos casos que proyectoEstado
@@ -151,12 +156,12 @@
   }
 
   function wireFilters() {
-    ['fCliente', 'fMercado', 'fProducto', 'fEstado', 'fDesde', 'fHasta'].forEach(function (id) {
+    ['fCliente', 'fMercado', 'fProducto', 'fEstado', 'fPago', 'fMateriales', 'fDesde', 'fHasta'].forEach(function (id) {
       document.getElementById(id).addEventListener('input', renderVentas);
       document.getElementById(id).addEventListener('change', renderVentas);
     });
     document.getElementById('pvClearFilters').addEventListener('click', function () {
-      ['fCliente', 'fMercado', 'fProducto', 'fEstado', 'fDesde', 'fHasta'].forEach(function (id) { document.getElementById(id).value = ''; });
+      ['fCliente', 'fMercado', 'fProducto', 'fEstado', 'fPago', 'fMateriales', 'fDesde', 'fHasta'].forEach(function (id) { document.getElementById(id).value = ''; });
       renderVentas();
     });
     ['fcMercado', 'fcEstado', 'fcTipo'].forEach(function (id) {
@@ -173,6 +178,8 @@
     var mercado = document.getElementById('fMercado').value;
     var producto = document.getElementById('fProducto').value;
     var estado = document.getElementById('fEstado').value;
+    var pago = document.getElementById('fPago').value;
+    var materiales = document.getElementById('fMateriales').value;
     var desde = document.getElementById('fDesde').value;
     var hasta = document.getElementById('fHasta').value;
     return misVentas.filter(function (v) {
@@ -180,6 +187,8 @@
       if (mercado && v.mercado !== mercado) return false;
       if (producto && v.producto !== producto) return false;
       if (estado && v.estadoOperativo !== estado) return false;
+      if (pago && v.estadoPagoResumen !== pago) return false;
+      if (materiales && v.estadoMaterialesResumen !== materiales) return false;
       var fechaVenta = (v.createdAt || '').slice(0, 10);
       if (desde && fechaVenta < desde) return false;
       if (hasta && fechaVenta > hasta) return false;
@@ -283,6 +292,79 @@
     return faltantes;
   }
 
+  function renderMaterialesHTML(detalle, c) {
+    var esVendedor = detalle.venta.vendedorEmail === identity.email;
+    var badge = MATERIALES_ESTADO_BADGE[c.materialesEstado] || 'neutral';
+    var html = '<div class="pv-materiales-box">' +
+      '<div class="pv-materiales-head">' +
+        '<span class="pv-materiales-titulo">Materiales</span>' +
+        '<span class="pv-badge pv-badge--' + badge + '">' + escapeHtml(MATERIALES_ESTADO_LABEL[c.materialesEstado] || c.materialesEstado) + '</span>' +
+      '</div>';
+
+    (c.materialesInformes || []).slice(0, 3).forEach(function (i) {
+      html += '<div class="pv-materiales-informe">Informado por <strong>' + escapeHtml(i.informadoPor) + '</strong> el ' + fmtFecha(i.createdAt) +
+        (i.elementos && i.elementos.length ? ' — ' + i.elementos.map(escapeHtml).join(', ') : '') +
+        (i.observaciones ? '<br>"' + escapeHtml(i.observaciones) + '"' : '') + '</div>';
+    });
+    (c.materialesConfirmaciones || []).slice(0, 2).forEach(function (cf) {
+      html += '<div class="pv-materiales-informe">' + (cf.resultado === 'completos' ? '✓ Confirmado completo' : '✗ Confirmado incompleto') +
+        ' por administración el ' + fmtFecha(cf.createdAt) +
+        (cf.faltantes && cf.faltantes.length ? ' — falta: ' + cf.faltantes.map(escapeHtml).join(', ') : '') + '</div>';
+    });
+
+    if (c.costoDominioPendiente) {
+      html += '<div class="pv-dominio-pendiente">El costo del dominio propio todavía no fue confirmado por administración — mientras tanto, la comisión de esta venta queda estimada, no definitiva.</div>';
+    }
+
+    if (esVendedor && c.materialesEstado === 'pendiente') {
+      html += '<form class="pv-materiales-form" data-informar-materiales="' + escapeHtml(c.id) + '">' +
+        '<div class="pv-materiales-checks">' +
+          ELEMENTOS_MATERIALES.map(function (e) {
+            return '<label><input type="checkbox" value="' + escapeHtml(e[0]) + '"> ' + escapeHtml(e[1]) + '</label>';
+          }).join('') +
+        '</div>' +
+        '<textarea placeholder="Observaciones (qué falta, cómo lo recibiste, etc.)"></textarea>' +
+        '<button type="submit" class="pv-btn pv-btn--primary">Informar materiales recibidos</button>' +
+      '</form>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  function renderAntecedentesHTML(detalle) {
+    var kit = detalle.venta.antecedentesKit;
+    if (!kit) return '';
+    var CATEGORIAS = [
+      ['diagnosticoComercial', 'Diagnóstico comercial'],
+      ['datosLanding', 'Datos de Landing'],
+      ['datosFicha', 'Datos de Ficha'],
+      ['facturacion', 'Facturación'],
+      ['productoCondiciones', 'Producto y condiciones seleccionadas'],
+    ];
+    var bloques = CATEGORIAS.map(function (par) {
+      var key = par[0], titulo = par[1];
+      var valor = kit[key];
+      if (!valor) return '';
+      var filas;
+      if (key === 'diagnosticoComercial') {
+        filas = '<div class="pv-kv"><dt>Tipo</dt><dd>' + escapeHtml(valor.tipo + ' — ' + valor.tipoNombre) + '</dd>' +
+          (valor.notas ? '<dt>Notas</dt><dd>' + escapeHtml(valor.notas) + '</dd>' : '') + '</div>';
+      } else {
+        var entradas = Object.keys(valor).filter(function (k) { return valor[k]; });
+        if (entradas.length === 0) return '';
+        filas = '<dl class="pv-kv">' + entradas.map(function (k) { return '<dt>' + escapeHtml(k) + '</dt><dd>' + escapeHtml(valor[k]) + '</dd>'; }).join('') + '</dl>';
+      }
+      return '<div class="pv-antecedente-categoria"><p class="pv-antecedente-categoria-titulo">' + escapeHtml(titulo) + '</p>' + filas + '</div>';
+    }).filter(Boolean).join('');
+    if (!bloques) return '';
+    return (
+      '<details class="pv-antecedentes"><summary>Antecedentes del Kit</summary>' +
+        '<div class="pv-antecedentes-body">' + bloques + '</div>' +
+      '</details>'
+    );
+  }
+
   async function renderDetalleVentaHTML(detalle) {
     var faltantesLanding = calcularFaltantesLanding(detalle);
 
@@ -299,8 +381,9 @@
             '<span class="pv-componente-titulo">' + escapeHtml(c.tipo) + '</span>' +
             '<span class="pv-badge pv-badge--blue">' + escapeHtml(COMPONENTE_ESTADO_LABEL[c.estadoActual] || c.estadoActual) + '</span>' +
           '</div>' +
-          '<div class="pv-componente-meta">Precio atribuido: ' + fmtMoneda(c.precioAtribuido, detalle.venta.moneda) + ' · Materiales: ' + escapeHtml(c.materialesEstado) + '</div>' +
+          '<div class="pv-componente-meta">Precio atribuido: ' + fmtMoneda(c.precioAtribuido, detalle.venta.moneda) + '</div>' +
           gateHTML +
+          renderMaterialesHTML(detalle, c) +
         '</div>'
       );
     }).join('');
@@ -308,6 +391,7 @@
     var pagosHTML = await Promise.all(detalle.pagosEsperados.map(function (p) { return renderPagoHTML(detalle.venta.id, p, detalle.venta.moneda); }));
 
     var historialHTML = await renderHistorialHTML(detalle.venta.id);
+    var antecedentesHTML = renderAntecedentesHTML(detalle);
 
     return (
       '<div class="pv-detail-section"><p class="pv-detail-section-title">Venta</p>' +
@@ -327,7 +411,8 @@
       '</div>' +
       '<div class="pv-detail-section"><p class="pv-detail-section-title">Proyecto y componentes</p>' + componentesHTML + '</div>' +
       '<div class="pv-detail-section"><p class="pv-detail-section-title">Pagos</p>' + pagosHTML.join('') + '</div>' +
-      '<div class="pv-detail-section"><p class="pv-detail-section-title">Avance y próximo paso</p>' + historialHTML + '</div>'
+      '<div class="pv-detail-section"><p class="pv-detail-section-title">Avance y próximo paso</p>' + historialHTML + '</div>' +
+      (antecedentesHTML ? '<div class="pv-detail-section">' + antecedentesHTML + '</div>' : '')
     );
   }
 
@@ -410,6 +495,28 @@
         if (!r.ok) {
           btn.disabled = false; btn.textContent = 'Informar pago';
           alert((r.body && r.body.error && r.body.error.message) || 'No se pudo informar el pago.');
+          return;
+        }
+        delete detalleVentaCache[detalle.venta.id];
+        abrirDetalleVenta(detalle.venta.id);
+      });
+    });
+
+    Array.prototype.forEach.call(body.querySelectorAll('form[data-informar-materiales]'), function (form) {
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var componenteId = form.getAttribute('data-informar-materiales');
+        var elementos = Array.prototype.map.call(form.querySelectorAll('input[type="checkbox"]:checked'), function (cb) { return cb.value; });
+        var observaciones = form.querySelector('textarea').value.trim() || null;
+        var btn = form.querySelector('button');
+        btn.disabled = true; btn.textContent = 'Informando…';
+        var r = await apiFetch(
+          '/interno/api/ventas/' + encodeURIComponent(detalle.venta.id) + '/componentes/' + encodeURIComponent(componenteId),
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'materiales-informados', elementos: elementos, observaciones: observaciones }) }
+        );
+        if (!r.ok) {
+          btn.disabled = false; btn.textContent = 'Informar materiales recibidos';
+          alert((r.body && r.body.error && r.body.error.message) || 'No se pudo informar los materiales.');
           return;
         }
         delete detalleVentaCache[detalle.venta.id];
@@ -547,6 +654,14 @@
     var motivoHTML = c.motivoRetencionOReprogramacion
       ? '<div class="pv-comision-row-detail" style="color:var(--pv-red);">Motivo: ' + escapeHtml(c.motivoRetencionOReprogramacion) + '</div>'
       : '';
+    // RIO-117 (corrección tras validación real): en Landing Premium, el
+    // precio atribuido al componente no es la utilidad neta — mientras el
+    // costo real del dominio no se confirme, la comisión no puede quedar
+    // definitiva. Esto nunca reemplaza el estado real (sigue "Estimada"),
+    // solo explica por qué sigue así en vez de avanzar.
+    var dominioHTML = (c.costoDominioPendiente && c.estado === 'calculada_provisional')
+      ? '<div class="pv-comision-row-detail" style="color:var(--pv-amber);">Costo de dominio propio todavía sin confirmar por administración.</div>'
+      : '';
     var fechasHTML =
       (c.fechaProgramadaOriginal ? 'Programada (original): ' + escapeHtml(c.fechaProgramadaOriginal) + '<br>' : '') +
       (c.fechaProgramadaEfectiva && c.fechaProgramadaEfectiva !== c.fechaProgramadaOriginal ? 'Programada (efectiva): ' + escapeHtml(c.fechaProgramadaEfectiva) + '<br>' : '') +
@@ -564,7 +679,7 @@
         '<td>' + escapeHtml(TIPO_COMISION_LABEL[c.tipo] || c.tipo) + '</td>' +
         '<td>' + (c.porcentaje != null ? c.porcentaje + '% de ' + fmtMoneda(c.montoBase, c.moneda) : '—') + '</td>' +
         '<td>' + fmtMoneda(c.montoComision, c.moneda) + '</td>' +
-        '<td><span class="pv-badge pv-badge--' + badge + '">' + escapeHtml(COMISION_ESTADO_LABEL[c.estado] || c.estado) + '</span>' + motivoHTML + liqBtn + '</td>' +
+        '<td><span class="pv-badge pv-badge--' + badge + '">' + escapeHtml(COMISION_ESTADO_LABEL[c.estado] || c.estado) + '</span>' + motivoHTML + dominioHTML + liqBtn + '</td>' +
         '<td class="pv-comision-row-detail">' + (fechasHTML || '—') + '</td>' +
       '</tr>'
     );

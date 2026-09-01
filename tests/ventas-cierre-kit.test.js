@@ -49,7 +49,7 @@ function fakeDb() {
       state.ventas.push({
         id: p[0], codigo_venta: p[1], cliente_id: p[2], mercado: p[3], producto: p[4], moneda: p[5],
         tipo_precio: p[6], precio_pactado: p[7], vendedor_email: p[8], equipo_id: p[9], idempotency_key: p[10],
-        origen: p[11], es_demo: p[12], estado_actual: 'registrada', created_at: '2026-09-01 00:00:00',
+        origen: p[11], es_demo: p[12], antecedentes_kit_json: p[13], estado_actual: 'registrada', created_at: '2026-09-01 00:00:00',
       });
     } else if (sql.startsWith('INSERT INTO proyectos')) {
       state.proyectos.push({ id: p[0], venta_id: p[1], codigo_proyecto: p[2], estado_actual: 'registrado' });
@@ -244,20 +244,43 @@ test('marcar una venta como demo (esDemo) es exclusivo de admin — un ejecutivo
   assert.equal(db._state.ventas.length, 0, 'no se crea nada — el rechazo es antes de escribir');
 });
 
-// ── Antecedentes (respuestas de Ficha/Landing recopiladas por el Kit) ──
+// ── Antecedentes del Kit (RIO-117, corrección tras validación real) ────
+// El historial muestra una línea corta y fija — nunca la cadena extensa
+// de respuestas del Kit. El contenido categorizado completo se guarda
+// aparte, estructurado, en antecedentes_kit_json.
 
-test('antecedentesTexto queda registrado como un evento del historial, sin reemplazar los campos estructurados', async () => {
+test('antecedentesKit: el historial muestra una sola línea corta, nunca la cadena completa de respuestas', async () => {
   const db = fakeDb();
   const ri = roleIdentity();
+  const antecedentesKit = {
+    diagnosticoComercial: { tipo: 'A', tipoNombre: 'Capacidad limitada', notas: 'Local pequeño' },
+    datosLanding: { 'Diferencial': 'atención rápida' },
+    datosFicha: null,
+    facturacion: null,
+    productoCondiciones: { 'Forma de pago': 'Mercado Pago (link)' },
+  };
   const response = await ventasHandler(fakeContext({
-    body: { ...CL_INDIVIDUAL, antecedentesTexto: 'Respuestas de Ficha — Negocio: Ferretería El Tornillo\nDiferencial: atención rápida' },
+    body: { ...CL_INDIVIDUAL, antecedentesKit },
     roleIdentity: ri, db,
   }));
   assert.equal(response.status, 201);
-  assert.ok(db._state.eventos_historial.some((e) => e.entidad === 'venta' && e.estado_nuevo === 'antecedente' && e.motivo_nota.includes('Diferencial')));
-  // Los campos esenciales siguen estructurados, no dentro del texto.
+  const evento = db._state.eventos_historial.find((e) => e.entidad === 'venta' && e.estado_nuevo === 'antecedente');
+  assert.ok(evento, 'se registra un evento de antecedente');
+  assert.equal(evento.motivo_nota, 'Venta registrada desde el Kit Comercial');
+  assert.ok(!evento.motivo_nota.includes('atención rápida'), 'el historial nunca muestra el contenido detallado');
+  // El contenido completo, categorizado, vive aparte — nunca reemplaza los campos estructurados.
+  assert.equal(JSON.parse(db._state.ventas[0].antecedentes_kit_json).datosLanding['Diferencial'], 'atención rápida');
   assert.equal(db._state.ventas[0].producto, 'ficha');
   assert.equal(db._state.ventas[0].precio_pactado, 50000);
+});
+
+test('antecedentesKit ausente: no se registra ningún evento de antecedente ni antecedentes_kit_json', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  const response = await ventasHandler(fakeContext({ body: { ...CL_INDIVIDUAL }, roleIdentity: ri, db }));
+  assert.equal(response.status, 201);
+  assert.ok(!db._state.eventos_historial.some((e) => e.entidad === 'venta' && e.estado_nuevo === 'antecedente'));
+  assert.equal(db._state.ventas[0].antecedentes_kit_json, null);
 });
 
 // ── HubSpot: consecuencia posterior, nunca bloquea ni duplica la venta ──

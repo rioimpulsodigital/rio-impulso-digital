@@ -76,6 +76,14 @@ function fakeDb() {
     }
     if (sql.startsWith('SELECT * FROM pagos_esperados WHERE venta_id')) return state.pagos_esperados.filter((pg) => pg.venta_id === p[0]);
     if (sql.startsWith('SELECT mercado FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]);
+    if (sql.startsWith('SELECT producto FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]);
+    if (sql.startsWith('SELECT id, tipo FROM componentes WHERE id')) return state.componentes.filter((c) => c.id === p[0]);
+    if (sql.startsWith("SELECT id FROM componentes WHERE proyecto_id") && sql.includes("tipo = 'landing'")) {
+      return state.componentes.filter((c) => c.proyecto_id === p[0] && c.tipo === 'landing');
+    }
+    if (sql.startsWith("SELECT id FROM costos_directos WHERE componente_id") && sql.includes("tipo = 'dominio'")) {
+      return state.costos_directos.filter((c) => c.componente_id === p[0] && c.tipo === 'dominio');
+    }
     if (sql.startsWith('SELECT 1 AS x FROM dias_no_habiles')) {
       return state.dias_no_habiles.filter((d) => d.mercado === p[0] && d.fecha === p[1]);
     }
@@ -253,6 +261,65 @@ test('evaluateComisionGate() — las 3 condiciones llegan en cualquier orden y e
   assert.equal(gate.habilitada, true);
   assert.equal(db._state.comisiones.find((c) => c.id === 'c1').estado, 'programada');
   assert.ok(db._state.comisiones.find((c) => c.id === 'c1').fecha_programada_original);
+});
+
+// ── RIO-117 (corrección tras validación real, 01/09/2026): costo de
+// dominio propio en Landing Premium — mientras no esté confirmado (ni
+// siquiera con costo 0), la comisión no puede quedar definitiva.
+
+test('evaluateComisionGate() — Landing Premium sin costo de dominio confirmado: la comisión queda provisional aunque las otras 3 condiciones se cumplan', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'v1', mercado: 'CL', producto: 'personalizado' });
+  db._state.proyectos.push({ id: 'p1', venta_id: 'v1' });
+  db._state.componentes.push({ id: 'comp-landing', proyecto_id: 'p1', tipo: 'landing' });
+  db._state.comisiones.push({
+    id: 'c1', venta_id: 'v1', componente_id: null, estado: 'calculada_provisional',
+    fecha_inicio_plazo: isoDaysAgo(11), fecha_pago_total_acreditado: isoDaysAgo(0), fecha_cumplimiento_plazo: null,
+  });
+  const gate = await evaluateComisionGate(db, 'req-dominio-1', 'c1', 'actor@example.com');
+  assert.equal(gate.habilitada, false);
+  assert.ok(gate.faltantes.includes('costo_dominio_confirmado'));
+  assert.equal(db._state.comisiones.find((c) => c.id === 'c1').estado, 'calculada_provisional');
+});
+
+test('evaluateComisionGate() — dominio propio del cliente con costo 0 (motivo auditable) desbloquea igual que un costo real', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'v1', mercado: 'CL', producto: 'ficha_personalizado' });
+  db._state.proyectos.push({ id: 'p1', venta_id: 'v1' });
+  db._state.componentes.push({ id: 'comp-landing', proyecto_id: 'p1', tipo: 'landing' });
+  db._state.costos_directos.push({ componente_id: 'comp-landing', tipo: 'dominio', monto: 0, nota: 'Cliente trae su propio dominio — RiO no asume costo.' });
+  db._state.comisiones.push({
+    id: 'c1', venta_id: 'v1', componente_id: null, estado: 'calculada_provisional',
+    fecha_inicio_plazo: isoDaysAgo(11), fecha_pago_total_acreditado: isoDaysAgo(0), fecha_cumplimiento_plazo: null,
+  });
+  const gate = await evaluateComisionGate(db, 'req-dominio-2', 'c1', 'actor@example.com');
+  assert.equal(gate.habilitada, true);
+  assert.equal(db._state.comisiones.find((c) => c.id === 'c1').estado, 'programada');
+});
+
+test('evaluateComisionGate() — el costo de dominio pendiente NUNCA bloquea Ficha ni Landing genérica (solo Landing Premium)', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'v1', mercado: 'CL', producto: 'ficha' }); // producto individual, sin dominio propio incluido.
+  db._state.comisiones.push({
+    id: 'c1', venta_id: 'v1', componente_id: null, estado: 'calculada_provisional',
+    fecha_inicio_plazo: isoDaysAgo(11), fecha_pago_total_acreditado: isoDaysAgo(0), fecha_cumplimiento_plazo: null,
+  });
+  const gate = await evaluateComisionGate(db, 'req-dominio-3', 'c1', 'actor@example.com');
+  assert.equal(gate.habilitada, true, 'Ficha nunca depende del costo de dominio');
+});
+
+test('evaluateComisionGate() — una comisión de realización de la Ficha (mismo pack) tampoco queda bloqueada por el dominio de la Landing', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'v1', mercado: 'CL', producto: 'ficha_personalizado' });
+  db._state.proyectos.push({ id: 'p1', venta_id: 'v1' });
+  db._state.componentes.push({ id: 'comp-ficha', proyecto_id: 'p1', tipo: 'ficha' });
+  db._state.componentes.push({ id: 'comp-landing', proyecto_id: 'p1', tipo: 'landing' }); // sin costo de dominio registrado.
+  db._state.comisiones.push({
+    id: 'c-ficha', venta_id: 'v1', componente_id: 'comp-ficha', estado: 'calculada_provisional',
+    fecha_inicio_plazo: isoDaysAgo(11), fecha_pago_total_acreditado: isoDaysAgo(0), fecha_cumplimiento_plazo: null,
+  });
+  const gate = await evaluateComisionGate(db, 'req-dominio-4', 'c-ficha', 'actor@example.com');
+  assert.equal(gate.habilitada, true, 'la realización de la Ficha no depende del dominio de la Landing');
 });
 
 test('evaluateComisionGate() — una disputa abierta bloquea aunque el plazo y el pago ya estén cumplidos', async () => {

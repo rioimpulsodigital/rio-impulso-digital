@@ -43,6 +43,8 @@ function fakeDb({ ventaExiste = true } = {}) {
     acreditaciones: [],
     eventos_historial: [],
     incidencias: [],
+    materiales_informados_detalle: [],
+    materiales_confirmaciones: [],
   };
 
   function makeStatement(sql) {
@@ -103,6 +105,10 @@ function fakeDb({ ventaExiste = true } = {}) {
       state.acreditaciones.push({ id: p[0], pago_informado_id: p[1], monto_acreditado: p[2], verificado_por: p[3], nota: p[4] });
     } else if (sql.startsWith('INSERT INTO incidencias')) {
       state.incidencias.push({ id: p[0], venta_id: p[1], tipo: p[2], motivo: p[3], estado: 'abierta', registrado_por: p[4] });
+    } else if (sql.startsWith('INSERT INTO materiales_informados_detalle')) {
+      state.materiales_informados_detalle.push({ id: p[0], componente_id: p[1], informado_por: p[2], elementos_json: p[3], observaciones: p[4] });
+    } else if (sql.startsWith('INSERT INTO materiales_confirmaciones')) {
+      state.materiales_confirmaciones.push({ id: p[0], componente_id: p[1], admin_email: p[2], resultado: p[3], faltantes_json: p[4] || null });
     }
   }
 
@@ -130,6 +136,46 @@ test('componentes: el vendedor de la venta puede reportar materiales-informados'
   const response = await componenteHandler(fakeContext({ body: { action: 'materiales-informados' }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
   assert.equal(response.status, 200);
   assert.equal(db._state.componentes.find((c) => c.id === 'comp-x').materiales_estado, 'informados');
+});
+
+test('componentes: materiales-informados registra elementos/observaciones/quién/cuándo, aparte de mover el estado', async () => {
+  const db = fakeDb();
+  const response = await componenteHandler(fakeContext({
+    body: { action: 'materiales-informados', elementos: ['logo', 'fotos'], observaciones: 'Llegaron por WhatsApp.' },
+    roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' },
+  }));
+  assert.equal(response.status, 200);
+  const detalle = db._state.materiales_informados_detalle[0];
+  assert.equal(detalle.componente_id, 'comp-x');
+  assert.equal(detalle.informado_por, VENDEDOR);
+  assert.deepEqual(JSON.parse(detalle.elementos_json), ['logo', 'fotos']);
+  assert.equal(detalle.observaciones, 'Llegaron por WhatsApp.');
+});
+
+test('componentes: informar materiales dos veces seguidas (sin que administración confirme entre medio) se rechaza — nunca se pisa el informe anterior', async () => {
+  const db = fakeDb();
+  await componenteHandler(fakeContext({ body: { action: 'materiales-informados', elementos: ['logo'] }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  const response = await componenteHandler(fakeContext({ body: { action: 'materiales-informados', elementos: ['fotos'] }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  assert.equal(response.status, 409);
+  assert.equal(db._state.materiales_informados_detalle.length, 1, 'el segundo intento no agrega un registro nuevo');
+});
+
+test('componentes: administración marca materiales-incompletos — vuelve a pendiente y deja auditoría de lo que falta, sin borrar el informe del vendedor', async () => {
+  const db = fakeDb();
+  await componenteHandler(fakeContext({ body: { action: 'materiales-informados', elementos: ['logo'] }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL', 'AR'], permissions: PERMISSIONS.admin });
+  const response = await componenteHandler(fakeContext({ body: { action: 'materiales-incompletos', faltantes: ['fotos', 'textos'] }, roleIdentity: admin, db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  assert.equal(response.status, 200);
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-x').materiales_estado, 'pendiente');
+  assert.equal(db._state.materiales_informados_detalle.length, 1, 'el informe original del vendedor sigue existiendo');
+  const confirmacion = db._state.materiales_confirmaciones[0];
+  assert.equal(confirmacion.resultado, 'incompletos');
+  assert.deepEqual(JSON.parse(confirmacion.faltantes_json), ['fotos', 'textos']);
+
+  // El vendedor puede volver a informar — un nuevo registro, no un reemplazo.
+  const segundo = await componenteHandler(fakeContext({ body: { action: 'materiales-informados', elementos: ['fotos', 'textos'] }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  assert.equal(segundo.status, 200);
+  assert.equal(db._state.materiales_informados_detalle.length, 2);
 });
 
 test('componentes: el vendedor de la venta recibe 403 al intentar una transición oficial (aprobar) — incluso siendo el dueño', async () => {
@@ -207,6 +253,14 @@ test('pagos: un supervisor recibe 403 al acreditar (exclusivo de admin)', async 
   assert.equal(response.status, 403);
 });
 
+test('componentes: un supervisor NUNCA puede confirmar materiales (ni completos ni incompletos) — exclusivo de administración', async () => {
+  const db = fakeDb();
+  const completos = await componenteHandler(fakeContext({ body: { action: 'materiales-completos' }, roleIdentity: supervisorMismoMercado(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  assert.equal(completos.status, 403);
+  const incompletos = await componenteHandler(fakeContext({ body: { action: 'materiales-incompletos', faltantes: ['fotos'] }, roleIdentity: supervisorMismoMercado(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  assert.equal(incompletos.status, 403);
+});
+
 test('componentes: un supervisor de OTRO mercado recibe 404 (la venta ni siquiera es visible)', async () => {
   const db = fakeDb();
   const otroMercado = supervisorMismoMercado({ allowedMarkets: ['AR'] });
@@ -278,6 +332,27 @@ test('admin: puede acreditar un pago ya informado, sobre una venta ajena de su m
   const acreditar = await pagoHandler(fakeContext({ body: { action: 'acreditar', montoAcreditado: 50000 }, roleIdentity: admin(), db, params: { id: 'venta-1', pagoId: 'pago-x' } }));
   assert.equal(acreditar.status, 200);
   assert.equal(db._state.pagos_esperados.find((p) => p.id === 'pago-x').estado, 'acreditado');
+});
+
+test('pack: los materiales de Landing se pueden informar y confirmar completos MIENTRAS la Ficha todavía está en producción (secuencia independiente)', async () => {
+  const db = fakeDb();
+  // La Ficha (comp-x) queda 'entregada' por defecto en este fakeDb — todavía
+  // no aprobada. Se agrega la Landing del mismo pack, bloqueada, sin tocar
+  // el estado de la Ficha en ningún momento de este test.
+  db._state.componentes.push({ id: 'comp-landing', proyecto_id: 'proyecto-1', tipo: 'landing', estado_actual: 'bloqueada', materiales_estado: 'pendiente' });
+
+  const informar = await componenteHandler(fakeContext({ body: { action: 'materiales-informados', elementos: ['fotos'] }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-landing' } }));
+  assert.equal(informar.status, 200);
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-landing').materiales_estado, 'informados');
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-x').estado_actual, 'entregada', 'la Ficha no se tocó');
+
+  const completos = await componenteHandler(fakeContext({ body: { action: 'materiales-completos' }, roleIdentity: admin(), db, params: { id: 'venta-1', componenteId: 'comp-landing' } }));
+  assert.equal(completos.status, 200);
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-landing').materiales_estado, 'completos');
+  // La Landing sigue bloqueada igual (todavía faltan Ficha aprobada + saldo
+  // acreditado) — materiales completos es solo UNA de las 3 condiciones.
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-landing').estado_actual, 'bloqueada');
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-x').estado_actual, 'entregada', 'la Ficha sigue sin tocarse');
 });
 
 test('admin: respeta igualmente sus propios mercados autorizados — 404 fuera de ellos', async () => {

@@ -80,6 +80,15 @@ function serializeVenta(row) {
     // proyecto (no ocurre: se crean juntos, en el mismo batch).
     proyectoEstado: row.proyecto_estado || null,
     estadoOperativo: calcularEstadoOperativo(row),
+    // RIO-117 (corrección tras validación real, 01/09/2026): resúmenes
+    // independientes para filtrar sin mezclar conceptos (Brenda, sección
+    // 7) — "acreditado" solo si TODOS los pagos esperados lo están,
+    // "completos" solo si TODOS los componentes lo están; con más de un
+    // pago/componente, cualquier estado intermedio se muestra como
+    // "informado"/"informados" (nunca se promedia ni se inventa un
+    // tercer valor).
+    estadoPagoResumen: row.estado_pago_resumen || 'pendiente',
+    estadoMaterialesResumen: row.estado_materiales_resumen || 'pendiente',
     origen: row.origen || null,
     esDemo: !!row.es_demo,
     createdAt: row.created_at,
@@ -142,7 +151,15 @@ async function handleList(context) {
       requestId,
       `SELECT v.*, c.negocio, p.estado_actual AS proyecto_estado,
          (SELECT COUNT(*) FROM pagos_esperados pe WHERE pe.venta_id = v.id AND pe.estado = 'acreditado') AS pagos_acreditados_count,
-         (SELECT COUNT(*) FROM incidencias i WHERE i.venta_id = v.id AND i.tipo = 'cancelacion') AS cancelacion_count
+         (SELECT COUNT(*) FROM incidencias i WHERE i.venta_id = v.id AND i.tipo = 'cancelacion') AS cancelacion_count,
+         (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
+            WHEN SUM(CASE WHEN pe.estado = 'acreditado' THEN 1 ELSE 0 END) = COUNT(*) THEN 'acreditado'
+            WHEN SUM(CASE WHEN pe.estado IN ('informado', 'acreditado') THEN 1 ELSE 0 END) > 0 THEN 'informado'
+            ELSE 'pendiente' END FROM pagos_esperados pe WHERE pe.venta_id = v.id) AS estado_pago_resumen,
+         (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
+            WHEN SUM(CASE WHEN co.materiales_estado = 'completos' THEN 1 ELSE 0 END) = COUNT(*) THEN 'completos'
+            WHEN SUM(CASE WHEN co.materiales_estado IN ('informados', 'completos') THEN 1 ELSE 0 END) > 0 THEN 'informados'
+            ELSE 'pendiente' END FROM componentes co WHERE co.proyecto_id = p.id) AS estado_materiales_resumen
        FROM ventas v JOIN clientes c ON c.id = v.cliente_id
        LEFT JOIN proyectos p ON p.venta_id = v.id
        WHERE v.mercado IN (${placeholders}) ORDER BY v.created_at DESC`,
@@ -157,7 +174,15 @@ async function handleList(context) {
       requestId,
       `SELECT v.*, c.negocio, p.estado_actual AS proyecto_estado,
          (SELECT COUNT(*) FROM pagos_esperados pe WHERE pe.venta_id = v.id AND pe.estado = 'acreditado') AS pagos_acreditados_count,
-         (SELECT COUNT(*) FROM incidencias i WHERE i.venta_id = v.id AND i.tipo = 'cancelacion') AS cancelacion_count
+         (SELECT COUNT(*) FROM incidencias i WHERE i.venta_id = v.id AND i.tipo = 'cancelacion') AS cancelacion_count,
+         (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
+            WHEN SUM(CASE WHEN pe.estado = 'acreditado' THEN 1 ELSE 0 END) = COUNT(*) THEN 'acreditado'
+            WHEN SUM(CASE WHEN pe.estado IN ('informado', 'acreditado') THEN 1 ELSE 0 END) > 0 THEN 'informado'
+            ELSE 'pendiente' END FROM pagos_esperados pe WHERE pe.venta_id = v.id) AS estado_pago_resumen,
+         (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
+            WHEN SUM(CASE WHEN co.materiales_estado = 'completos' THEN 1 ELSE 0 END) = COUNT(*) THEN 'completos'
+            WHEN SUM(CASE WHEN co.materiales_estado IN ('informados', 'completos') THEN 1 ELSE 0 END) > 0 THEN 'informados'
+            ELSE 'pendiente' END FROM componentes co WHERE co.proyecto_id = p.id) AS estado_materiales_resumen
        FROM ventas v JOIN clientes c ON c.id = v.cliente_id
        LEFT JOIN proyectos p ON p.venta_id = v.id
        WHERE v.vendedor_email = ? ORDER BY v.created_at DESC`,
@@ -212,7 +237,7 @@ async function handleCreate(context) {
     }
   }
 
-  const { mercado, cliente, producto, tipoPrecio, precioPactado, precioFichaIndividual, precioLandingIndividual, origen, esDemo, antecedentesTexto, hubspot } = body || {};
+  const { mercado, cliente, producto, tipoPrecio, precioPactado, precioFichaIndividual, precioLandingIndividual, origen, esDemo, antecedentesKit, hubspot } = body || {};
 
   if (!VALID_MERCADOS.includes(mercado)) {
     return Errors.validation('Mercado inválido.', requestId);
@@ -304,8 +329,8 @@ async function handleCreate(context) {
   if (origen !== undefined && origen !== null && typeof origen !== 'string') {
     return Errors.validation('origen debe ser texto.', requestId);
   }
-  if (antecedentesTexto !== undefined && antecedentesTexto !== null && typeof antecedentesTexto !== 'string') {
-    return Errors.validation('antecedentesTexto debe ser texto.', requestId);
+  if (antecedentesKit !== undefined && antecedentesKit !== null && (typeof antecedentesKit !== 'object' || Array.isArray(antecedentesKit))) {
+    return Errors.validation('antecedentesKit debe ser un objeto.', requestId);
   }
 
   const db = env.DB;
@@ -321,8 +346,8 @@ async function handleCreate(context) {
   const statements = [
     db.prepare('INSERT INTO clientes (id, negocio, contacto_nombre, telefono, email, mercado, datos_facturacion_ar, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(clienteId, cliente.negocio.trim(), cliente.contactoNombre || null, cliente.telefono || null, cliente.email || null, mercado, cliente.datosFacturacionAr || null, roleIdentity.email),
-    db.prepare('INSERT INTO ventas (id, codigo_venta, cliente_id, mercado, producto, moneda, tipo_precio, precio_pactado, vendedor_email, equipo_id, idempotency_key, origen, es_demo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(ventaId, codigoVenta, clienteId, mercado, producto, moneda, tipoPrecio, precioPactado, roleIdentity.email, equipoId, idempotencyKey, origen || null, esDemo ? 1 : 0),
+    db.prepare('INSERT INTO ventas (id, codigo_venta, cliente_id, mercado, producto, moneda, tipo_precio, precio_pactado, vendedor_email, equipo_id, idempotency_key, origen, es_demo, antecedentes_kit_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(ventaId, codigoVenta, clienteId, mercado, producto, moneda, tipoPrecio, precioPactado, roleIdentity.email, equipoId, idempotencyKey, origen || null, esDemo ? 1 : 0, antecedentesKit ? JSON.stringify(antecedentesKit) : null),
     db.prepare('INSERT INTO proyectos (id, venta_id, codigo_proyecto) VALUES (?, ?, ?)')
       .bind(proyectoId, ventaId, codigoProyecto),
     ...componentesPlan.map((c) =>
@@ -354,14 +379,16 @@ async function handleCreate(context) {
     console.error(JSON.stringify({ requestId, scope: 'comisiones', reason: 'generacion_fallida' }));
   }
 
-  // RIO-117 (segundo bloque): antecedente con lo que el Kit ya recopiló
-  // durante la llamada (desafío, respuestas de Ficha/Landing) — texto
-  // largo conservado como snapshot/nota, nunca reemplaza los campos
-  // esenciales ya guardados de forma estructurada arriba (cliente,
-  // producto, precio, moneda, plan de pago vía pagos_esperados).
-  if (antecedentesTexto && antecedentesTexto.trim()) {
+  // RIO-117 (corrección tras validación real, 01/09/2026): el historial
+  // muestra una sola línea corta — el contenido completo (categorizado)
+  // vive en antecedentes_kit_json, ya guardado arriba en el mismo batch,
+  // y se sirve aparte, con permisos propios, en GET /ventas/:id (sección
+  // plegable "Antecedentes del Kit"). Antes esto guardaba el texto
+  // concatenado entero como motivo_nota del evento — Brenda: "el historial
+  // no debe mostrar todas las respuestas del Kit como una cadena extensa".
+  if (antecedentesKit) {
     try {
-      await agregarAntecedente(db, requestId, { ventaId, nota: antecedentesTexto.trim(), actorEmail: roleIdentity.email });
+      await agregarAntecedente(db, requestId, { ventaId, nota: 'Venta registrada desde el Kit Comercial', actorEmail: roleIdentity.email });
     } catch (e) {
       console.error(JSON.stringify({ requestId, scope: 'antecedente', reason: 'registro_fallido' }));
     }

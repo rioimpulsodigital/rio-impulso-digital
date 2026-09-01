@@ -47,6 +47,44 @@ export async function onRequest(context) {
     : [];
   const pagos = await query(env.DB, requestId, 'SELECT * FROM pagos_esperados WHERE venta_id = ? ORDER BY tipo', [venta.id]);
 
+  // RIO-117 (corrección tras validación real, 01/09/2026): datos
+  // tributarios/de facturación — nunca automáticos para un supervisor
+  // (Brenda: "no recibe automáticamente CUIT/RUT, domicilio de
+  // facturación ni datos tributarios"), sin importar que ya pueda ver el
+  // resto de la venta por ser de su mismo mercado. Solo el vendedor dueño
+  // o administración los ven.
+  const esVendedorDueño = roleIdentity.email === venta.vendedor_email;
+  const esAdmin = roleIdentity.role === 'admin';
+  const puedeVerFacturacion = esVendedorDueño || esAdmin;
+
+  const componentesConMateriales = await Promise.all(componentes.map(async (c) => {
+    const informes = await query(env.DB, requestId, 'SELECT * FROM materiales_informados_detalle WHERE componente_id = ? ORDER BY created_at DESC', [c.id]);
+    const confirmaciones = await query(env.DB, requestId, 'SELECT * FROM materiales_confirmaciones WHERE componente_id = ? ORDER BY created_at DESC', [c.id]);
+    const costoDominio = await query(env.DB, requestId, "SELECT monto, nota FROM costos_directos WHERE componente_id = ? AND tipo = 'dominio'", [c.id]);
+    const requiereDominio = c.tipo === 'landing' && (venta.producto === 'personalizado' || venta.producto === 'ficha_personalizado');
+    return {
+      id: c.id,
+      tipo: c.tipo,
+      precioIndividualReferencia: c.precio_individual_referencia,
+      precioAtribuido: c.precio_atribuido,
+      estadoActual: c.estado_actual,
+      materialesEstado: c.materiales_estado,
+      materialesInformes: informes.map((i) => ({
+        id: i.id, informadoPor: i.informado_por,
+        elementos: (() => { try { return JSON.parse(i.elementos_json); } catch (e) { return []; } })(),
+        observaciones: i.observaciones, createdAt: i.created_at,
+      })),
+      materialesConfirmaciones: confirmaciones.map((cf) => ({
+        id: cf.id, adminEmail: cf.admin_email, resultado: cf.resultado,
+        faltantes: cf.faltantes_json ? (() => { try { return JSON.parse(cf.faltantes_json); } catch (e) { return []; } })() : [],
+        createdAt: cf.created_at,
+      })),
+      // Solo tiene sentido en la Landing de un plan con dominio propio
+      // incluido (Premium) — el resto de los componentes nunca lo necesita.
+      costoDominioPendiente: requiereDominio && costoDominio.length === 0,
+    };
+  }));
+
   return ok(
     {
       venta: {
@@ -60,6 +98,22 @@ export async function onRequest(context) {
         vendedorEmail: venta.vendedor_email,
         estadoActual: venta.estado_actual,
         createdAt: venta.created_at,
+        // RIO-117 (corrección tras validación real): categorizado, nunca
+        // repite lo que ya está en cabecera (cliente/producto/mercado/
+        // precio) — ver Kit para el detalle de qué llena cada categoría.
+        // Redactado igual que datosFacturacionAr: la categoría
+        // "facturacion" (si el Kit la incluyó) desaparece para un
+        // supervisor que no es ni el vendedor ni admin.
+        antecedentesKit: (() => {
+          if (!venta.antecedentes_kit_json) return null;
+          let parsed;
+          try { parsed = JSON.parse(venta.antecedentes_kit_json); } catch (e) { return null; }
+          if (!puedeVerFacturacion && parsed && typeof parsed === 'object') {
+            const { facturacion, ...resto } = parsed;
+            return resto;
+          }
+          return parsed;
+        })(),
       },
       cliente: {
         id: venta.cliente_id,
@@ -67,17 +121,10 @@ export async function onRequest(context) {
         contactoNombre: venta.contacto_nombre,
         telefono: venta.telefono,
         email: venta.cliente_email,
-        datosFacturacionAr: venta.datos_facturacion_ar,
+        datosFacturacionAr: puedeVerFacturacion ? venta.datos_facturacion_ar : null,
       },
       proyecto: proyecto ? { id: proyecto.id, codigoProyecto: proyecto.codigo_proyecto, estadoActual: proyecto.estado_actual } : null,
-      componentes: componentes.map((c) => ({
-        id: c.id,
-        tipo: c.tipo,
-        precioIndividualReferencia: c.precio_individual_referencia,
-        precioAtribuido: c.precio_atribuido,
-        estadoActual: c.estado_actual,
-        materialesEstado: c.materiales_estado,
-      })),
+      componentes: componentesConMateriales,
       pagosEsperados: pagos.map((p) => ({
         id: p.id,
         tipo: p.tipo,

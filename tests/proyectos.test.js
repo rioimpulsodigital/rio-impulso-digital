@@ -27,6 +27,8 @@ function fakeDb() {
     incidencias: [],
     comisiones: [], // RIO-114: acreditarPago() ahora también consulta comisiones — ninguna se siembra en este suite (fuera de su alcance), así que siempre vacío.
     asignaciones_realizacion: [], // RIO-115 (consolidación): aprobarComponente() consulta si hay responsable/practicante asignado — ninguno en este suite.
+    materiales_informados_detalle: [], // RIO-117 (corrección tras validación real): detalle auditable de "informar materiales".
+    materiales_confirmaciones: [], // RIO-117 (corrección tras validación real): confirmación/incompletos de administración.
   };
 
   function makeStatement(sql) {
@@ -77,6 +79,10 @@ function fakeDb() {
         id: p[0], tipo: p[1], rol_realizacion: p[2], venta_id: p[3], componente_id: p[4], beneficiario_email: p[5], plan_id: p[6], asignacion_plan_id: p[7],
         porcentaje_snapshot: p[8], base_snapshot: p[9], monto_base: p[10], moneda: p[11], monto_comision: p[12], estado: 'calculada_provisional',
       });
+    } else if (sql.startsWith('INSERT INTO materiales_informados_detalle')) {
+      state.materiales_informados_detalle.push({ id: p[0], componente_id: p[1], informado_por: p[2], elementos_json: p[3], observaciones: p[4], created_at: nowIso() });
+    } else if (sql.startsWith('INSERT INTO materiales_confirmaciones')) {
+      state.materiales_confirmaciones.push({ id: p[0], componente_id: p[1], admin_email: p[2], resultado: p[3], faltantes_json: p[4] || null, created_at: nowIso() });
     } else {
       throw new Error('mutación inesperada en test: ' + sql);
     }

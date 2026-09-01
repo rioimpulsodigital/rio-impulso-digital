@@ -1443,6 +1443,55 @@
     return null;
   }
 
+  // RIO-117 (corrección tras validación real, 01/09/2026): antecedentes
+  // del Kit CATEGORIZADOS para el Panel del Vendedor — separado de los
+  // textos que se arman para HubSpot (buildLandingAnswersText/
+  // buildFichaAnswersText, sin tocar). Nunca repite lo que ya vive en la
+  // cabecera de la venta (cliente/producto/mercado/precio) — por eso no
+  // hay categoría "cliente y contacto" acá, ya está ahí. La categoría
+  // "facturacion" queda redactada server-side para un supervisor
+  // (functions/interno/api/ventas/[id].js).
+  function buildAntecedentesKit(){
+    const activeType = document.querySelector('.type-card.active');
+    const diagnosticoComercial = activeType ? {
+      tipo: activeType.dataset.type,
+      tipoNombre: activeType.querySelector('.name').textContent,
+      notas: (document.getElementById('revealNotes').value || '').trim() || null,
+    } : null;
+
+    const landingFieldIds = [['q1','Qué ofrece / qué resuelve'],['q2','Público objetivo'],['q3','Diferencial'],['q4','Acción esperada de la página'],['q5','Fotos disponibles'],['q6','Puede conseguir reseñas'],['q7','Color / identidad visual'],['qCanal','Canal de contacto']];
+    const datosLanding = {};
+    landingFieldIds.forEach(([id, label]) => { const el = document.getElementById(id); if(el && el.value.trim()) datosLanding[label] = el.value.trim(); });
+
+    let datosFicha = null;
+    if(!hasFicha){
+      const fichaFieldIds = [['f2','Local físico o área de servicio'],['f3','Horario de atención'],['f4','Teléfono público / correo'],['f5','Métodos de pago / retiro / entrega']];
+      datosFicha = {};
+      fichaFieldIds.forEach(([id, label]) => { const el = document.getElementById(id); if(el && el.value.trim()) datosFicha[label] = el.value.trim(); });
+    }
+
+    let facturacion = null;
+    if(currentMarket === 'AR'){
+      const partes = {
+        'Nombre / razón social': document.getElementById('pclientbillingname').value.trim(),
+        'CUIT/CUIL/DNI': document.getElementById('pclientcuit').value.trim(),
+        'Domicilio': document.getElementById('pclientaddress').value.trim(),
+        'Condición fiscal': document.getElementById('pclientfiscal').value.trim(),
+      };
+      const conValor = Object.fromEntries(Object.entries(partes).filter(([, v]) => v));
+      if(Object.keys(conValor).length) facturacion = conValor;
+    }
+
+    const desiredDomain = (document.getElementById('desiredDomain').value || '').trim();
+    const config = MARKETS[currentMarket];
+    const productoCondiciones = {
+      'Dominio propio deseado': desiredDomain || null,
+      'Forma de pago': config.paymentMethod === 'bank_transfer' ? 'Transferencia bancaria' : 'Mercado Pago (link)',
+    };
+
+    return { diagnosticoComercial, datosLanding, datosFicha, facturacion, productoCondiciones };
+  }
+
   function buildVentaPayload(){
     const activeProduct = document.querySelector('.domain-choice-card.active');
     const productKey    = activeProduct.dataset.domain;
@@ -1474,7 +1523,7 @@
       tipoPrecio,
       precioPactado,
       origen: 'kit_comercial',
-      antecedentesTexto: hasFicha ? buildLandingAnswersText() : (buildLandingAnswersText() + '\n\n' + buildFichaAnswersText()),
+      antecedentesKit: buildAntecedentesKit(),
       hubspot: { fields: buildHubSpotFields(), context: { pageUri: window.location.href, pageName: document.title } },
     };
     if(isPack){

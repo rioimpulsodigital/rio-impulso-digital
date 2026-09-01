@@ -20,14 +20,21 @@ import { query } from '../../../../../../_shared/db.js';
 import { assertCanAccessOwner, AuthzError } from '../../../../../../_shared/authz.js';
 import { isMethodAllowed, hasExpectedContentType } from '../../../../../../_shared/security.js';
 import {
-  marcarMaterialesInformados, marcarMaterialesCompletos, iniciarProduccion, marcarEntregada, aprobarComponente, ProyectoError,
+  marcarMaterialesInformados, marcarMaterialesCompletos, marcarMaterialesIncompletos,
+  iniciarProduccion, marcarEntregada, aprobarComponente, ProyectoError,
 } from '../../../../../../_shared/proyectos.js';
+import { crearNotificacionSiCorresponde } from '../../../../../../_shared/notificaciones.js';
 
 const REPORT_ACTIONS = new Set(['materiales-informados']);
 
+// RIO-117 (corrección tras validación real, 01/09/2026): 'materiales-informados'
+// ahora acepta {elementos, observaciones} en el body — se los pasa al
+// handler además de ventaId/componenteId/actorEmail. 'materiales-incompletos'
+// acepta {faltantes}. El resto ignora cualquier campo extra del body.
 const ACTIONS = {
-  'materiales-informados': marcarMaterialesInformados,
+  'materiales-informados': (db, requestId, args, body) => marcarMaterialesInformados(db, requestId, { ...args, elementos: body?.elementos, observaciones: body?.observaciones }),
   'materiales-completos': marcarMaterialesCompletos,
+  'materiales-incompletos': (db, requestId, args, body) => marcarMaterialesIncompletos(db, requestId, { ...args, faltantes: body?.faltantes }),
   'iniciar-produccion': iniciarProduccion,
   entregar: marcarEntregada,
   aprobar: aprobarComponente,
@@ -68,7 +75,7 @@ export async function onRequest(context) {
   }
   const handler = ACTIONS[body?.action];
   if (!handler) {
-    return Errors.validation('action inválida. Valores permitidos: materiales-informados, materiales-completos, iniciar-produccion, entregar, aprobar.', requestId);
+    return Errors.validation('action inválida. Valores permitidos: materiales-informados, materiales-completos, materiales-incompletos, iniciar-produccion, entregar, aprobar.', requestId);
   }
 
   const esVendedor = roleIdentity.email === venta.vendedor_email;
@@ -77,11 +84,30 @@ export async function onRequest(context) {
       return Errors.forbidden(requestId); // un supervisor sin ser el vendedor no reporta materiales ajenos.
     }
   } else if (!roleIdentity.permissions.manageProduccionOficial) {
-    return Errors.forbidden(requestId); // transición oficial — exclusiva de administración, incluso para el vendedor dueño.
+    return Errors.forbidden(requestId); // transición oficial (incluida materiales-incompletos) — exclusiva de administración, incluso para el vendedor dueño o un supervisor.
   }
 
   try {
-    const result = await handler(env.DB, requestId, { ventaId: venta.id, componenteId: params.componenteId, actorEmail: roleIdentity.email });
+    const result = await handler(env.DB, requestId, { ventaId: venta.id, componenteId: params.componenteId, actorEmail: roleIdentity.email }, body);
+
+    if (body.action === 'materiales-informados') {
+      // RIO-117 (corrección tras validación real): notificar a
+      // administración, mismo patrón que "pago informado" (RIO-116) —
+      // nunca bloquea la acción si la notificación falla.
+      try {
+        const clienteRows = await query(env.DB, requestId, 'SELECT c.negocio FROM ventas v JOIN clientes c ON c.id = v.cliente_id WHERE v.id = ?', [venta.id]);
+        await crearNotificacionSiCorresponde(env.DB, requestId, {
+          tipo: 'materiales_informados',
+          claveIdempotencia: `materiales_informados:${result?.detalleId || params.componenteId}`,
+          ventaId: venta.id, mercado: venta.mercado,
+          clienteNegocio: clienteRows[0]?.negocio || null, vendedorEmail: venta.vendedor_email,
+          rutaPortal: `/interno/index.html?venta=${venta.id}&componente=${params.componenteId}`,
+        });
+      } catch (e) {
+        console.error(JSON.stringify({ requestId, scope: 'notificaciones', reason: 'creacion_fallida' }));
+      }
+    }
+
     return ok({ action: body.action, gate: result?.gate || null }, requestId);
   } catch (e) {
     if (e instanceof ProyectoError) {

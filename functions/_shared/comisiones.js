@@ -55,6 +55,43 @@ async function utilidadNetaComponente(db, requestId, componente) {
   return componente.precio_atribuido - totalCostos;
 }
 
+// RIO-117 (corrección tras validación real, 01/09/2026): en Landing
+// Premium ("personalizado"/"ficha_personalizado") RiO asume el costo real
+// del dominio propio incluido — hasta que ese costo se registre (aunque
+// sea con monto 0, cuando el cliente trae su propio dominio y RiO no
+// asume nada — "costo 0 con motivo auditable"), la utilidad neta de ese
+// componente es una ESTIMACIÓN, no un valor definitivo: no hay forma de
+// saber si el costo real la va a reducir. Por eso ninguna comisión que
+// dependa de esa utilidad puede quedar habilitada/programada/pagada
+// mientras el costo siga sin confirmar — se queda en
+// 'calculada_provisional' (nunca se inventa un valor de dominio).
+// Nunca aplica a Ficha ni a Landing genérica (sin dominio propio incluido).
+export async function costoDominioPendienteParaComision(db, requestId, comision) {
+  const ventaRows = await query(db, requestId, 'SELECT producto FROM ventas WHERE id = ?', [comision.venta_id]);
+  const producto = ventaRows[0]?.producto;
+  if (producto !== 'personalizado' && producto !== 'ficha_personalizado') return false;
+
+  let landingIds;
+  if (comision.componente_id) {
+    // Comisión de realización: solo bloquea si ESTE componente es la Landing.
+    const compRows = await query(db, requestId, 'SELECT id, tipo FROM componentes WHERE id = ?', [comision.componente_id]);
+    if (!compRows[0] || compRows[0].tipo !== 'landing') return false;
+    landingIds = [compRows[0].id];
+  } else {
+    // Comisión comercial/supervisión: a nivel de venta — busca la Landing del proyecto.
+    const proyectoRows = await query(db, requestId, 'SELECT id FROM proyectos WHERE venta_id = ?', [comision.venta_id]);
+    if (!proyectoRows[0]) return false;
+    const compRows = await query(db, requestId, "SELECT id FROM componentes WHERE proyecto_id = ? AND tipo = 'landing'", [proyectoRows[0].id]);
+    landingIds = compRows.map((c) => c.id);
+  }
+
+  for (const id of landingIds) {
+    const costoRows = await query(db, requestId, "SELECT id FROM costos_directos WHERE componente_id = ? AND tipo = 'dominio'", [id]);
+    if (costoRows.length === 0) return true; // todavía sin confirmar, ni siquiera en 0.
+  }
+  return false;
+}
+
 // Resuelve la asignación de plan VIGENTE de una persona para un tipo de
 // comisión, solo si el plan además alcanza el producto y el mercado de
 // esta venta (productos_alcanzados/mercados_alcanzados). Devuelve null si
@@ -356,6 +393,8 @@ export async function evaluateComisionGate(db, requestId, comisionId, actorEmail
 
   const disputasAbiertas = await query(db, requestId, "SELECT id FROM incidencias WHERE venta_id = ? AND estado = 'abierta'", [comision.venta_id]);
   if (disputasAbiertas.length > 0) faltantes.push('venta_sin_disputa');
+
+  if (await costoDominioPendienteParaComision(db, requestId, comision)) faltantes.push('costo_dominio_confirmado');
 
   if (faltantes.length > 0) {
     return { habilitada: false, faltantes };

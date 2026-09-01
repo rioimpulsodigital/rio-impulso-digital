@@ -25,8 +25,9 @@
 import { ok, Errors } from '../../../../../_shared/response.js';
 import { query } from '../../../../../_shared/db.js';
 import { isMethodAllowed } from '../../../../../_shared/security.js';
+import { costoDominioPendienteParaComision } from '../../../../../_shared/comisiones.js';
 
-function serialize(c) {
+async function serialize(db, requestId, c) {
   return {
     id: c.id,
     tipo: c.tipo,
@@ -46,6 +47,11 @@ function serialize(c) {
     fechaProgramadaEfectiva: c.fecha_programada_efectiva,
     fechaPagoReal: c.fecha_pago_real,
     motivoRetencionOReprogramacion: c.motivo_retencion_o_reprogramacion,
+    // RIO-117 (corrección tras validación real, 01/09/2026): solo puede
+    // ser true para una comisión asociada a una Landing Premium sin costo
+    // de dominio confirmado todavía — nunca afecta Ficha ni Landing
+    // genérica (ver costoDominioPendienteParaComision).
+    costoDominioPendiente: await costoDominioPendienteParaComision(db, requestId, c),
   };
 }
 
@@ -64,7 +70,7 @@ export async function onRequest(context) {
   const esAdminDeSuMercado = roleIdentity.role === 'admin' && roleIdentity.allowedMarkets.includes(venta.mercado);
   if (esAdminDeSuMercado) {
     const comisiones = await query(env.DB, requestId, 'SELECT * FROM comisiones WHERE venta_id = ? ORDER BY tipo', [venta.id]);
-    return ok({ comisiones: comisiones.map(serialize) }, requestId);
+    return ok({ comisiones: await Promise.all(comisiones.map((c) => serialize(env.DB, requestId, c))) }, requestId);
   }
 
   if (roleIdentity.role === 'supervisor' && venta.equipo_id) {
@@ -83,7 +89,7 @@ export async function onRequest(context) {
         [venta.id, roleIdentity.email]
       );
       if (comisiones.length === 0) return Errors.notFound(requestId);
-      return ok({ comisiones: comisiones.map(serialize) }, requestId);
+      return ok({ comisiones: await Promise.all(comisiones.map((c) => serialize(env.DB, requestId, c))) }, requestId);
     }
   }
 
@@ -93,5 +99,5 @@ export async function onRequest(context) {
   // si no hay nada propio.
   const comisionesPropias = await query(env.DB, requestId, 'SELECT * FROM comisiones WHERE venta_id = ? AND beneficiario_email = ?', [venta.id, roleIdentity.email]);
   if (comisionesPropias.length === 0) return Errors.notFound(requestId);
-  return ok({ comisiones: comisionesPropias.map(serialize) }, requestId);
+  return ok({ comisiones: await Promise.all(comisionesPropias.map((c) => serialize(env.DB, requestId, c))) }, requestId);
 }

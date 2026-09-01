@@ -228,11 +228,48 @@
       padding: 0; margin-top: 4px;
     }
 
+    /* Materiales — independiente del estado de pago y del componente */
+    .pv-materiales-box { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+    .pv-materiales-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+    .pv-materiales-titulo { font-size: .74rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .pv-materiales-informe { font-size: .76rem; color: var(--muted); margin-top: 4px; }
+    .pv-materiales-informe strong { color: var(--ink); }
+    .pv-materiales-form { margin-top: 8px; }
+    .pv-materiales-checks { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; font-size: .8rem; }
+    .pv-materiales-checks label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+    .pv-materiales-form textarea {
+      width: 100%; min-height: 56px; font-family: var(--ff-body); font-size: .8rem;
+      border: 1.5px solid var(--border); border-radius: var(--r-m); padding: 7px 10px; margin-bottom: 8px; resize: vertical;
+    }
+    .pv-dominio-pendiente {
+      margin-top: 8px; font-size: .78rem; color: var(--pv-amber);
+      background: var(--pv-amber-bg); border: 1px solid var(--pv-amber-bd);
+      border-radius: var(--r-m); padding: 8px 10px;
+    }
+
+    /* Antecedentes del Kit — plegado por defecto en cualquier tamaño */
+    .pv-antecedentes { border: 1px solid var(--border); border-radius: var(--r-m); overflow: hidden; }
+    .pv-antecedentes summary {
+      cursor: pointer; padding: 10px 14px; font-size: .84rem; font-weight: 700; color: var(--ink);
+      background: var(--off); list-style: none; display: flex; align-items: center; gap: 8px;
+    }
+    .pv-antecedentes summary::-webkit-details-marker { display: none; }
+    .pv-antecedentes summary::before { content: '▸'; color: var(--muted); transition: transform .15s; }
+    .pv-antecedentes[open] summary::before { transform: rotate(90deg); }
+    .pv-antecedentes-body { padding: 12px 14px; }
+    .pv-antecedente-categoria { margin-bottom: 12px; }
+    .pv-antecedente-categoria:last-child { margin-bottom: 0; }
+    .pv-antecedente-categoria-titulo { font-size: .72rem; font-weight: 700; color: var(--sec); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+
     @media (max-width: 640px) {
       .pv-filters { flex-direction: column; align-items: stretch; }
       .pv-filter-field { min-width: 0; }
       .pv-table { min-width: 520px; }
       .pv-detail { width: 100%; }
+      .pv-informar-form { flex-direction: column; align-items: stretch; }
+      .pv-informar-form button { width: 100%; }
+      .pv-upload-row button { width: 100%; }
+      .pv-materiales-form button { width: 100%; }
     }
   </style>
 </head>
@@ -314,7 +351,7 @@
             </select>
           </div>
           <div class="pv-filter-field">
-            <label for="fEstado">Estado</label>
+            <label for="fEstado">Avance operativo</label>
             <select id="fEstado">
               <option value="">Todos</option>
               <option value="en_espera_pago">En espera de pago</option>
@@ -322,6 +359,24 @@
               <option value="en_produccion">En producción</option>
               <option value="completado">Completado</option>
               <option value="cancelada">Cancelada</option>
+            </select>
+          </div>
+          <div class="pv-filter-field">
+            <label for="fPago">Estado de pago</label>
+            <select id="fPago">
+              <option value="">Todos</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="informado">Informado</option>
+              <option value="acreditado">Acreditado</option>
+            </select>
+          </div>
+          <div class="pv-filter-field">
+            <label for="fMateriales">Estado de materiales</label>
+            <select id="fMateriales">
+              <option value="">Todos</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="informados">Informados</option>
+              <option value="completos">Completos</option>
             </select>
           </div>
           <div class="pv-filter-field">
@@ -412,7 +467,7 @@
 
 <script src="./config/users.js" defer></script>
 <script src="../assets/js/main.js?v=20260627" defer></script>
-<script src="./panel-vendedor.js?v=20260831" defer></script>
+<script src="./panel-vendedor.js?v=20260901c" defer></script>
 
 </body>
 </html>
