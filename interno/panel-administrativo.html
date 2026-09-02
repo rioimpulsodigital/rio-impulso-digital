@@ -244,6 +244,16 @@
     .pv-status-msg.ok { color: var(--pv-green); }
     .pv-status-msg.err { color: var(--pv-red); }
 
+    /* ── Nuevo proyecto personalizado: filas dinámicas de fase/pago ── */
+    .np-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 8px; padding: 10px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--off); }
+    .np-row-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 110px; }
+    .np-row-field input { width: 100%; }
+    .np-row-field label { font-family: var(--ff-mono); font-size: .6rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    .np-row-remove { flex-shrink: 0; }
+    @media (max-width: 640px) {
+      .np-row { flex-direction: column; align-items: stretch; }
+    }
+
     @media (max-width: 640px) {
       .pv-filters { flex-direction: column; align-items: stretch; }
       .pv-filter-field { min-width: 0; }
@@ -312,6 +322,9 @@
 
       <!-- ── VENTAS Y PROYECTOS ── -->
       <div class="pv-panel active" id="pvTabVentas" role="tabpanel">
+        <div class="pv-btn-row" style="margin-bottom:16px;">
+          <button type="button" class="pv-btn pv-btn--primary" id="pvNuevoProyectoBtn">+ Nuevo proyecto personalizado</button>
+        </div>
         <div class="pv-pipeline" id="pvPipeline"></div>
 
         <div class="pv-filters">
@@ -344,6 +357,7 @@
               <option value="personalizado">Landing personalizada</option>
               <option value="ficha_generico">Pack (genérica)</option>
               <option value="ficha_personalizado">Pack (personalizada)</option>
+              <option value="proyecto_personalizado">Proyecto personalizado</option>
             </select>
           </div>
           <div class="pv-filter-field">
@@ -384,6 +398,73 @@
 
   </div>
 </div>
+
+<!-- ── NUEVO PROYECTO PERSONALIZADO ── -->
+<!-- RIO-119 (ampliación de alcance, 02/09/2026): registra un proyecto que
+     NO es Ficha/Landing/Pack del catálogo (ej. Nua Bushi — eCommerce +
+     integración Laudus) — nunca se infiere un producto de catálogo para
+     esto. Fases y pagos son configurables, sin tocar código. -->
+<div class="pv-detail-overlay" id="pvNuevoProyectoOverlay"></div>
+<aside class="pv-detail" id="pvNuevoProyectoPanel" aria-hidden="true">
+  <div class="pv-detail-head">
+    <div><h2 style="font-family:var(--ff-head);font-size:1.15rem;margin:0;">Nuevo proyecto personalizado</h2></div>
+    <button class="pv-detail-close" id="pvNuevoProyectoCloseBtn" aria-label="Cerrar">✕</button>
+  </div>
+  <div class="pv-detail-body">
+    <form id="pvNuevoProyectoForm">
+      <div class="pv-detail-section">
+        <p class="pv-detail-section-title">Datos generales</p>
+        <div class="pv-accion-form" style="border-top:none;padding-top:0;">
+          <label for="npCliente">Cliente (negocio)</label>
+          <input type="text" id="npCliente" required>
+          <label for="npMercado">Mercado</label>
+          <select id="npMercado" required><option value="CL">CL</option><option value="AR">AR</option></select>
+          <label for="npPrecio">Precio total pactado</label>
+          <input type="number" id="npPrecio" min="1" step="1" required>
+          <label for="npNombre">Nombre del proyecto</label>
+          <input type="text" id="npNombre" required>
+          <label for="npDescripcion">Descripción</label>
+          <textarea id="npDescripcion" placeholder="Opcional"></textarea>
+          <label for="npNotionUrl">Enlace a la página operativa de Notion</label>
+          <input type="url" id="npNotionUrl" placeholder="https://…">
+        </div>
+      </div>
+
+      <div class="pv-detail-section">
+        <p class="pv-detail-section-title">Tipo de venta</p>
+        <div class="pv-accion-form" style="border-top:none;padding-top:0;">
+          <select id="npTipoVenta" required>
+            <option value="">Seleccioná una opción…</option>
+            <option value="directa">Venta directa de Administración — sin supervisión</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="pv-detail-section">
+        <p class="pv-detail-section-title">Fases del proyecto</p>
+        <div id="npFasesLista"></div>
+        <div class="pv-btn-row">
+          <button type="button" class="pv-btn" id="npAgregarFase">+ Agregar fase</button>
+        </div>
+        <p class="pv-status-msg" id="npFasesSuma"></p>
+      </div>
+
+      <div class="pv-detail-section">
+        <p class="pv-detail-section-title">Calendario de pagos</p>
+        <div id="npPagosLista"></div>
+        <div class="pv-btn-row">
+          <button type="button" class="pv-btn" id="npAgregarPago">+ Agregar pago</button>
+        </div>
+        <p class="pv-status-msg" id="npPagosSuma"></p>
+      </div>
+
+      <div class="pv-btn-row">
+        <button type="submit" class="pv-btn pv-btn--primary" id="npSubmitBtn">Registrar proyecto</button>
+      </div>
+      <span class="pv-status-msg" id="npStatus"></span>
+    </form>
+  </div>
+</aside>
 
 <!-- ── DETALLE DE VENTA (con acciones) ── -->
 <div class="pv-detail-overlay" id="pvDetailOverlay"></div>

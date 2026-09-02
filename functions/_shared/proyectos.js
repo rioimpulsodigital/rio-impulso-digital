@@ -104,7 +104,11 @@ export async function iniciarProduccion(db, requestId, { ventaId, componenteId, 
   if (componente.estado_actual !== 'pendiente') {
     throw new ProyectoError('transicion_invalida', `No se puede iniciar producción desde el estado ${componente.estado_actual}.`);
   }
-  if (componente.materiales_estado !== 'completos') {
+  // RIO-119 (proyectos personalizados, 02/09/2026): una fase de un
+  // proyecto a medida no tiene el mismo concepto de "materiales" que
+  // Ficha/Landing (fotos/logo que entrega el cliente) — nunca se le exige
+  // ese gate, que fue diseñado para ese caso específico.
+  if (componente.tipo !== 'personalizado' && componente.materiales_estado !== 'completos') {
     throw new ProyectoError('materiales_incompletos', 'Los materiales de este componente todavía no están completos.');
   }
   const pagoRelevante = relevantPagoForStart(pagos, componente.tipo);

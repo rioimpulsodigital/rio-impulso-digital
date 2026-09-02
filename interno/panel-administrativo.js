@@ -128,8 +128,10 @@
     wireTabs();
     wireFilters();
     wireDetailPanel();
+    wireNuevoProyecto();
     await cargarVentas();
     await cargarNotificacionesResumen();
+    await cargarEquiposDisponibles();
   });
 
   function wireTabs() {
@@ -291,7 +293,7 @@
             '<span class="pv-mono">' + escapeHtml(v.codigoVenta) + '</span></td>' +
           '<td>' + escapeHtml(nombreParaMostrar(v.vendedorNombre)) + '</td>' +
           '<td>' + equipoSupervisorCelda(v) + '</td>' +
-          '<td>' + escapeHtml(PRODUCTO_LABEL[v.producto] || v.producto) + '<br><span class="pv-badge pv-badge--neutral">' + escapeHtml(v.mercado) + '</span></td>' +
+          '<td>' + escapeHtml(v.producto === 'proyecto_personalizado' ? (v.nombreProyecto || 'Proyecto personalizado') : (PRODUCTO_LABEL[v.producto] || v.producto)) + '<br><span class="pv-badge pv-badge--neutral">' + escapeHtml(v.mercado) + '</span></td>' +
           '<td>' + fmtMoneda(v.precioPactado, v.moneda) + '</td>' +
           '<td><span class="pv-badge pv-badge--' + (ESTADO_OPERATIVO_BADGE[v.estadoOperativo] || 'neutral') + '">' + escapeHtml(ESTADO_OPERATIVO_LABEL[v.estadoOperativo] || v.estadoOperativo || '—') + '</span></td>' +
           '<td>' + fmtFecha(v.createdAt) + '</td>' +
@@ -437,7 +439,10 @@
     } else if (c.estadoActual === 'entregada') {
       botones.push('<button type="button" class="pv-btn pv-btn--primary" data-accion-componente="aprobar" data-componente-id="' + escapeHtml(c.id) + '">Aprobar</button>');
     }
-    if (c.materialesEstado !== 'completos') {
+    // RIO-119: una fase de un proyecto personalizado no tiene el concepto
+    // de "materiales que entrega el cliente" — nunca se le ofrece este
+    // botón (mismo criterio que el gate que se omite en proyectos.js).
+    if (c.tipo !== 'personalizado' && c.materialesEstado !== 'completos') {
       botones.push('<button type="button" class="pv-btn" data-accion-componente="materiales-completos" data-componente-id="' + escapeHtml(c.id) + '">Marcar materiales completos</button>');
     }
     return botones.length ? '<div class="pv-btn-row">' + botones.join('') + '</div>' : '';
@@ -524,13 +529,14 @@
       return (
         '<div class="pv-componente-card">' +
           '<div class="pv-componente-head">' +
-            '<span class="pv-componente-titulo">' + escapeHtml(c.tipo) + '</span>' +
+            '<span class="pv-componente-titulo">' + escapeHtml(c.tipo === 'personalizado' ? (c.nombre || 'Fase') : c.tipo) + '</span>' +
             '<span class="pv-badge pv-badge--blue">' + escapeHtml(COMPONENTE_ESTADO_LABEL[c.estadoActual] || c.estadoActual) + '</span>' +
           '</div>' +
+          (c.tipo === 'personalizado' && c.descripcion ? '<div class="pv-componente-meta">' + escapeHtml(c.descripcion) + '</div>' : '') +
           '<div class="pv-componente-meta">Precio atribuido: ' + fmtMoneda(c.precioAtribuido, detalle.venta.moneda) + '</div>' +
           gateHTML +
           accionesComponenteHTML(c) +
-          renderMaterialesHTML(c) +
+          (c.tipo === 'personalizado' ? '' : renderMaterialesHTML(c)) +
           costoDirectoFormHTML(c) +
         '</div>'
       );
@@ -545,7 +551,11 @@
       return (
         '<div class="pv-detail-section"><p class="pv-detail-section-title">Venta</p>' +
           '<dl class="pv-kv">' +
-            '<dt>Producto</dt><dd>' + escapeHtml(PRODUCTO_LABEL[detalle.venta.producto] || detalle.venta.producto) + '</dd>' +
+            (detalle.venta.producto === 'proyecto_personalizado'
+              ? '<dt>Proyecto</dt><dd>' + escapeHtml(detalle.venta.nombreProyecto || '—') + '</dd>' +
+                (detalle.venta.descripcionProyecto ? '<dt>Descripción</dt><dd>' + escapeHtml(detalle.venta.descripcionProyecto) + '</dd>' : '') +
+                (detalle.venta.notionUrl ? '<dt>Notion</dt><dd><a href="' + escapeHtml(detalle.venta.notionUrl) + '" target="_blank" rel="noopener">Ver página operativa</a></dd>' : '')
+              : '<dt>Producto</dt><dd>' + escapeHtml(PRODUCTO_LABEL[detalle.venta.producto] || detalle.venta.producto) + '</dd>') +
             '<dt>Mercado</dt><dd>' + escapeHtml(detalle.venta.mercado) + '</dd>' +
             '<dt>Precio pactado</dt><dd>' + fmtMoneda(detalle.venta.precioPactado, detalle.venta.moneda) + '</dd>' +
             '<dt>Fecha</dt><dd>' + fmtFecha(detalle.venta.createdAt) + '</dd>' +
@@ -612,7 +622,7 @@
     return (
       '<div class="pv-pago-card">' +
         '<div class="pv-pago-head">' +
-          '<span class="pv-pago-titulo">' + escapeHtml(pago.tipo) + ' — ' + fmtMoneda(pago.monto, moneda) + '</span>' +
+          '<span class="pv-pago-titulo">' + escapeHtml(pago.etiqueta || pago.tipo) + ' — ' + fmtMoneda(pago.monto, moneda) + '</span>' +
           '<span class="pv-badge pv-badge--' + badgeClass + '">' + escapeHtml(PAGO_ESTADO_LABEL[pago.estado] || pago.estado) + '</span>' +
         '</div>' +
         accionesHTML +
@@ -884,6 +894,197 @@
         await cargarNotificaciones();
         await cargarNotificacionesResumen();
       });
+    });
+  }
+
+  // ── Nuevo proyecto personalizado (ej. Nua Bushi — eCommerce + Laudus,
+  // 02/09/2026) ─────────────────────────────────────────────────────────
+  // Un proyecto que NO es Ficha/Landing/Pack del catálogo — administración
+  // lo registra acá con sus propias fases (componentes libres) y su propio
+  // calendario de pagos. El servidor vuelve a validar todo (admin-only,
+  // suma de fases = precio, suma de pagos = precio) — este formulario solo
+  // evita que se envíe algo que el servidor rechazaría siempre.
+
+  var equiposDisponibles = [];
+
+  async function cargarEquiposDisponibles() {
+    try {
+      var r = await apiFetch('/interno/api/equipos');
+      if (r.ok && r.body && r.body.ok) equiposDisponibles = r.body.data.equipos || [];
+    } catch (e) { /* el selector queda solo con "venta directa" — no bloquea el resto del panel */ }
+  }
+
+  function poblarTipoVentaProyecto() {
+    var select = document.getElementById('npTipoVenta');
+    var mercado = document.getElementById('npMercado').value;
+    while (select.options.length > 2) select.remove(2);
+    equiposDisponibles.filter(function (eq) { return eq.mercado === mercado; }).forEach(function (eq) {
+      var opt = document.createElement('option');
+      opt.value = 'equipo:' + eq.id;
+      opt.textContent = eq.nombre;
+      select.appendChild(opt);
+    });
+  }
+
+  function fasePagoRowHTML(kind, index) {
+    if (kind === 'fase') {
+      return (
+        '<div class="np-row" data-fase-row>' +
+          '<div class="np-row-field"><label>Nombre de la fase</label><input type="text" data-fase-nombre required></div>' +
+          '<div class="np-row-field"><label>Descripción</label><input type="text" data-fase-descripcion placeholder="Opcional"></div>' +
+          '<div class="np-row-field" style="max-width:140px;"><label>Precio atribuido</label><input type="number" min="1" step="1" data-fase-precio required></div>' +
+          '<button type="button" class="pv-btn pv-btn--danger np-row-remove" data-quitar-fila>Quitar</button>' +
+        '</div>'
+      );
+    }
+    return (
+      '<div class="np-row" data-pago-row>' +
+        '<div class="np-row-field"><label>Etiqueta del pago</label><input type="text" data-pago-etiqueta required></div>' +
+        '<div class="np-row-field" style="max-width:140px;"><label>Monto</label><input type="number" min="1" step="1" data-pago-monto required></div>' +
+        '<button type="button" class="pv-btn pv-btn--danger np-row-remove" data-quitar-fila>Quitar</button>' +
+      '</div>'
+    );
+  }
+
+  function recomputarSumaFases() {
+    var precio = parseInt(document.getElementById('npPrecio').value, 10) || 0;
+    var suma = 0;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-fase-precio]'), function (input) { suma += parseInt(input.value, 10) || 0; });
+    var el = document.getElementById('npFasesSuma');
+    el.textContent = 'Suma de fases: ' + suma.toLocaleString('es-CL') + ' / ' + precio.toLocaleString('es-CL') + ' (precio pactado)';
+    el.className = 'pv-status-msg ' + (suma === precio && precio > 0 ? 'ok' : 'err');
+  }
+
+  function recomputarSumaPagos() {
+    var precio = parseInt(document.getElementById('npPrecio').value, 10) || 0;
+    var suma = 0;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-pago-monto]'), function (input) { suma += parseInt(input.value, 10) || 0; });
+    var el = document.getElementById('npPagosSuma');
+    el.textContent = 'Suma de pagos: ' + suma.toLocaleString('es-CL') + ' / ' + precio.toLocaleString('es-CL') + ' (precio pactado)';
+    el.className = 'pv-status-msg ' + (suma === precio && precio > 0 ? 'ok' : 'err');
+  }
+
+  function agregarFilaFase() {
+    var contenedor = document.getElementById('npFasesLista');
+    var wrapper = document.createElement('div');
+    wrapper.innerHTML = fasePagoRowHTML('fase');
+    var fila = wrapper.firstElementChild;
+    contenedor.appendChild(fila);
+    fila.querySelector('[data-quitar-fila]').addEventListener('click', function () { fila.remove(); recomputarSumaFases(); });
+    fila.querySelector('[data-fase-precio]').addEventListener('input', recomputarSumaFases);
+    recomputarSumaFases();
+  }
+
+  function agregarFilaPago() {
+    var contenedor = document.getElementById('npPagosLista');
+    var wrapper = document.createElement('div');
+    wrapper.innerHTML = fasePagoRowHTML('pago');
+    var fila = wrapper.firstElementChild;
+    contenedor.appendChild(fila);
+    fila.querySelector('[data-quitar-fila]').addEventListener('click', function () { fila.remove(); recomputarSumaPagos(); });
+    fila.querySelector('[data-pago-monto]').addEventListener('input', recomputarSumaPagos);
+    recomputarSumaPagos();
+  }
+
+  function resetNuevoProyectoForm() {
+    var form = document.getElementById('pvNuevoProyectoForm');
+    form.reset();
+    document.getElementById('npFasesLista').innerHTML = '';
+    document.getElementById('npPagosLista').innerHTML = '';
+    document.getElementById('npFasesSuma').textContent = '';
+    document.getElementById('npPagosSuma').textContent = '';
+    document.getElementById('npStatus').textContent = '';
+    document.getElementById('npStatus').className = 'pv-status-msg';
+    agregarFilaFase();
+    agregarFilaPago();
+    poblarTipoVentaProyecto();
+  }
+
+  function abrirNuevoProyecto() {
+    resetNuevoProyectoForm();
+    document.getElementById('pvNuevoProyectoOverlay').classList.add('open');
+    document.getElementById('pvNuevoProyectoPanel').classList.add('open');
+    document.getElementById('pvNuevoProyectoPanel').setAttribute('aria-hidden', 'false');
+  }
+
+  function cerrarNuevoProyecto() {
+    document.getElementById('pvNuevoProyectoOverlay').classList.remove('open');
+    document.getElementById('pvNuevoProyectoPanel').classList.remove('open');
+    document.getElementById('pvNuevoProyectoPanel').setAttribute('aria-hidden', 'true');
+  }
+
+  function wireNuevoProyecto() {
+    document.getElementById('pvNuevoProyectoBtn').addEventListener('click', abrirNuevoProyecto);
+    document.getElementById('pvNuevoProyectoCloseBtn').addEventListener('click', cerrarNuevoProyecto);
+    document.getElementById('pvNuevoProyectoOverlay').addEventListener('click', cerrarNuevoProyecto);
+    document.getElementById('npAgregarFase').addEventListener('click', agregarFilaFase);
+    document.getElementById('npAgregarPago').addEventListener('click', agregarFilaPago);
+    document.getElementById('npMercado').addEventListener('change', poblarTipoVentaProyecto);
+    document.getElementById('npPrecio').addEventListener('input', function () { recomputarSumaFases(); recomputarSumaPagos(); });
+
+    document.getElementById('pvNuevoProyectoForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var statusEl = document.getElementById('npStatus');
+      statusEl.textContent = '';
+      statusEl.className = 'pv-status-msg';
+
+      var precioPactado = parseInt(document.getElementById('npPrecio').value, 10);
+      var fases = Array.prototype.map.call(document.querySelectorAll('[data-fase-row]'), function (fila) {
+        return {
+          nombre: fila.querySelector('[data-fase-nombre]').value.trim(),
+          descripcion: fila.querySelector('[data-fase-descripcion]').value.trim() || undefined,
+          precioAtribuido: parseInt(fila.querySelector('[data-fase-precio]').value, 10),
+        };
+      });
+      var pagos = Array.prototype.map.call(document.querySelectorAll('[data-pago-row]'), function (fila) {
+        return {
+          etiqueta: fila.querySelector('[data-pago-etiqueta]').value.trim(),
+          monto: parseInt(fila.querySelector('[data-pago-monto]').value, 10),
+        };
+      });
+
+      if (fases.length === 0) { statusEl.textContent = 'Agregá al menos una fase.'; statusEl.className = 'pv-status-msg err'; return; }
+      if (pagos.length === 0) { statusEl.textContent = 'Agregá al menos un pago.'; statusEl.className = 'pv-status-msg err'; return; }
+      var sumaFases = fases.reduce(function (s, f) { return s + (f.precioAtribuido || 0); }, 0);
+      var sumaPagos = pagos.reduce(function (s, p) { return s + (p.monto || 0); }, 0);
+      if (sumaFases !== precioPactado) { statusEl.textContent = 'La suma de las fases debe ser exactamente el precio pactado.'; statusEl.className = 'pv-status-msg err'; return; }
+      if (sumaPagos !== precioPactado) { statusEl.textContent = 'La suma de los pagos debe ser exactamente el precio pactado.'; statusEl.className = 'pv-status-msg err'; return; }
+
+      var tipoVentaSel = document.getElementById('npTipoVenta').value;
+      if (!tipoVentaSel) { statusEl.textContent = 'Elegí el tipo de venta (equipo o venta directa de Administración).'; statusEl.className = 'pv-status-msg err'; return; }
+      var payload = {
+        mercado: document.getElementById('npMercado').value,
+        cliente: { negocio: document.getElementById('npCliente').value.trim() },
+        producto: 'proyecto_personalizado',
+        tipoPrecio: 'regular',
+        precioPactado: precioPactado,
+        nombreProyecto: document.getElementById('npNombre').value.trim(),
+        descripcionProyecto: document.getElementById('npDescripcion').value.trim() || undefined,
+        notionUrl: document.getElementById('npNotionUrl').value.trim() || undefined,
+        fases: fases,
+        pagos: pagos,
+      };
+      if (tipoVentaSel === 'directa') {
+        payload.tipoVenta = 'directa_administracion_sin_supervision';
+      } else {
+        payload.tipoVenta = 'equipo';
+        payload.equipoId = tipoVentaSel.slice('equipo:'.length);
+      }
+
+      var submitBtn = document.getElementById('npSubmitBtn');
+      submitBtn.disabled = true;
+      var r = await apiPost('/interno/api/ventas', payload);
+      submitBtn.disabled = false;
+      if (!r.ok || !r.body || !r.body.ok) {
+        statusEl.textContent = (r.body && r.body.error && r.body.error.message) || 'No se pudo registrar el proyecto.';
+        statusEl.className = 'pv-status-msg err';
+        return;
+      }
+      var nuevaVentaId = r.body.data.venta.id;
+      cerrarNuevoProyecto();
+      await cargarVentas();
+      activarTab('ventas');
+      abrirDetalleVenta(nuevaVentaId);
     });
   }
 })();

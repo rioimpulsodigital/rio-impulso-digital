@@ -275,6 +275,29 @@ test('iniciarProduccion() — producto individual solo necesita materiales compl
   assert.equal(db._state.componentes.find((c) => c.id === 'comp-solo').estado_actual, 'en_produccion');
 });
 
+// RIO-119 (proyectos personalizados, 02/09/2026): una fase de un proyecto
+// a medida (tipo 'personalizado') no tiene el concepto de "materiales que
+// entrega el cliente" — nunca se le exige ese gate, a diferencia de
+// Ficha/Landing.
+test('iniciarProduccion() — una fase personalizada NUNCA exige materiales completos (ese gate es exclusivo de Ficha/Landing)', async () => {
+  const db = fakeDb();
+  const ventaId = 'venta-personalizada';
+  const proyectoId = 'proyecto-personalizado';
+  db._state.ventas.push({ id: ventaId, vendedor_email: 'admin@example.com', mercado: 'CL' });
+  db._state.proyectos.push({ id: proyectoId, venta_id: ventaId, estado_actual: 'registrado' });
+  db._state.componentes.push({ id: 'fase-1', proyecto_id: proyectoId, tipo: 'personalizado', estado_actual: 'pendiente', materiales_estado: 'pendiente', nombre: 'Diseño UI' });
+  // Dos pagos (no uno solo) — relevantPagoForStart() solo trata como "pago
+  // único relevante" el caso de UN solo pago total; con más de uno, y
+  // tipo !== 'ficha', ningún pago puntual bloquea el inicio de una fase
+  // personalizada (sin gate de pago para este tipo, a diferencia de
+  // individual/Ficha).
+  db._state.pagos_esperados.push({ id: 'pago-1', venta_id: ventaId, tipo: 'personalizado', monto: 500000, estado: 'pendiente', etiqueta: 'Pago inicial' });
+  db._state.pagos_esperados.push({ id: 'pago-2', venta_id: ventaId, tipo: 'personalizado', monto: 500000, estado: 'pendiente', etiqueta: 'Pago final' });
+
+  await iniciarProduccion(db, 'req-personalizado-1', { ventaId, componenteId: 'fase-1', actorEmail: 'admin@example.com' });
+  assert.equal(db._state.componentes.find((c) => c.id === 'fase-1').estado_actual, 'en_produccion', 'inicia sin exigir materiales completos, a diferencia de Ficha/Landing');
+});
+
 // --- Flujo completo Ficha -> entregar -> aprobar -> desbloquea Landing ---
 
 test('flujo completo: Ficha entregada, aprobada, y recién ahí (con saldo y materiales) se desbloquea Landing — nunca antes', async () => {

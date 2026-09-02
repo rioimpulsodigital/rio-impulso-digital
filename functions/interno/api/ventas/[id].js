@@ -84,6 +84,10 @@ export async function onRequest(context) {
     return {
       id: c.id,
       tipo: c.tipo,
+      // RIO-119: nombre/descripción libres de la fase — null salvo
+      // tipo === 'personalizado' (proyectos fuera del catálogo fijo).
+      nombre: c.nombre || null,
+      descripcion: c.descripcion || null,
       precioIndividualReferencia: c.precio_individual_referencia,
       precioAtribuido: c.precio_atribuido,
       estadoActual: c.estado_actual,
@@ -150,6 +154,11 @@ export async function onRequest(context) {
         motivoSinSupervision: venta.motivo_sin_supervision || null,
         porcentajeSupervisionAplicado: venta.porcentaje_supervision_aplicado,
         porcentajeFinalEmpresa: venta.porcentaje_final_empresa,
+        // RIO-119 (ampliación de alcance — proyectos personalizados,
+        // 02/09/2026): null salvo producto === 'proyecto_personalizado'.
+        nombreProyecto: venta.nombre_proyecto || null,
+        descripcionProyecto: venta.descripcion_proyecto || null,
+        notionUrl: venta.notion_url || null,
         // RIO-117 (corrección tras validación real): categorizado, nunca
         // repite lo que ya está en cabecera (cliente/producto/mercado/
         // precio) — ver Kit para el detalle de qué llena cada categoría.
@@ -180,6 +189,7 @@ export async function onRequest(context) {
       pagosEsperados: pagos.map((p) => ({
         id: p.id,
         tipo: p.tipo,
+        etiqueta: p.etiqueta || null,
         monto: p.monto,
         moneda: p.moneda,
         estado: p.estado,

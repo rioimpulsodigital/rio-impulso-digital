@@ -35,7 +35,13 @@ const PACK_LANDING_PRODUCT = {
   ficha_generico: 'generico',
   ficha_personalizado: 'personalizado',
 };
-const VALID_PRODUCTS = ['ficha', 'generico', 'personalizado', 'ficha_generico', 'ficha_personalizado'];
+// RIO-119 (ampliación de alcance, 02/09/2026): 'proyecto_personalizado' es
+// UN solo código genérico, reutilizable para Nua Bushi y cualquier
+// proyecto personalizado futuro — nunca se agrega un código nuevo por
+// proyecto (Brenda: "sin modificar código"). No pertenece al catálogo de
+// precios fijos (markets.js/pricing.js) — se valida aparte, más abajo.
+const PROYECTO_PERSONALIZADO = 'proyecto_personalizado';
+const VALID_PRODUCTS = ['ficha', 'generico', 'personalizado', 'ficha_generico', 'ficha_personalizado', PROYECTO_PERSONALIZADO];
 const VALID_TIPO_PRECIO = ['regular', 'lanzamiento'];
 const VALID_MERCADOS = ['CL', 'AR'];
 
@@ -113,6 +119,12 @@ function serializeVenta(row) {
     estadoMaterialesResumen: row.estado_materiales_resumen || 'pendiente',
     origen: row.origen || null,
     esDemo: !!row.es_demo,
+    // RIO-119 (ampliación de alcance — proyectos personalizados,
+    // 02/09/2026): null salvo cuando producto === 'proyecto_personalizado'
+    // — nunca se reutiliza un campo del catálogo para simular esto.
+    nombreProyecto: row.nombre_proyecto || null,
+    descripcionProyecto: row.descripcion_proyecto || null,
+    notionUrl: row.notion_url || null,
     createdAt: row.created_at,
   };
 }
@@ -150,10 +162,13 @@ async function serializarVentaCompletaExistente(db, requestId, ventaId) {
       equipoId: venta.equipo_id || null,
       supervisionAplica: !!venta.supervision_aplica,
       motivoSinSupervision: venta.motivo_sin_supervision || null,
+      nombreProyecto: venta.nombre_proyecto || null,
+      descripcionProyecto: venta.descripcion_proyecto || null,
+      notionUrl: venta.notion_url || null,
     },
     proyecto: { id: proyecto.id, codigoProyecto: proyecto.codigo_proyecto },
-    componentes: componentes.map((c) => ({ id: c.id, tipo: c.tipo, precioAtribuido: c.precio_atribuido, estadoActual: c.estado_actual })),
-    pagosEsperados: pagos.map((p) => ({ tipo: p.tipo, monto: p.monto })),
+    componentes: componentes.map((c) => ({ id: c.id, tipo: c.tipo, nombre: c.nombre || null, descripcion: c.descripcion || null, precioAtribuido: c.precio_atribuido, estadoActual: c.estado_actual })),
+    pagosEsperados: pagos.map((p) => ({ tipo: p.tipo, etiqueta: p.etiqueta || null, monto: p.monto })),
     hubspotSync: hubspotRows[0] ? { estado: hubspotRows[0].estado, resumen: hubspotRows[0].ultima_respuesta_resumen } : null,
     replay: true,
   };
@@ -310,7 +325,12 @@ async function handleCreate(context) {
     }
   }
 
-  const { mercado, cliente, producto, tipoPrecio, precioPactado, precioFichaIndividual, precioLandingIndividual, origen, esDemo, antecedentesKit, hubspot, tipoVenta, equipoId: equipoIdElegido } = body || {};
+  const {
+    mercado, cliente, producto, tipoPrecio, precioPactado, precioFichaIndividual, precioLandingIndividual,
+    origen, esDemo, antecedentesKit, hubspot, tipoVenta, equipoId: equipoIdElegido,
+    // RIO-119 (ampliación de alcance — proyectos personalizados, 02/09/2026).
+    nombreProyecto, descripcionProyecto, notionUrl, fases, pagos: pagosPersonalizados,
+  } = body || {};
 
   if (!VALID_MERCADOS.includes(mercado)) {
     return Errors.validation('Mercado inválido.', requestId);
@@ -327,13 +347,25 @@ async function handleCreate(context) {
   if (!VALID_PRODUCTS.includes(producto)) {
     return Errors.validation('Producto inválido.', requestId);
   }
-  if (!VALID_TIPO_PRECIO.includes(tipoPrecio)) {
+  const esProyectoPersonalizado = producto === PROYECTO_PERSONALIZADO;
+  // RIO-119: un proyecto personalizado no se registra desde el Kit
+  // Comercial — solo administración lo crea, desde el Panel
+  // Administrativo (nunca inferido del nombre de quien vende, mismo
+  // criterio que "venta directa" en RIO-118).
+  if (esProyectoPersonalizado && roleIdentity.permissions.viewOthersData !== true) {
+    return Errors.forbidden(requestId);
+  }
+  // Sin concepto de "lanzamiento" para un proyecto a medida — no hay tabla
+  // de precios que distinga promoción de regular acá, se fuerza 'regular'
+  // en vez de exponer un selector sin sentido.
+  const tipoPrecioFinal = esProyectoPersonalizado ? 'regular' : tipoPrecio;
+  if (!esProyectoPersonalizado && !VALID_TIPO_PRECIO.includes(tipoPrecio)) {
     return Errors.validation('Tipo de precio inválido.', requestId);
   }
   if (!Number.isInteger(precioPactado) || precioPactado <= 0) {
     return Errors.validation('Precio pactado inválido.', requestId);
   }
-  if (!isValidPrice(mercado, producto, tipoPrecio, precioPactado)) {
+  if (!esProyectoPersonalizado && !isValidPrice(mercado, producto, tipoPrecio, precioPactado)) {
     return Errors.validation('El precio pactado no corresponde a un precio vigente para ese producto y mercado.', requestId);
   }
   if (mercado === 'AR' && cliente.datosFacturacionAr && typeof cliente.datosFacturacionAr !== 'string') {
@@ -342,7 +374,65 @@ async function handleCreate(context) {
 
   const pack = isPack(producto);
   let componentesPlan;
-  if (pack) {
+  let pagosPlanPersonalizado = null;
+  if (esProyectoPersonalizado) {
+    // RIO-119: "sin clasificarlos falsamente como productos del catálogo
+    // vigente" — cada fase es su propio componente, con su nombre y
+    // descripción libres (nunca 'ficha'/'landing'), sin pasar por
+    // isValidPrice ni por el prorrateo de un pack. La suma de fases debe
+    // reconciliar EXACTO con el precio pactado — mismo principio que ya
+    // rige el prorrateo de un pack (RIO-112): nunca queda un resto sin
+    // asignar ni se completa un número inventado.
+    if (typeof nombreProyecto !== 'string' || !nombreProyecto.trim()) {
+      return Errors.validation('Falta el nombre del proyecto personalizado.', requestId);
+    }
+    if (descripcionProyecto !== undefined && descripcionProyecto !== null && typeof descripcionProyecto !== 'string') {
+      return Errors.validation('descripcionProyecto debe ser texto.', requestId);
+    }
+    if (notionUrl !== undefined && notionUrl !== null && typeof notionUrl !== 'string') {
+      return Errors.validation('notionUrl debe ser texto.', requestId);
+    }
+    if (!Array.isArray(fases) || fases.length === 0) {
+      return Errors.validation('Un proyecto personalizado requiere al menos una fase.', requestId);
+    }
+    componentesPlan = [];
+    let sumaFases = 0;
+    for (const f of fases) {
+      if (!f || typeof f.nombre !== 'string' || !f.nombre.trim()) {
+        return Errors.validation('Cada fase requiere un nombre.', requestId);
+      }
+      if (!Number.isInteger(f.precioAtribuido) || f.precioAtribuido <= 0) {
+        return Errors.validation('Cada fase requiere un precioAtribuido entero positivo.', requestId);
+      }
+      sumaFases += f.precioAtribuido;
+      componentesPlan.push({
+        id: crypto.randomUUID(), tipo: 'personalizado', nombre: f.nombre.trim(),
+        descripcion: (f.descripcion && String(f.descripcion).trim()) || null,
+        precioIndividualReferencia: f.precioAtribuido, precioAtribuido: f.precioAtribuido, estado: 'pendiente',
+      });
+    }
+    if (sumaFases !== precioPactado) {
+      return Errors.validation('La suma de las fases debe ser exactamente igual al precio pactado — nunca queda un resto sin asignar.', requestId);
+    }
+    if (!Array.isArray(pagosPersonalizados) || pagosPersonalizados.length === 0) {
+      return Errors.validation('Un proyecto personalizado requiere al menos un pago.', requestId);
+    }
+    pagosPlanPersonalizado = [];
+    let sumaPagos = 0;
+    for (const p of pagosPersonalizados) {
+      if (!p || typeof p.etiqueta !== 'string' || !p.etiqueta.trim()) {
+        return Errors.validation('Cada pago requiere una etiqueta.', requestId);
+      }
+      if (!Number.isInteger(p.monto) || p.monto <= 0) {
+        return Errors.validation('Cada pago requiere un monto entero positivo.', requestId);
+      }
+      sumaPagos += p.monto;
+      pagosPlanPersonalizado.push({ tipo: 'personalizado', etiqueta: p.etiqueta.trim(), monto: p.monto });
+    }
+    if (sumaPagos !== precioPactado) {
+      return Errors.validation('La suma de los pagos debe ser exactamente igual al precio pactado.', requestId);
+    }
+  } else if (pack) {
     if (!Number.isInteger(precioFichaIndividual) || !Number.isInteger(precioLandingIndividual)) {
       return Errors.validation('Un pack requiere precioFichaIndividual y precioLandingIndividual.', requestId);
     }
@@ -381,15 +471,17 @@ async function handleCreate(context) {
   // 2 (inicial 50% + saldo 50%) si es pack. Mismo criterio de redondeo
   // exacto que el prorrateo de componentes (RIO-112): se redondea el
   // primero, el segundo es el resto — la suma siempre da precioPactado.
-  const pagosPlan = pack
-    ? (() => {
-        const inicial = Math.round(precioPactado / 2);
-        return [
-          { tipo: 'inicial', monto: inicial },
-          { tipo: 'saldo', monto: precioPactado - inicial },
-        ];
-      })()
-    : [{ tipo: 'total', monto: precioPactado }];
+  const pagosPlan = esProyectoPersonalizado
+    ? pagosPlanPersonalizado
+    : (pack
+      ? (() => {
+          const inicial = Math.round(precioPactado / 2);
+          return [
+            { tipo: 'inicial', monto: inicial },
+            { tipo: 'saldo', monto: precioPactado - inicial },
+          ];
+        })()
+      : [{ tipo: 'total', monto: precioPactado }]);
 
   // Marcar una venta como dato de demostración es exclusivo de admin —
   // nunca algo que un ejecutivo pueda activar sobre su propia venta real
@@ -507,23 +599,27 @@ async function handleCreate(context) {
          id, codigo_venta, cliente_id, mercado, producto, moneda, tipo_precio, precio_pactado, vendedor_email, equipo_id,
          idempotency_key, origen, es_demo, antecedentes_kit_json,
          tipo_venta, supervisor_snapshot_email, plan_supervision_snapshot_id, supervision_aplica, motivo_sin_supervision,
-         porcentaje_supervision_aplicado, porcentaje_final_empresa
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         porcentaje_supervision_aplicado, porcentaje_final_empresa,
+         nombre_proyecto, descripcion_proyecto, notion_url
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
-      ventaId, codigoVenta, clienteId, mercado, producto, moneda, tipoPrecio, precioPactado, roleIdentity.email, equipoId,
+      ventaId, codigoVenta, clienteId, mercado, producto, moneda, tipoPrecioFinal, precioPactado, roleIdentity.email, equipoId,
       idempotencyKey, origen || null, esDemo ? 1 : 0, antecedentesKit ? JSON.stringify(antecedentesKit) : null,
       tipoVentaFinal, supervisorSnapshotEmail, planSupervisionSnapshotId, supervisionAplica, motivoSinSupervision,
-      porcentajeSupervisionAplicado, porcentajeFinalEmpresa
+      porcentajeSupervisionAplicado, porcentajeFinalEmpresa,
+      esProyectoPersonalizado ? nombreProyecto.trim() : null,
+      esProyectoPersonalizado ? ((descripcionProyecto && descripcionProyecto.trim()) || null) : null,
+      esProyectoPersonalizado ? ((notionUrl && notionUrl.trim()) || null) : null
     ),
     db.prepare('INSERT INTO proyectos (id, venta_id, codigo_proyecto) VALUES (?, ?, ?)')
       .bind(proyectoId, ventaId, codigoProyecto),
     ...componentesPlan.map((c) =>
-      db.prepare('INSERT INTO componentes (id, proyecto_id, tipo, precio_individual_referencia, precio_atribuido, estado_actual) VALUES (?, ?, ?, ?, ?, ?)')
-        .bind(c.id, proyectoId, c.tipo, c.precioIndividualReferencia, c.precioAtribuido, c.estado)
+      db.prepare('INSERT INTO componentes (id, proyecto_id, tipo, precio_individual_referencia, precio_atribuido, estado_actual, nombre, descripcion) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(c.id, proyectoId, c.tipo, c.precioIndividualReferencia, c.precioAtribuido, c.estado, c.nombre || null, c.descripcion || null)
     ),
     ...pagosPlan.map((p) =>
-      db.prepare('INSERT INTO pagos_esperados (id, venta_id, tipo, monto, moneda) VALUES (?, ?, ?, ?, ?)')
-        .bind(crypto.randomUUID(), ventaId, p.tipo, p.monto, moneda)
+      db.prepare('INSERT INTO pagos_esperados (id, venta_id, tipo, monto, moneda, etiqueta) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(crypto.randomUUID(), ventaId, p.tipo, p.monto, moneda, p.etiqueta || null)
     ),
   ];
 
@@ -582,7 +678,7 @@ async function handleCreate(context) {
         mercado,
         producto,
         moneda,
-        tipoPrecio,
+        tipoPrecio: tipoPrecioFinal,
         precioPactado,
         vendedorEmail: roleIdentity.email,
         origen: origen || null,
@@ -592,10 +688,13 @@ async function handleCreate(context) {
         equipoId,
         supervisionAplica: !!supervisionAplica,
         motivoSinSupervision,
+        nombreProyecto: esProyectoPersonalizado ? nombreProyecto.trim() : null,
+        descripcionProyecto: esProyectoPersonalizado ? ((descripcionProyecto && descripcionProyecto.trim()) || null) : null,
+        notionUrl: esProyectoPersonalizado ? ((notionUrl && notionUrl.trim()) || null) : null,
       },
       proyecto: { id: proyectoId, codigoProyecto },
-      componentes: componentesPlan.map((c) => ({ id: c.id, tipo: c.tipo, precioAtribuido: c.precioAtribuido, estadoActual: c.estado })),
-      pagosEsperados: pagosPlan.map((p) => ({ tipo: p.tipo, monto: p.monto })),
+      componentes: componentesPlan.map((c) => ({ id: c.id, tipo: c.tipo, nombre: c.nombre || null, descripcion: c.descripcion || null, precioAtribuido: c.precioAtribuido, estadoActual: c.estado })),
+      pagosEsperados: pagosPlan.map((p) => ({ tipo: p.tipo, etiqueta: p.etiqueta || null, monto: p.monto })),
       hubspotSync,
     },
     requestId,

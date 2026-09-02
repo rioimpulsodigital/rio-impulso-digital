@@ -89,14 +89,16 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
         tipo_venta: p[14] || 'equipo', supervisor_snapshot_email: p[15] || null, plan_supervision_snapshot_id: p[16] || null,
         supervision_aplica: p[17] === undefined ? 1 : p[17], motivo_sin_supervision: p[18] || null,
         porcentaje_supervision_aplicado: p[19] === undefined ? 10 : p[19], porcentaje_final_empresa: p[20] === undefined ? 20 : p[20],
+        // RIO-119 (ampliación de alcance — proyectos personalizados, 02/09/2026).
+        nombre_proyecto: p[21] || null, descripcion_proyecto: p[22] || null, notion_url: p[23] || null,
         estado_actual: 'registrada', created_at: '2026-08-28 00:00:00',
       });
     } else if (sql.startsWith('INSERT INTO proyectos')) {
       state.proyectos.push({ id: p[0], venta_id: p[1], codigo_proyecto: p[2], estado_actual: 'registrado' });
     } else if (sql.startsWith('INSERT INTO componentes')) {
-      state.componentes.push({ id: p[0], proyecto_id: p[1], tipo: p[2], precio_individual_referencia: p[3], precio_atribuido: p[4], estado_actual: p[5], materiales_estado: 'pendiente' });
+      state.componentes.push({ id: p[0], proyecto_id: p[1], tipo: p[2], precio_individual_referencia: p[3], precio_atribuido: p[4], estado_actual: p[5], materiales_estado: 'pendiente', nombre: p[6] || null, descripcion: p[7] || null });
     } else if (sql.startsWith('INSERT INTO pagos_esperados')) {
-      state.pagos_esperados.push({ id: p[0], venta_id: p[1], tipo: p[2], monto: p[3], moneda: p[4], estado: 'pendiente' });
+      state.pagos_esperados.push({ id: p[0], venta_id: p[1], tipo: p[2], monto: p[3], moneda: p[4], estado: 'pendiente', etiqueta: p[5] || null });
     } else if (sql.startsWith('INSERT INTO comisiones')) {
       state.comisiones.push({
         id: p[0], tipo: p[1], rol_realizacion: p[2], venta_id: p[3], componente_id: p[4], beneficiario_email: p[5], plan_id: p[6], asignacion_plan_id: p[7],
@@ -936,6 +938,102 @@ test('GET /ventas — el listado (no solo el detalle) expone equipoNombre y supe
   assert.equal(body.data.ventas.length, 1);
   assert.equal(body.data.ventas[0].equipoNombre, 'Equipo CL 1');
   assert.equal(body.data.ventas[0].supervisorNombre, 'Alberto Soto');
+});
+
+// RIO-119 (ampliación de alcance — proyectos personalizados, 02/09/2026):
+// un proyecto como Nua Bushi (eCommerce + integración) no es Ficha,
+// Landing ni Pack — 'proyecto_personalizado' es UN código genérico
+// reutilizable, nunca uno nuevo por proyecto. Solo administración lo
+// registra (desde el Panel Administrativo, nunca el Kit). Estas pruebas
+// usan datos íntegramente ficticios — nunca los de Nua Bushi.
+const PROYECTO_PERSONALIZADO_BASE = {
+  mercado: 'CL',
+  cliente: { negocio: 'Cliente de prueba — proyecto ficticio' },
+  producto: 'proyecto_personalizado',
+  tipoPrecio: 'regular',
+  precioPactado: 1000000,
+  nombreProyecto: 'Proyecto ficticio de prueba',
+  descripcionProyecto: 'Sitio de prueba con integración ficticia',
+  notionUrl: 'https://app.notion.com/p/pagina-ficticia-de-prueba',
+  tipoVenta: 'directa_administracion_sin_supervision',
+  fases: [
+    { nombre: 'Diseño', descripcion: 'UI/UX', precioAtribuido: 400000 },
+    { nombre: 'Desarrollo e integración', precioAtribuido: 600000 },
+  ],
+  pagos: [
+    { etiqueta: 'Pago inicial', monto: 500000 },
+    { etiqueta: 'Pago final', monto: 500000 },
+  ],
+};
+
+test('POST /ventas — administración registra un proyecto personalizado (fases y pagos configurables, nunca clasificado como catálogo)', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  const response = await ventasHandler(fakeContext({ method: 'POST', body: PROYECTO_PERSONALIZADO_BASE, roleIdentity: admin, db }));
+  assert.equal(response.status, 201);
+  const body = (await response.json()).data;
+  assert.equal(body.venta.producto, 'proyecto_personalizado');
+  assert.equal(body.venta.nombreProyecto, 'Proyecto ficticio de prueba');
+  assert.equal(body.venta.notionUrl, 'https://app.notion.com/p/pagina-ficticia-de-prueba');
+  assert.equal(body.venta.tipoVenta, 'directa_administracion_sin_supervision');
+  assert.equal(body.componentes.length, 2);
+  assert.equal(body.componentes[0].tipo, 'personalizado');
+  assert.equal(body.componentes[0].nombre, 'Diseño');
+  assert.equal(body.componentes[0].descripcion, 'UI/UX');
+  assert.equal(body.componentes.reduce((s, c) => s + c.precioAtribuido, 0), 1000000);
+  assert.equal(body.pagosEsperados.length, 2);
+  assert.equal(body.pagosEsperados[0].etiqueta, 'Pago inicial');
+  assert.equal(body.pagosEsperados.reduce((s, p) => s + p.monto, 0), 1000000);
+});
+
+test('POST /ventas — proyecto personalizado: la suma de las fases debe ser exactamente el precio pactado', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  const body = { ...PROYECTO_PERSONALIZADO_BASE, fases: [{ nombre: 'Diseño', precioAtribuido: 300000 }, { nombre: 'Desarrollo', precioAtribuido: 600000 }] }; // suma 900000 != 1000000.
+  const response = await ventasHandler(fakeContext({ method: 'POST', body, roleIdentity: admin, db }));
+  assert.equal(response.status, 400);
+  assert.equal(db._state.ventas.length, 0, 'no debe registrarse nada si las fases no reconcilian con el precio pactado');
+});
+
+test('POST /ventas — proyecto personalizado: la suma de los pagos debe ser exactamente el precio pactado', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  const body = { ...PROYECTO_PERSONALIZADO_BASE, pagos: [{ etiqueta: 'Pago único', monto: 999999 }] }; // != 1000000.
+  const response = await ventasHandler(fakeContext({ method: 'POST', body, roleIdentity: admin, db }));
+  assert.equal(response.status, 400);
+  assert.equal(db._state.ventas.length, 0);
+});
+
+test('POST /ventas — proyecto personalizado sin nombreProyecto es rechazado', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  const { nombreProyecto, ...body } = PROYECTO_PERSONALIZADO_BASE;
+  const response = await ventasHandler(fakeContext({ method: 'POST', body, roleIdentity: admin, db }));
+  assert.equal(response.status, 400);
+});
+
+test('POST /ventas — un vendedor común (no admin) nunca puede registrar un proyecto personalizado', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  const response = await ventasHandler(fakeContext({ method: 'POST', body: PROYECTO_PERSONALIZADO_BASE, roleIdentity: ri, db }));
+  assert.equal(response.status, 403);
+  assert.equal(db._state.ventas.length, 0);
+});
+
+test('GET /ventas/:id — un proyecto personalizado expone nombre, descripción, notionUrl, y cada fase/pago con su etiqueta libre', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  const createResponse = await ventasHandler(fakeContext({ method: 'POST', body: PROYECTO_PERSONALIZADO_BASE, roleIdentity: admin, db }));
+  const created = (await createResponse.json()).data.venta;
+  const response = await ventaDetailHandler(fakeContext({ roleIdentity: admin, db, params: { id: created.id } }));
+  const detalle = (await response.json()).data;
+  assert.equal(detalle.venta.nombreProyecto, 'Proyecto ficticio de prueba');
+  assert.equal(detalle.venta.descripcionProyecto, 'Sitio de prueba con integración ficticia');
+  assert.equal(detalle.venta.notionUrl, 'https://app.notion.com/p/pagina-ficticia-de-prueba');
+  assert.equal(detalle.componentes.length, 2);
+  assert.ok(detalle.componentes.every((c) => c.tipo === 'personalizado'));
+  assert.equal(detalle.componentes.find((c) => c.nombre === 'Diseño').descripcion, 'UI/UX');
+  assert.equal(detalle.pagosEsperados.find((p) => p.etiqueta === 'Pago inicial').monto, 500000);
 });
 
 test('la suma efectiva de porcentajes (supervisión + empresa) siempre es 30, con o sin supervisión aplicada', async () => {
