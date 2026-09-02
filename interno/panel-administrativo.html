@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Panel Administrativo | RiO Impulso Digital</title>
+
+  <link rel="icon" type="image/png" href="../assets/branding/rio-favicon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../assets/css/main.css?v=20260716">
+  <link rel="stylesheet" href="../assets/css/utilitaria.css?v=20260714">
+
+  <style>
+    /* ── RIO-119: Panel Administrativo — reutiliza el sistema visual de
+       panel-vendedor.html/panel-supervisor.html (RIO-117/118), esta vez
+       con acciones reales — cada una vuelve a autorizarse en el servidor,
+       ocultar un botón acá es solo UX, nunca el control real. ─────────── */
+    :root {
+      --pv-green:      #2a8040;
+      --pv-green-bg:   #f2fbf3;
+      --pv-green-bd:   #8fd19e;
+      --pv-amber:      #a06600;
+      --pv-amber-bg:   #fff8ec;
+      --pv-amber-bd:   #e6c27a;
+      --pv-red:        #b3261e;
+      --pv-red-bg:     #fdf1f0;
+      --pv-red-bd:     #e6a29c;
+      --pv-blue:       #1d5fa8;
+      --pv-blue-bg:    #eef5fc;
+      --pv-blue-bd:    #a9c9e8;
+    }
+
+    .pv-tabs { display: flex; gap: 4px; margin-bottom: 32px; border-bottom: 1.5px solid var(--border); flex-wrap: wrap; }
+    .pv-tab {
+      font-family: var(--ff-head); font-size: .88rem; font-weight: 700;
+      color: var(--muted); background: none; border: none;
+      padding: 12px 18px; cursor: pointer; border-bottom: 2.5px solid transparent;
+      margin-bottom: -1.5px; transition: color .15s, border-color .15s;
+    }
+    .pv-tab:hover { color: var(--ink); }
+    .pv-tab.active { color: var(--p); border-color: var(--p); }
+    .pv-tab:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+    .pv-tab-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px;
+      border-radius: 100px; background: var(--coral); color: #fff;
+      font-family: var(--ff-mono); font-size: .64rem; font-weight: 700;
+    }
+
+    .pv-panel { display: none; }
+    .pv-panel.active { display: block; }
+
+    .pv-pipeline { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+    .pv-pipeline-chip {
+      font-family: var(--ff-mono); font-size: .7rem; color: var(--ink);
+      background: var(--off); border: 1px solid var(--border); border-radius: 100px;
+      padding: 6px 14px;
+    }
+    .pv-pipeline-chip strong { color: var(--p); font-size: .82rem; }
+
+    .pv-filters {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;
+      margin-bottom: 24px; padding: 16px; background: var(--off);
+      border-radius: var(--r-l); border: 1px solid var(--border);
+    }
+    .pv-filter-field { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+    .pv-filter-field label {
+      font-family: var(--ff-mono); font-size: .62rem; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--muted);
+    }
+    .pv-filter-field input, .pv-filter-field select {
+      font-family: var(--ff-body); font-size: .82rem; color: var(--ink);
+      border: 1.5px solid var(--border); border-radius: var(--r-m);
+      padding: 7px 10px; background: var(--white);
+    }
+    .pv-filter-field input:focus-visible, .pv-filter-field select:focus-visible {
+      outline: 2px solid var(--coral); outline-offset: 1px;
+    }
+    .pv-filter-clear {
+      font-family: var(--ff-body); font-size: .78rem; font-weight: 600; color: var(--p);
+      background: none; border: 1.5px solid var(--border); border-radius: 100px;
+      padding: 7px 16px; cursor: pointer; align-self: flex-end;
+    }
+    .pv-filter-clear:hover { border-color: var(--p); }
+
+    .pv-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-family: var(--ff-mono); font-size: .62rem; font-weight: 500;
+      text-transform: uppercase; letter-spacing: .04em;
+      border-radius: 100px; padding: 3px 10px; white-space: nowrap;
+    }
+    .pv-badge--neutral { background: var(--off); color: var(--muted); border: 1px solid var(--border); }
+    .pv-badge--green   { background: var(--pv-green-bg); color: var(--pv-green); border: 1px solid var(--pv-green-bd); }
+    .pv-badge--amber   { background: var(--pv-amber-bg); color: var(--pv-amber); border: 1px solid var(--pv-amber-bd); }
+    .pv-badge--red     { background: var(--pv-red-bg); color: var(--pv-red); border: 1px solid var(--pv-red-bd); }
+    .pv-badge--blue    { background: var(--pv-blue-bg); color: var(--pv-blue); border: 1px solid var(--pv-blue-bd); }
+    .pv-badge--purple  { background: var(--purple-soft, #f3ecfa); color: var(--p); border: 1px solid var(--p); }
+
+    .pv-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r-l); background: var(--white); }
+    .pv-table { width: 100%; border-collapse: collapse; min-width: 760px; }
+    .pv-table th {
+      text-align: left; font-family: var(--ff-mono); font-size: .62rem;
+      text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+      padding: 12px 14px; border-bottom: 1.5px solid var(--border); background: var(--off);
+    }
+    .pv-table td { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: .84rem; vertical-align: top; }
+    .pv-table tbody tr { cursor: pointer; transition: background .1s; }
+    .pv-table tbody tr:hover { background: var(--off); }
+    .pv-table tbody tr:focus-visible { outline: 2px solid var(--coral); outline-offset: -2px; }
+    .pv-table tbody tr:last-child td { border-bottom: none; }
+    .pv-cliente-nombre { font-weight: 700; color: var(--ink); }
+    .pv-mono { font-family: var(--ff-mono); font-size: .76rem; color: var(--muted); }
+
+    .pv-empty {
+      text-align: center; padding: 48px 24px; color: var(--muted);
+      border: 1.5px dashed var(--border); border-radius: var(--r-l); background: var(--off);
+    }
+    .pv-empty-icon { font-size: 1.8rem; margin-bottom: 8px; display: block; }
+    .pv-loading { text-align: center; padding: 40px; color: var(--muted); font-size: .85rem; }
+
+    .pv-detail-overlay { position: fixed; inset: 0; background: rgba(13,0,19,.35); z-index: 200; display: none; }
+    .pv-detail-overlay.open { display: block; }
+    .pv-detail {
+      position: fixed; top: 0; right: 0; bottom: 0; width: min(620px, 100%);
+      background: var(--white); z-index: 201; overflow-y: auto;
+      transform: translateX(100%); transition: transform .2s ease;
+      box-shadow: -8px 0 32px rgba(0,0,0,.15);
+    }
+    .pv-detail.open { transform: translateX(0); }
+    .pv-detail-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      padding: 22px 24px 16px; border-bottom: 1.5px solid var(--border); position: sticky; top: 0; background: var(--white);
+    }
+    .pv-detail-close {
+      background: none; border: 1.5px solid var(--border); border-radius: 100px;
+      width: 32px; height: 32px; font-size: 1rem; cursor: pointer; color: var(--muted); flex-shrink: 0;
+    }
+    .pv-detail-close:hover { color: var(--ink); border-color: var(--ink); }
+    .pv-detail-body { padding: 20px 24px 40px; }
+    .pv-detail-section { margin-bottom: 26px; }
+    .pv-detail-section-title {
+      font-family: var(--ff-mono); font-size: .64rem; text-transform: uppercase;
+      letter-spacing: .07em; color: var(--sec); margin: 0 0 12px;
+    }
+    .pv-kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: .84rem; }
+    .pv-kv dt { color: var(--muted); }
+    .pv-kv dd { margin: 0; color: var(--ink); font-weight: 600; }
+
+    .pv-componente-card, .pv-pago-card, .pv-notif-card {
+      border: 1px solid var(--border); border-radius: var(--r-m);
+      padding: 14px 16px; margin-bottom: 10px; background: var(--off);
+    }
+    .pv-componente-head, .pv-pago-head, .pv-notif-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+    .pv-componente-titulo, .pv-pago-titulo { font-weight: 700; font-size: .86rem; color: var(--ink); text-transform: capitalize; }
+    .pv-componente-meta, .pv-pago-meta { font-size: .78rem; color: var(--muted); }
+    .pv-gate-faltantes {
+      margin-top: 8px; font-size: .78rem; color: var(--pv-amber);
+      background: var(--pv-amber-bg); border: 1px solid var(--pv-amber-bd);
+      border-radius: var(--r-m); padding: 8px 10px;
+    }
+    .pv-gate-faltantes ul { margin: 4px 0 0; padding-left: 18px; }
+    .pv-motivo-box {
+      margin-top: 8px; font-size: .78rem; color: var(--pv-red);
+      background: var(--pv-red-bg); border: 1px solid var(--pv-red-bd);
+      border-radius: var(--r-m); padding: 8px 10px;
+    }
+    .pv-dominio-pendiente {
+      margin-top: 8px; font-size: .78rem; color: var(--pv-amber);
+      background: var(--pv-amber-bg); border: 1px solid var(--pv-amber-bd);
+      border-radius: var(--r-m); padding: 8px 10px;
+    }
+    .pv-materiales-box { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+    .pv-materiales-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+    .pv-materiales-titulo { font-size: .74rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .pv-materiales-informe { font-size: .76rem; color: var(--muted); margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+    .pv-materiales-informe:first-child { border-top: none; padding-top: 0; }
+    .pv-materiales-informe strong { color: var(--ink); }
+    .pv-materiales-vacio { font-size: .78rem; color: var(--muted); font-style: italic; margin: 6px 0; }
+    .pv-materiales-motivo-admin { margin-top: 4px; font-size: .76rem; color: var(--pv-blue); }
+
+    .pv-timeline { list-style: none; margin: 0; padding: 0; }
+    .pv-timeline li { position: relative; padding: 0 0 16px 20px; border-left: 2px solid var(--border); font-size: .8rem; }
+    .pv-timeline li:last-child { border-color: transparent; padding-bottom: 0; }
+    .pv-timeline li::before { content: ''; position: absolute; left: -5px; top: 2px; width: 8px; height: 8px; border-radius: 50%; background: var(--p); }
+    .pv-timeline-fecha { font-family: var(--ff-mono); font-size: .68rem; color: var(--muted); }
+    .pv-timeline-desc { color: var(--ink); }
+    .pv-timeline-proxima { color: var(--pv-blue); font-weight: 600; margin-top: 2px; }
+
+    .pv-antecedentes { border: 1px solid var(--border); border-radius: var(--r-m); overflow: hidden; }
+    .pv-antecedentes summary {
+      cursor: pointer; padding: 10px 14px; font-size: .84rem; font-weight: 700; color: var(--ink);
+      background: var(--off); list-style: none; display: flex; align-items: center; gap: 8px;
+    }
+    .pv-antecedentes summary::-webkit-details-marker { display: none; }
+    .pv-antecedentes summary::before { content: '▸'; color: var(--muted); transition: transform .15s; }
+    .pv-antecedentes[open] summary::before { transform: rotate(90deg); }
+    .pv-antecedentes-body { padding: 12px 14px; }
+    .pv-antecedente-categoria { margin-bottom: 12px; }
+    .pv-antecedente-categoria:last-child { margin-bottom: 0; }
+    .pv-antecedente-categoria-titulo { font-size: .72rem; font-weight: 700; color: var(--sec); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+
+    /* ── Acciones (exclusivas de administración) ── */
+    .pv-btn {
+      font-family: var(--ff-body); font-size: .78rem; font-weight: 600;
+      color: var(--p); background: var(--white); border: 1.5px solid var(--p);
+      border-radius: 100px; padding: 7px 16px; cursor: pointer; transition: background .15s, color .15s;
+    }
+    .pv-btn:hover { background: var(--purple-soft, #f3ecfa); }
+    .pv-btn--primary { background: var(--p); color: #fff; }
+    .pv-btn--primary:hover { background: var(--p-dark); color: #fff; }
+    .pv-btn--danger { color: var(--pv-red); border-color: var(--pv-red-bd); }
+    .pv-btn--danger:hover { background: var(--pv-red-bg); }
+    .pv-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .pv-btn:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+    .pv-btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+    .pv-accion-form { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); display: flex; flex-direction: column; gap: 8px; }
+    .pv-accion-form input, .pv-accion-form select, .pv-accion-form textarea {
+      font-family: var(--ff-body); font-size: .82rem; color: var(--ink);
+      border: 1.5px solid var(--border); border-radius: var(--r-m);
+      padding: 7px 10px; background: var(--white);
+    }
+    .pv-accion-form textarea { min-height: 52px; resize: vertical; }
+    .pv-accion-form label { font-family: var(--ff-mono); font-size: .62rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+
+    .pv-comprobante-link { font-size: .78rem; margin-top: 6px; }
+    .pv-comprobante-link a { color: var(--p); font-weight: 600; }
+
+    .pv-notif-tipo { font-weight: 700; font-size: .82rem; color: var(--ink); }
+    .pv-notif-meta { font-size: .76rem; color: var(--muted); margin-top: 2px; }
+    .pv-notif-card.leida { opacity: .55; }
+
+    .pv-costo-form { margin-top: 10px; padding: 10px; border: 1px dashed var(--border); border-radius: var(--r-m); }
+    .pv-costo-form-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+    .pv-costo-form-field { display: flex; flex-direction: column; gap: 4px; }
+    .pv-costo-form-field input { width: 130px; }
+
+    .pv-status-msg { font-size: .78rem; margin-top: 6px; }
+    .pv-status-msg.ok { color: var(--pv-green); }
+    .pv-status-msg.err { color: var(--pv-red); }
+
+    @media (max-width: 640px) {
+      .pv-filters { flex-direction: column; align-items: stretch; }
+      .pv-filter-field { min-width: 0; }
+      .pv-table { min-width: 620px; }
+      .pv-detail { width: 100%; }
+      .pv-btn-row { flex-direction: column; }
+      .pv-btn-row .pv-btn { width: 100%; }
+      .pv-costo-form-field input { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── NAV ──────────────────────────────────────── -->
+<nav class="nav" id="mainNav">
+  <a href="/" class="nav-logo" aria-label="RiO Impulso Digital">
+    <img
+      src="../assets/branding/rio-logo-horizontal-245w.webp"
+      srcset="../assets/branding/rio-logo-horizontal-245w.webp 1x,
+              ../assets/branding/rio-logo-horizontal-429w.webp 2x,
+              ../assets/branding/rio-logo-horizontal.webp 3x"
+      alt="RiO Impulso Digital"
+      width="245" height="60"
+      fetchpriority="high"
+      onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+    >
+    <span class="nav-logo-text">RiO <em>Impulso</em> Digital</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="/interno/">Portal</a></li>
+  </ul>
+  <button class="nav-hamburger" aria-label="Abrir menú" onclick="openDrawer()">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<div class="nav-drawer" id="navDrawer">
+  <button class="nav-drawer-close" onclick="closeDrawer()" aria-label="Cerrar">✕</button>
+  <a href="/interno/" onclick="closeDrawer()">Portal</a>
+</div>
+
+<!-- ── HERO ───────────────────────────────────────── -->
+<section class="ut-hero">
+  <div class="ut-hero-content">
+    <a href="/interno/" class="ut-back">Volver al Portal</a>
+    <p class="ut-label">Panel Administrativo</p>
+    <h1>Operación</h1>
+    <p class="ut-hero-desc" id="pvGreeting">Consultando tu identidad…</p>
+  </div>
+</section>
+
+<!-- ── CONTENIDO ─────────────────────────────────── -->
+<div class="ut-main">
+  <div class="ut-container">
+
+    <div id="pvBlocked" class="portal-blocked" style="display:none;">
+      <p class="portal-blocked-title">Tu cuenta no tiene capacidad de administración.</p>
+      <p class="portal-blocked-desc">Contactá a Brenda si creés que esto es un error.</p>
+    </div>
+
+    <div id="pvApp" style="display:none;">
+      <div class="pv-tabs" role="tablist">
+        <button class="pv-tab active" id="pvTabVentasBtn" role="tab" aria-selected="true" aria-controls="pvTabVentas">Ventas y proyectos</button>
+        <button class="pv-tab" id="pvTabNotifBtn" role="tab" aria-selected="false" aria-controls="pvTabNotif">Notificaciones<span class="pv-tab-badge" id="pvNotifBadge" style="display:none;"></span></button>
+      </div>
+
+      <!-- ── VENTAS Y PROYECTOS ── -->
+      <div class="pv-panel active" id="pvTabVentas" role="tabpanel">
+        <div class="pv-pipeline" id="pvPipeline"></div>
+
+        <div class="pv-filters">
+          <div class="pv-filter-field">
+            <label for="fCliente">Cliente</label>
+            <input type="text" id="fCliente" placeholder="Buscar por negocio…">
+          </div>
+          <div class="pv-filter-field">
+            <label for="fVendedor">Vendedor</label>
+            <select id="fVendedor"><option value="">Todos</option></select>
+          </div>
+          <div class="pv-filter-field">
+            <label for="fEquipo">Equipo</label>
+            <select id="fEquipo"><option value="">Todos</option></select>
+          </div>
+          <div class="pv-filter-field">
+            <label for="fSupervisor">Supervisor</label>
+            <select id="fSupervisor"><option value="">Todos</option></select>
+          </div>
+          <div class="pv-filter-field">
+            <label for="fMercado">Mercado</label>
+            <select id="fMercado"><option value="">Todos</option><option value="CL">CL</option><option value="AR">AR</option></select>
+          </div>
+          <div class="pv-filter-field">
+            <label for="fProducto">Producto</label>
+            <select id="fProducto">
+              <option value="">Todos</option>
+              <option value="ficha">Ficha</option>
+              <option value="generico">Landing genérica</option>
+              <option value="personalizado">Landing personalizada</option>
+              <option value="ficha_generico">Pack (genérica)</option>
+              <option value="ficha_personalizado">Pack (personalizada)</option>
+            </select>
+          </div>
+          <div class="pv-filter-field">
+            <label for="fEstado">Avance operativo</label>
+            <select id="fEstado">
+              <option value="">Todos</option>
+              <option value="en_espera_pago">En espera de pago</option>
+              <option value="registrado">Registrado</option>
+              <option value="en_produccion">En producción</option>
+              <option value="completado">Completado</option>
+              <option value="cancelada">Cancelada</option>
+            </select>
+          </div>
+          <div class="pv-filter-field">
+            <label for="fDesde">Desde</label>
+            <input type="date" id="fDesde">
+          </div>
+          <div class="pv-filter-field">
+            <label for="fHasta">Hasta</label>
+            <input type="date" id="fHasta">
+          </div>
+          <button class="pv-filter-clear" id="pvClearFilters" type="button">Limpiar filtros</button>
+        </div>
+
+        <div id="pvVentasResult"><div class="pv-loading">Cargando ventas…</div></div>
+      </div>
+
+      <!-- ── NOTIFICACIONES ── -->
+      <div class="pv-panel" id="pvTabNotif" role="tabpanel">
+        <div class="pv-filters">
+          <div class="pv-filter-field" style="min-width:0;">
+            <label><input type="checkbox" id="fNotifPendientes" checked> Solo pendientes</label>
+          </div>
+        </div>
+        <div id="pvNotifResult"><div class="pv-loading">Cargando notificaciones…</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── DETALLE DE VENTA (con acciones) ── -->
+<div class="pv-detail-overlay" id="pvDetailOverlay"></div>
+<aside class="pv-detail" id="pvDetail" aria-hidden="true">
+  <div class="pv-detail-head">
+    <div>
+      <p class="ut-label" style="margin:0 0 4px;" id="pvDetailCodigo"></p>
+      <h2 style="font-family:var(--ff-head);font-size:1.15rem;margin:0;" id="pvDetailNegocio"></h2>
+    </div>
+    <button class="pv-detail-close" id="pvDetailCloseBtn" aria-label="Cerrar detalle">✕</button>
+  </div>
+  <div class="pv-detail-body" id="pvDetailBody"></div>
+</aside>
+
+<!-- ── FOOTER ────────────────────────────────────── -->
+<footer>
+  <div class="footer-row">
+    <div class="footer-col">
+      <div class="footer-brand">RiO <em>Impulso</em> Digital</div>
+      <div class="footer-tag">Tecnología · Integración · Automatización</div>
+    </div>
+    <div class="footer-col footer-col--center">
+      <picture>
+        <source media="(max-width: 900px)" srcset="../assets/branding/rio-logo-primary-48x48.webp">
+        <source srcset="../assets/branding/rio-logo-primary-84x84.webp">
+        <img src="../assets/branding/rio-logo-primary.png" alt="RiO Impulso Digital" class="footer-logo" width="48" height="48">
+      </picture>
+    </div>
+    <ul class="footer-links footer-col footer-col--right">
+      <li><a href="/interno/">Portal</a></li>
+    </ul>
+  </div>
+  <div class="footer-copy">
+    © 2026 RiO Impulso Digital · Brenda Rivera Obando · Todos los derechos reservados
+  </div>
+</footer>
+
+<script src="./config/users.js" defer></script>
+<script src="../assets/js/main.js?v=20260627" defer></script>
+<script src="./panel-administrativo.js?v=20260902a" defer></script>
+
+</body>
+</html>

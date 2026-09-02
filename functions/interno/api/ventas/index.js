@@ -82,6 +82,11 @@ function serializeVenta(row) {
     // frontend decide el texto de reemplazo, nunca usa el email como tal).
     vendedorNombre: row.vendedor_nombre || null,
     equipoId: row.equipo_id || null,
+    // RIO-119 (panel administrativo, 02/09/2026): nombres de equipo/
+    // supervisor también en el LISTADO, no solo en el detalle — necesarios
+    // para filtrar la vista global sin una consulta extra por fila.
+    equipoNombre: row.equipo_nombre || null,
+    supervisorNombre: row.supervisor_nombre || null,
     // RIO-118 (corrección — ventas administrativas y comisión de
     // supervisión, 01/09/2026): snapshot inmutable de la decisión tomada
     // al cerrar la venta — nunca se recalcula si el equipo o el
@@ -170,7 +175,7 @@ async function handleList(context) {
     rows = await query(
       env.DB,
       requestId,
-      `SELECT v.*, c.negocio, u.nombre AS vendedor_nombre, p.estado_actual AS proyecto_estado,
+      `SELECT v.*, c.negocio, u.nombre AS vendedor_nombre, e.nombre AS equipo_nombre, us.nombre AS supervisor_nombre, p.estado_actual AS proyecto_estado,
          (SELECT COUNT(*) FROM pagos_esperados pe WHERE pe.venta_id = v.id AND pe.estado = 'acreditado') AS pagos_acreditados_count,
          (SELECT COUNT(*) FROM incidencias i WHERE i.venta_id = v.id AND i.tipo = 'cancelacion') AS cancelacion_count,
          (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
@@ -184,6 +189,8 @@ async function handleList(context) {
        FROM ventas v JOIN clientes c ON c.id = v.cliente_id
        LEFT JOIN proyectos p ON p.venta_id = v.id
        LEFT JOIN usuarios u ON u.email = v.vendedor_email
+       LEFT JOIN equipos e ON e.id = v.equipo_id
+       LEFT JOIN usuarios us ON us.email = v.supervisor_snapshot_email
        WHERE v.mercado IN (${placeholders}) ORDER BY v.created_at DESC`,
       roleIdentity.allowedMarkets
     );
@@ -201,7 +208,7 @@ async function handleList(context) {
     rows = await query(
       env.DB,
       requestId,
-      `SELECT v.*, c.negocio, u.nombre AS vendedor_nombre, p.estado_actual AS proyecto_estado,
+      `SELECT v.*, c.negocio, u.nombre AS vendedor_nombre, e.nombre AS equipo_nombre, us.nombre AS supervisor_nombre, p.estado_actual AS proyecto_estado,
          (SELECT COUNT(*) FROM pagos_esperados pe WHERE pe.venta_id = v.id AND pe.estado = 'acreditado') AS pagos_acreditados_count,
          (SELECT COUNT(*) FROM incidencias i WHERE i.venta_id = v.id AND i.tipo = 'cancelacion') AS cancelacion_count,
          (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
@@ -215,6 +222,8 @@ async function handleList(context) {
        FROM ventas v JOIN clientes c ON c.id = v.cliente_id
        LEFT JOIN proyectos p ON p.venta_id = v.id
        LEFT JOIN usuarios u ON u.email = v.vendedor_email
+       LEFT JOIN equipos e ON e.id = v.equipo_id
+       LEFT JOIN usuarios us ON us.email = v.supervisor_snapshot_email
        WHERE v.mercado IN (${placeholders})
          AND (
            v.vendedor_email = ?
@@ -233,7 +242,7 @@ async function handleList(context) {
     rows = await query(
       env.DB,
       requestId,
-      `SELECT v.*, c.negocio, u.nombre AS vendedor_nombre, p.estado_actual AS proyecto_estado,
+      `SELECT v.*, c.negocio, u.nombre AS vendedor_nombre, e.nombre AS equipo_nombre, us.nombre AS supervisor_nombre, p.estado_actual AS proyecto_estado,
          (SELECT COUNT(*) FROM pagos_esperados pe WHERE pe.venta_id = v.id AND pe.estado = 'acreditado') AS pagos_acreditados_count,
          (SELECT COUNT(*) FROM incidencias i WHERE i.venta_id = v.id AND i.tipo = 'cancelacion') AS cancelacion_count,
          (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
@@ -247,6 +256,8 @@ async function handleList(context) {
        FROM ventas v JOIN clientes c ON c.id = v.cliente_id
        LEFT JOIN proyectos p ON p.venta_id = v.id
        LEFT JOIN usuarios u ON u.email = v.vendedor_email
+       LEFT JOIN equipos e ON e.id = v.equipo_id
+       LEFT JOIN usuarios us ON us.email = v.supervisor_snapshot_email
        WHERE v.vendedor_email = ? ORDER BY v.created_at DESC`,
       [roleIdentity.email]
     );

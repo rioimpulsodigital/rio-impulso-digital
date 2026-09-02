@@ -109,13 +109,25 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
     }
   }
 
+  // RIO-119 (panel administrativo, 02/09/2026): equipo_nombre/
+  // supervisor_nombre ahora se resuelven también en el LISTADO (antes solo
+  // en el detalle) — mismo LEFT JOIN a equipos/usuarios que la consulta
+  // real, para que el panel administrativo pueda filtrar sin una consulta
+  // extra por fila.
+  function enrichVenta(v) {
+    return {
+      ...v,
+      negocio: state.clientes.find((c) => c.id === v.cliente_id)?.negocio,
+      vendedor_nombre: state.usuarios.find((u) => u.email === v.vendedor_email)?.nombre,
+      proyecto_estado: state.proyectos.find((pr) => pr.venta_id === v.id)?.estado_actual,
+      equipo_nombre: state.equipos.find((e) => e.id === v.equipo_id)?.nombre || null,
+      supervisor_nombre: state.usuarios.find((u) => u.email === v.supervisor_snapshot_email)?.nombre || null,
+    };
+  }
+
   function runSelect(sql, p) {
     if (sql.includes('FROM ventas v JOIN clientes c') && sql.includes('WHERE v.vendedor_email')) {
-      return state.ventas.filter((v) => v.vendedor_email === p[0]).map((v) => ({
-        ...v, negocio: state.clientes.find((c) => c.id === v.cliente_id)?.negocio,
-        vendedor_nombre: state.usuarios.find((u) => u.email === v.vendedor_email)?.nombre,
-        proyecto_estado: state.proyectos.find((pr) => pr.venta_id === v.id)?.estado_actual,
-      }));
+      return state.ventas.filter((v) => v.vendedor_email === p[0]).map(enrichVenta);
     }
     if (sql.includes('FROM ventas v JOIN clientes c') && sql.includes('equipo_supervisores')) {
       // Rama del supervisor (RIO-118, corrección): propias + equipos que
@@ -128,18 +140,10 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
         .map((s) => s.equipo_id);
       return state.ventas
         .filter((v) => mercados.includes(v.mercado) && (v.vendedor_email === email || (v.equipo_id && equiposSupervisados.includes(v.equipo_id))))
-        .map((v) => ({
-          ...v, negocio: state.clientes.find((c) => c.id === v.cliente_id)?.negocio,
-          vendedor_nombre: state.usuarios.find((u) => u.email === v.vendedor_email)?.nombre,
-          proyecto_estado: state.proyectos.find((pr) => pr.venta_id === v.id)?.estado_actual,
-        }));
+        .map(enrichVenta);
     }
     if (sql.includes('FROM ventas v JOIN clientes c') && sql.includes('WHERE v.mercado IN')) {
-      return state.ventas.filter((v) => p.includes(v.mercado)).map((v) => ({
-        ...v, negocio: state.clientes.find((c) => c.id === v.cliente_id)?.negocio,
-        vendedor_nombre: state.usuarios.find((u) => u.email === v.vendedor_email)?.nombre,
-        proyecto_estado: state.proyectos.find((pr) => pr.venta_id === v.id)?.estado_actual,
-      }));
+      return state.ventas.filter((v) => p.includes(v.mercado)).map(enrichVenta);
     }
     if (sql.includes('FROM ventas v JOIN clientes c') && sql.includes('WHERE v.id = ?')) {
       const v = state.ventas.find((x) => x.id === p[0]);
@@ -916,6 +920,22 @@ test('el supervisor snapshotteado en una venta no cambia si el equipo cambia de 
   const venta = (await response.json()).data.venta;
   assert.equal(venta.supervisorEmail, 'alberto@example.com', 'la venta histórica conserva el supervisor con el que se cerró, no el vigente actual');
   assert.equal(venta.supervisorNombre, 'Alberto Soto');
+});
+
+test('GET /ventas — el listado (no solo el detalle) expone equipoNombre y supervisorNombre, para filtrar sin una consulta extra por fila (RIO-119)', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  db._state.usuarios.push({ id: 950, email: 'supervisor.cl@example.com', nombre: 'Alberto Soto' });
+  seedEquipo(db, { equipoId: 'equipo-cl-1', mercado: 'CL', miembroEmail: ri.email, supervisorEmail: 'supervisor.cl@example.com' });
+  db._state.equipos.push({ id: 'equipo-cl-1', mercado: 'CL', nombre: 'Equipo CL 1' });
+
+  await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }));
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  const response = await ventasHandler(fakeContext({ roleIdentity: admin, db }));
+  const body = await response.json();
+  assert.equal(body.data.ventas.length, 1);
+  assert.equal(body.data.ventas[0].equipoNombre, 'Equipo CL 1');
+  assert.equal(body.data.ventas[0].supervisorNombre, 'Alberto Soto');
 });
 
 test('la suma efectiva de porcentajes (supervisión + empresa) siempre es 30, con o sin supervisión aplicada', async () => {
