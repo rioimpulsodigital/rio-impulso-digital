@@ -173,8 +173,14 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
     if (sql.startsWith("SELECT id FROM componentes WHERE proyecto_id") && sql.includes("tipo = 'landing'")) {
       return state.componentes.filter((c) => c.proyecto_id === p[0] && c.tipo === 'landing');
     }
-    if (sql.startsWith('SELECT * FROM materiales_informados_detalle WHERE componente_id')) {
-      return state.materiales_informados_detalle.filter((m) => m.componente_id === p[0]);
+    if (sql.includes('FROM materiales_informados_detalle m') && sql.includes('WHERE m.componente_id')) {
+      return state.materiales_informados_detalle
+        .filter((m) => m.componente_id === p[0])
+        .map((m) => ({
+          ...m,
+          informado_por_nombre: (state.usuarios || []).find((u) => u.email === m.informado_por)?.nombre || null,
+          revisado_por_nombre: (state.usuarios || []).find((u) => u.email === m.revisado_por)?.nombre || null,
+        }));
     }
     if (sql.startsWith('SELECT * FROM materiales_confirmaciones WHERE componente_id')) {
       return state.materiales_confirmaciones.filter((m) => m.componente_id === p[0]);
@@ -569,6 +575,35 @@ test('GET /ventas/:id — el dueño de la venta sí puede verla', async () => {
   const body = await response.json();
   assert.equal(body.data.venta.id, created.id);
   assert.equal(body.data.componentes.length, 1);
+});
+
+// RIO-118 (corrección — identidad visible, 01/09/2026): también aplica a
+// quién informó/revisó cada entrega de materiales — nunca solo el email.
+test('GET /ventas/:id — cada entrega de materiales incluye informadoPorNombre (y revisadoPorNombre si ya fue revisada) resueltos desde D1', async () => {
+  const db = fakeDb();
+  db._state.usuarios.push({ id: 99, email: 'ejecutivo.a@example.com', nombre: 'Juan Herrera' });
+  db._state.usuarios.push({ id: 98, email: 'admin@example.com', nombre: 'Brenda Rivera' });
+  const a = roleIdentity({ email: 'ejecutivo.a@example.com' });
+  const createResponse = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: a, db }));
+  const created = (await createResponse.json()).data.venta;
+  const detalleInicial = await (await ventaDetailHandler(fakeContext({ roleIdentity: a, db, params: { id: created.id } }))).json();
+  const componenteId = detalleInicial.data.componentes[0].id;
+
+  db._state.materiales_informados_detalle.push({
+    id: 'e1', componente_id: componenteId, informado_por: 'ejecutivo.a@example.com',
+    elementos_json: '[]', observaciones: null, numero_entrega: 1, descripcion: 'Fotos.',
+    cantidad_archivos_aprox: null, correo_destino: 'venta@rioimpulsodigital.com',
+    estado_revision: 'aceptada', revisado_por: 'admin@example.com', revisado_en: '2026-09-02 10:00:00',
+    motivo_revision: null, created_at: '2026-09-01 09:00:00',
+  });
+
+  const response = await ventaDetailHandler(fakeContext({ roleIdentity: a, db, params: { id: created.id } }));
+  const body = await response.json();
+  const informe = body.data.componentes[0].materialesInformes[0];
+  assert.equal(informe.informadoPor, 'ejecutivo.a@example.com');
+  assert.equal(informe.informadoPorNombre, 'Juan Herrera');
+  assert.equal(informe.revisadoPor, 'admin@example.com');
+  assert.equal(informe.revisadoPorNombre, 'Brenda Rivera');
 });
 
 test('GET /ventas/:id — un supervisor de OTRO mercado no puede ver la venta (aislamiento entre mercados)', async () => {

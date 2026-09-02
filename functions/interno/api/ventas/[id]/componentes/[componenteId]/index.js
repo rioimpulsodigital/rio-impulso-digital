@@ -20,28 +20,38 @@ import { query } from '../../../../../../_shared/db.js';
 import { assertCanAccessOwner, AuthzError } from '../../../../../../_shared/authz.js';
 import { isMethodAllowed, hasExpectedContentType } from '../../../../../../_shared/security.js';
 import {
-  marcarMaterialesInformados, marcarMaterialesCompletos, marcarMaterialesIncompletos,
+  marcarMaterialesInformados, marcarMaterialesCompletos, revisarEntregaMateriales,
   iniciarProduccion, marcarEntregada, aprobarComponente, ProyectoError,
 } from '../../../../../../_shared/proyectos.js';
 import { crearNotificacionSiCorresponde } from '../../../../../../_shared/notificaciones.js';
 
 const REPORT_ACTIONS = new Set(['materiales-informados']);
+const ESTADOS_REVISION_VALIDOS = new Set(['en_revision', 'aceptada', 'requiere_material_adicional', 'descartada_con_motivo']);
+const ESTADOS_REVISION_CON_MOTIVO_OBLIGATORIO = new Set(['requiere_material_adicional', 'descartada_con_motivo']);
 
-// RIO-117 (corrección tras validación real, 01/09/2026): 'materiales-informados'
-// ahora acepta {elementos, observaciones} en el body — se los pasa al
-// handler además de ventaId/componenteId/actorEmail. 'materiales-incompletos'
-// acepta {faltantes}. El resto ignora cualquier campo extra del body.
+// RIO-118 (corrección funcional — materiales por correo central,
+// 01/09/2026): 'materiales-informados' ahora acepta {elementos,
+// descripcion, cantidadArchivosAprox, observaciones} — SIEMPRE
+// disponible, sin importar el estado actual del componente (el registro
+// nunca se cierra). 'revisar-entrega-materiales' (nueva, exclusiva de
+// administración) acepta {entregaId, resultado, motivo} — reemplaza a
+// 'materiales-incompletos' (RIO-117), que revertía todo el componente en
+// vez de revisar la entrega puntual.
 const ACTIONS = {
-  'materiales-informados': (db, requestId, args, body) => marcarMaterialesInformados(db, requestId, { ...args, elementos: body?.elementos, observaciones: body?.observaciones }),
+  'materiales-informados': (db, requestId, args, body) => marcarMaterialesInformados(db, requestId, {
+    ...args, elementos: body?.elementos, descripcion: body?.descripcion, cantidadArchivosAprox: body?.cantidadArchivosAprox, observaciones: body?.observaciones,
+  }),
   'materiales-completos': marcarMaterialesCompletos,
-  'materiales-incompletos': (db, requestId, args, body) => marcarMaterialesIncompletos(db, requestId, { ...args, faltantes: body?.faltantes }),
+  'revisar-entrega-materiales': (db, requestId, args, body) => revisarEntregaMateriales(db, requestId, {
+    ...args, entregaId: body?.entregaId, resultado: body?.resultado, motivo: body?.motivo,
+  }),
   'iniciar-produccion': iniciarProduccion,
   entregar: marcarEntregada,
   aprobar: aprobarComponente,
 };
 
 function errorStatusFor(code) {
-  if (code === 'componente_no_encontrado' || code === 'pago_no_encontrado') return 404;
+  if (code === 'componente_no_encontrado' || code === 'pago_no_encontrado' || code === 'entrega_no_encontrada') return 404;
   return 409; // el recurso existe, pero su estado actual no permite esta transición.
 }
 
@@ -75,7 +85,7 @@ export async function onRequest(context) {
   }
   const handler = ACTIONS[body?.action];
   if (!handler) {
-    return Errors.validation('action inválida. Valores permitidos: materiales-informados, materiales-completos, materiales-incompletos, iniciar-produccion, entregar, aprobar.', requestId);
+    return Errors.validation('action inválida. Valores permitidos: materiales-informados, materiales-completos, revisar-entrega-materiales, iniciar-produccion, entregar, aprobar.', requestId);
   }
 
   const esVendedor = roleIdentity.email === venta.vendedor_email;
@@ -84,20 +94,41 @@ export async function onRequest(context) {
       return Errors.forbidden(requestId); // un supervisor sin ser el vendedor no reporta materiales ajenos.
     }
   } else if (!roleIdentity.permissions.manageProduccionOficial) {
-    return Errors.forbidden(requestId); // transición oficial (incluida materiales-incompletos) — exclusiva de administración, incluso para el vendedor dueño o un supervisor.
+    return Errors.forbidden(requestId); // transición oficial (incluida revisar-entrega-materiales) — exclusiva de administración, incluso para el vendedor dueño o un supervisor.
+  }
+
+  // Validación de campos DESPUÉS de la autorización: quien no tiene
+  // permiso para esta acción recibe 403/404 sin importar qué haya
+  // mandado en el body — nunca se le confirma que el payload "casi" era
+  // válido.
+  if (body.action === 'materiales-informados' && (typeof body.descripcion !== 'string' || !body.descripcion.trim())) {
+    return Errors.validation('Falta la descripción del material enviado.', requestId);
+  }
+  if (body.action === 'revisar-entrega-materiales') {
+    if (typeof body.entregaId !== 'string' || !body.entregaId.trim()) {
+      return Errors.validation('Falta entregaId.', requestId);
+    }
+    if (!ESTADOS_REVISION_VALIDOS.has(body.resultado)) {
+      return Errors.validation('resultado inválido. Valores permitidos: en_revision, aceptada, requiere_material_adicional, descartada_con_motivo.', requestId);
+    }
+    if (ESTADOS_REVISION_CON_MOTIVO_OBLIGATORIO.has(body.resultado) && (typeof body.motivo !== 'string' || !body.motivo.trim())) {
+      return Errors.validation('Este resultado requiere un motivo.', requestId);
+    }
   }
 
   try {
     const result = await handler(env.DB, requestId, { ventaId: venta.id, componenteId: params.componenteId, actorEmail: roleIdentity.email }, body);
 
     if (body.action === 'materiales-informados') {
-      // RIO-117 (corrección tras validación real): notificar a
-      // administración, mismo patrón que "pago informado" (RIO-116) —
-      // nunca bloquea la acción si la notificación falla.
+      // RIO-118 (corrección funcional): notificar a administración, mismo
+      // patrón que "pago informado" (RIO-116) — nunca bloquea la acción
+      // si la notificación falla. Una entrega adicional llegada DESPUÉS
+      // de "completos" usa un tipo distinto — administración necesita
+      // distinguirla, nunca se le pierde entre las entregas normales.
       try {
         const clienteRows = await query(env.DB, requestId, 'SELECT c.negocio FROM ventas v JOIN clientes c ON c.id = v.cliente_id WHERE v.id = ?', [venta.id]);
         await crearNotificacionSiCorresponde(env.DB, requestId, {
-          tipo: 'materiales_informados',
+          tipo: result?.esAdicionalTrasCompletos ? 'material_adicional_informado' : 'materiales_informados',
           claveIdempotencia: `materiales_informados:${result?.detalleId || params.componenteId}`,
           ventaId: venta.id, mercado: venta.mercado,
           clienteNegocio: clienteRows[0]?.negocio || null, vendedorEmail: venta.vendedor_email,
@@ -108,7 +139,7 @@ export async function onRequest(context) {
       }
     }
 
-    return ok({ action: body.action, gate: result?.gate || null }, requestId);
+    return ok({ action: body.action, gate: result?.gate || null, numeroEntrega: result?.numeroEntrega || null }, requestId);
   } catch (e) {
     if (e instanceof ProyectoError) {
       let details;

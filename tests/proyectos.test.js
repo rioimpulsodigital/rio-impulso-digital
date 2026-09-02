@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   evaluateLandingGate, iniciarProduccion, marcarEntregada, aprobarComponente,
-  marcarMaterialesInformados, marcarMaterialesCompletos, informarPago, acreditarPago,
+  marcarMaterialesInformados, marcarMaterialesCompletos, revisarEntregaMateriales, informarPago, acreditarPago,
   registrarIncidencia, agregarAntecedente, ProyectoError,
 } from '../functions/_shared/proyectos.js';
 
@@ -80,7 +80,14 @@ function fakeDb() {
         porcentaje_snapshot: p[8], base_snapshot: p[9], monto_base: p[10], moneda: p[11], monto_comision: p[12], estado: 'calculada_provisional',
       });
     } else if (sql.startsWith('INSERT INTO materiales_informados_detalle')) {
-      state.materiales_informados_detalle.push({ id: p[0], componente_id: p[1], informado_por: p[2], elementos_json: p[3], observaciones: p[4], created_at: nowIso() });
+      state.materiales_informados_detalle.push({
+        id: p[0], componente_id: p[1], informado_por: p[2], elementos_json: p[3], observaciones: p[4],
+        numero_entrega: p[5], descripcion: p[6], cantidad_archivos_aprox: p[7],
+        estado_revision: 'informada', created_at: nowIso(),
+      });
+    } else if (sql.startsWith("UPDATE materiales_informados_detalle SET estado_revision")) {
+      const row = state.materiales_informados_detalle.find((x) => x.id === p[3]);
+      if (row) { row.estado_revision = p[0]; row.revisado_por = p[1]; row.motivo_revision = p[2]; }
     } else if (sql.startsWith('INSERT INTO materiales_confirmaciones')) {
       state.materiales_confirmaciones.push({ id: p[0], componente_id: p[1], admin_email: p[2], resultado: p[3], faltantes_json: p[4] || null, created_at: nowIso() });
     } else {
@@ -89,6 +96,12 @@ function fakeDb() {
   }
 
   function runSelect(sql, p) {
+    if (sql.startsWith('SELECT COUNT(*) AS n FROM materiales_informados_detalle WHERE componente_id')) {
+      return [{ n: state.materiales_informados_detalle.filter((m) => m.componente_id === p[0]).length }];
+    }
+    if (sql.startsWith('SELECT * FROM materiales_informados_detalle WHERE id')) {
+      return state.materiales_informados_detalle.filter((m) => m.id === p[0] && m.componente_id === p[1]);
+    }
     if (sql.startsWith('SELECT * FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]);
     if (sql.startsWith('SELECT * FROM proyectos WHERE venta_id')) return state.proyectos.filter((pr) => pr.venta_id === p[0]);
     if (sql.startsWith('SELECT * FROM componentes WHERE proyecto_id')) return state.componentes.filter((c) => c.proyecto_id === p[0]);
@@ -454,21 +467,35 @@ test('aprobarComponente() — un responsable inactivo no genera su comisión, au
 test('marcarMaterialesInformados() — pasa de pendiente a informados y registra el evento, sin tocar el gate', async () => {
   const db = fakeDb();
   const { ventaId } = seedPack(db);
-  await marcarMaterialesInformados(db, 'req-16a', { ventaId, componenteId: 'comp-landing', actorEmail: 'vendedor@example.com' });
+  await marcarMaterialesInformados(db, 'req-16a', { ventaId, componenteId: 'comp-landing', actorEmail: 'vendedor@example.com', descripcion: 'Logo y fotos del local.' });
   assert.equal(db._state.componentes.find((c) => c.id === 'comp-landing').materiales_estado, 'informados');
   assert.ok(db._state.eventos_historial.some((e) => e.entidad_id === 'comp-landing' && e.estado_nuevo === 'materiales:informados'));
   // Landing sigue bloqueada — informar materiales no es lo mismo que confirmarlos completos.
   assert.equal(db._state.componentes.find((c) => c.id === 'comp-landing').estado_actual, 'bloqueada');
 });
 
-test('marcarMaterialesInformados() — rechaza informar dos veces (o informar si ya están confirmados completos)', async () => {
+// RIO-118 (corrección funcional — materiales por correo central,
+// 01/09/2026): el registro NUNCA se cierra — informar una segunda o
+// tercera vez crea una entrega nueva, numerada, sin pisar la anterior.
+test('marcarMaterialesInformados() — informar varias veces crea entregas numeradas e independientes, nunca se rechaza ni se pisan entre sí', async () => {
   const db = fakeDb();
   const { ventaId } = seedPack(db);
-  await marcarMaterialesInformados(db, 'req-17a', { ventaId, componenteId: 'comp-ficha', actorEmail: 'vendedor@example.com' });
-  await assert.rejects(
-    () => marcarMaterialesInformados(db, 'req-17b', { ventaId, componenteId: 'comp-ficha', actorEmail: 'vendedor@example.com' }),
-    (e) => { assert.equal(e.code, 'materiales_ya_reportados'); return true; }
-  );
+  const r1 = await marcarMaterialesInformados(db, 'req-17a', { ventaId, componenteId: 'comp-ficha', actorEmail: 'vendedor@example.com', descripcion: 'Primera tanda de fotos.' });
+  const r2 = await marcarMaterialesInformados(db, 'req-17b', { ventaId, componenteId: 'comp-ficha', actorEmail: 'vendedor@example.com', descripcion: 'Segunda tanda — faltaba el logo.' });
+  assert.equal(r1.numeroEntrega, 1);
+  assert.equal(r2.numeroEntrega, 2);
+  assert.equal(db._state.materiales_informados_detalle.filter((m) => m.componente_id === 'comp-ficha').length, 2);
+  assert.equal(db._state.materiales_informados_detalle.find((m) => m.id === r1.detalleId).descripcion, 'Primera tanda de fotos.', 'la primera entrega no se sobrescribe');
+});
+
+test('marcarMaterialesInformados() — una entrega DESPUÉS de "completos" no toca materiales_estado ni el gate, y queda marcada como adicional', async () => {
+  const db = fakeDb();
+  const { ventaId } = seedPack(db);
+  await marcarMaterialesCompletos(db, 'req-17c', { ventaId, componenteId: 'comp-ficha', actorEmail: 'admin@example.com' });
+  const r = await marcarMaterialesInformados(db, 'req-17d', { ventaId, componenteId: 'comp-ficha', actorEmail: 'vendedor@example.com', descripcion: 'El cliente mandó fotos nuevas.' });
+  assert.equal(r.esAdicionalTrasCompletos, true);
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-ficha').materiales_estado, 'completos', 'nunca se revierte automáticamente');
+  assert.ok(db._state.eventos_historial.some((e) => e.entidad_id === 'comp-ficha' && e.estado_nuevo === 'material_adicional_informado'));
 });
 
 test('marcarMaterialesCompletos() — la confirmación oficial funciona tanto desde "pendiente" como desde "informados"', async () => {
@@ -479,12 +506,43 @@ test('marcarMaterialesCompletos() — la confirmación oficial funciona tanto de
   assert.equal(db._state.componentes.find((c) => c.id === 'comp-ficha').materiales_estado, 'completos');
 
   // Landing: primero informados, luego confirmación oficial.
-  await marcarMaterialesInformados(db, 'req-18b', { ventaId, componenteId: 'comp-landing', actorEmail: 'vendedor@example.com' });
+  await marcarMaterialesInformados(db, 'req-18b', { ventaId, componenteId: 'comp-landing', actorEmail: 'vendedor@example.com', descripcion: 'Fotos del local.' });
   await marcarMaterialesCompletos(db, 'req-18c', { ventaId, componenteId: 'comp-landing', actorEmail: 'admin@example.com' });
   assert.equal(db._state.componentes.find((c) => c.id === 'comp-landing').materiales_estado, 'completos');
 });
 
 // --- Antecedentes u observaciones ---
+
+test('revisarEntregaMateriales() — administración revisa una entrega puntual, sin tocar materiales_estado del componente', async () => {
+  const db = fakeDb();
+  const { ventaId } = seedPack(db);
+  const { detalleId } = await marcarMaterialesInformados(db, 'req-19a', { ventaId, componenteId: 'comp-ficha', actorEmail: 'vendedor@example.com', descripcion: 'Fotos.' });
+  await revisarEntregaMateriales(db, 'req-19b', { ventaId, componenteId: 'comp-ficha', entregaId: detalleId, actorEmail: 'admin@example.com', resultado: 'aceptada' });
+  const entrega = db._state.materiales_informados_detalle.find((m) => m.id === detalleId);
+  assert.equal(entrega.estado_revision, 'aceptada');
+  assert.equal(entrega.revisado_por, 'admin@example.com');
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-ficha').materiales_estado, 'informados', 'la revisión de la entrega nunca confirma el componente completo por sí sola');
+});
+
+test('revisarEntregaMateriales() — "requiere_material_adicional" queda registrado con motivo, sin revertir el componente', async () => {
+  const db = fakeDb();
+  const { ventaId } = seedPack(db);
+  const { detalleId } = await marcarMaterialesInformados(db, 'req-19c', { ventaId, componenteId: 'comp-ficha', actorEmail: 'vendedor@example.com', descripcion: 'Fotos.' });
+  await revisarEntregaMateriales(db, 'req-19d', { ventaId, componenteId: 'comp-ficha', entregaId: detalleId, actorEmail: 'admin@example.com', resultado: 'requiere_material_adicional', motivo: 'Falta el logo en alta resolución.' });
+  const entrega = db._state.materiales_informados_detalle.find((m) => m.id === detalleId);
+  assert.equal(entrega.estado_revision, 'requiere_material_adicional');
+  assert.equal(entrega.motivo_revision, 'Falta el logo en alta resolución.');
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-ficha').materiales_estado, 'informados');
+});
+
+test('revisarEntregaMateriales() — entrega inexistente lanza entrega_no_encontrada', async () => {
+  const db = fakeDb();
+  const { ventaId } = seedPack(db);
+  await assert.rejects(
+    () => revisarEntregaMateriales(db, 'req-19e', { ventaId, componenteId: 'comp-ficha', entregaId: 'no-existe', actorEmail: 'admin@example.com', resultado: 'aceptada' }),
+    (e) => { assert.equal(e.code, 'entrega_no_encontrada'); return true; }
+  );
+});
 
 test('agregarAntecedente() — agrega un evento de historial sin cambiar ningún estado oficial', async () => {
   const db = fakeDb();

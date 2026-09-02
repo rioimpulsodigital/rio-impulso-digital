@@ -66,7 +66,15 @@ export async function onRequest(context) {
   const puedeVerFacturacion = esVendedorDueño || esAdmin;
 
   const componentesConMateriales = await Promise.all(componentes.map(async (c) => {
-    const informes = await query(env.DB, requestId, 'SELECT * FROM materiales_informados_detalle WHERE componente_id = ? ORDER BY created_at DESC', [c.id]);
+    const informes = await query(
+      env.DB, requestId,
+      `SELECT m.*, ui.nombre AS informado_por_nombre, ur.nombre AS revisado_por_nombre
+       FROM materiales_informados_detalle m
+       LEFT JOIN usuarios ui ON ui.email = m.informado_por
+       LEFT JOIN usuarios ur ON ur.email = m.revisado_por
+       WHERE m.componente_id = ? ORDER BY m.created_at DESC`,
+      [c.id]
+    );
     const confirmaciones = await query(env.DB, requestId, 'SELECT * FROM materiales_confirmaciones WHERE componente_id = ? ORDER BY created_at DESC', [c.id]);
     const costoDominio = await query(env.DB, requestId, "SELECT monto, nota FROM costos_directos WHERE componente_id = ? AND tipo = 'dominio'", [c.id]);
     const requiereDominio = c.tipo === 'landing' && (venta.producto === 'personalizado' || venta.producto === 'ficha_personalizado');
@@ -79,8 +87,23 @@ export async function onRequest(context) {
       materialesEstado: c.materiales_estado,
       materialesInformes: informes.map((i) => ({
         id: i.id, informadoPor: i.informado_por,
+        // RIO-118 (corrección — identidad visible): nombre para mostrar,
+        // resuelto desde D1 — el email sigue siendo el dato real.
+        informadoPorNombre: i.informado_por_nombre || null,
         elementos: (() => { try { return JSON.parse(i.elementos_json); } catch (e) { return []; } })(),
         observaciones: i.observaciones, createdAt: i.created_at,
+        // RIO-118 (corrección funcional — materiales por correo central,
+        // 01/09/2026): cada entrega es su propio registro inmutable, con
+        // su propio estado de revisión — nunca reemplaza al anterior.
+        numeroEntrega: i.numero_entrega,
+        descripcion: i.descripcion,
+        cantidadArchivosAprox: i.cantidad_archivos_aprox,
+        correoDestino: i.correo_destino,
+        estadoRevision: i.estado_revision,
+        revisadoPor: i.revisado_por,
+        revisadoPorNombre: i.revisado_por_nombre || null,
+        revisadoEn: i.revisado_en,
+        motivoRevision: i.motivo_revision,
       })),
       materialesConfirmaciones: confirmaciones.map((cf) => ({
         id: cf.id, adminEmail: cf.admin_email, resultado: cf.resultado,

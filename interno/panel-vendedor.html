@@ -232,15 +232,35 @@
     .pv-materiales-box { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
     .pv-materiales-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
     .pv-materiales-titulo { font-size: .74rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-    .pv-materiales-informe { font-size: .76rem; color: var(--muted); margin-top: 4px; }
+    .pv-materiales-correo-nota { font-size: .74rem; color: var(--muted); margin: 0 0 10px; }
+    .pv-materiales-informe {
+      font-size: .76rem; color: var(--muted); margin-top: 8px; padding: 10px 12px;
+      background: var(--white); border: 1px solid var(--border); border-radius: var(--r-m);
+    }
     .pv-materiales-informe strong { color: var(--ink); }
-    .pv-materiales-form { margin-top: 8px; }
+    .pv-materiales-informe-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+    .pv-materiales-motivo-admin {
+      margin-top: 6px; font-size: .74rem; color: var(--pv-amber);
+      background: var(--pv-amber-bg); border: 1px solid var(--pv-amber-bd); border-radius: var(--r-m); padding: 6px 9px;
+    }
+    .pv-materiales-vacio { font-size: .78rem; color: var(--muted); font-style: italic; margin: 6px 0; }
+    .pv-materiales-asunto {
+      margin-top: 12px; padding: 10px 12px; background: var(--white); border: 1px dashed var(--border);
+      border-radius: var(--r-m); display: flex; flex-direction: column; gap: 6px;
+    }
+    .pv-materiales-asunto-label { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .pv-materiales-asunto-texto {
+      font-family: var(--ff-mono); font-size: .78rem; color: var(--ink); background: var(--off);
+      border-radius: var(--r-m); padding: 6px 9px; word-break: break-word;
+    }
+    .pv-materiales-form { margin-top: 12px; }
     .pv-materiales-checks { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; font-size: .8rem; }
     .pv-materiales-checks label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
-    .pv-materiales-form textarea {
-      width: 100%; min-height: 56px; font-family: var(--ff-body); font-size: .8rem;
-      border: 1.5px solid var(--border); border-radius: var(--r-m); padding: 7px 10px; margin-bottom: 8px; resize: vertical;
+    .pv-materiales-form textarea, .pv-materiales-form input[type="number"] {
+      width: 100%; font-family: var(--ff-body); font-size: .8rem;
+      border: 1.5px solid var(--border); border-radius: var(--r-m); padding: 7px 10px; margin-bottom: 8px;
     }
+    .pv-materiales-form textarea { min-height: 56px; resize: vertical; }
     .pv-dominio-pendiente {
       margin-top: 8px; font-size: .78rem; color: var(--pv-amber);
       background: var(--pv-amber-bg); border: 1px solid var(--pv-amber-bd);
@@ -299,6 +319,7 @@
       .pv-informar-form button { width: 100%; }
       .pv-upload-row button { width: 100%; }
       .pv-materiales-form button { width: 100%; }
+      .pv-materiales-asunto button[data-copiar-asunto] { width: 100%; min-height: 40px; }
       .pv-referente-card { flex-direction: column; align-items: stretch; }
       .pv-referente-btn { justify-content: center; width: 100%; }
     }
@@ -500,7 +521,7 @@
 
 <script src="./config/users.js" defer></script>
 <script src="../assets/js/main.js?v=20260627" defer></script>
-<script src="./panel-vendedor.js?v=20260901d" defer></script>
+<script src="./panel-vendedor.js?v=20260901e" defer></script>
 
 </body>
 </html>

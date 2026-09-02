@@ -42,6 +42,18 @@
   var PAGO_ESTADO_LABEL = { pendiente: 'Pendiente', informado: 'Informado', acreditado: 'Acreditado' };
   var MATERIALES_ESTADO_LABEL = { pendiente: 'Pendiente', informados: 'Informados (sin confirmar)', completos: 'Completos' };
   var MATERIALES_ESTADO_BADGE = { pendiente: 'neutral', informados: 'amber', completos: 'green' };
+  // RIO-118 (corrección funcional — materiales por correo central,
+  // 01/09/2026): estado de revisión de CADA entrega — independiente del
+  // estado oficial del componente (MATERIALES_ESTADO de arriba).
+  var ESTADO_REVISION_LABEL = {
+    informada: 'Informada', en_revision: 'En revisión', aceptada: 'Aceptada',
+    requiere_material_adicional: 'Requiere material adicional', descartada_con_motivo: 'Descartada',
+  };
+  var ESTADO_REVISION_BADGE = {
+    informada: 'neutral', en_revision: 'blue', aceptada: 'green',
+    requiere_material_adicional: 'amber', descartada_con_motivo: 'red',
+  };
+  var CORREO_MATERIALES = 'venta@rioimpulsodigital.com';
   var ELEMENTOS_MATERIALES = [
     ['logo', 'Logo'], ['fotos', 'Fotos'], ['textos', 'Textos'], ['otros', 'Otros'],
   ];
@@ -368,6 +380,21 @@
     return faltantes;
   }
 
+  // RIO-118 (corrección funcional — materiales por correo central,
+  // 01/09/2026): el cliente entrega al ejecutivo, que reenvía por correo
+  // a venta@rioimpulsodigital.com — el Portal NUNCA almacena los
+  // archivos, solo el hecho de la entrega y su revisión. Por eso este
+  // asunto es solo texto para copiar y pegar en el correo, nunca un
+  // envío automático ni un control de subida.
+  function siguienteNumeroEntrega(c) {
+    return ((c.materialesInformes || []).length) + 1;
+  }
+
+  function construirAsuntoSugerido(detalle, c) {
+    var tipo = c.tipo === 'ficha' ? 'FICHA' : 'LANDING';
+    return '[MATERIALES] [' + detalle.venta.codigoVenta + '] [' + detalle.cliente.negocio + '] [' + tipo + '] [ENTREGA ' + siguienteNumeroEntrega(c) + '°]';
+  }
+
   function renderMaterialesHTML(detalle, c) {
     var esVendedor = detalle.venta.vendedorEmail === identity.email;
     var badge = MATERIALES_ESTADO_BADGE[c.materialesEstado] || 'neutral';
@@ -375,32 +402,54 @@
       '<div class="pv-materiales-head">' +
         '<span class="pv-materiales-titulo">Materiales</span>' +
         '<span class="pv-badge pv-badge--' + badge + '">' + escapeHtml(MATERIALES_ESTADO_LABEL[c.materialesEstado] || c.materialesEstado) + '</span>' +
-      '</div>';
+      '</div>' +
+      '<p class="pv-materiales-correo-nota">El cliente entrega los materiales al ejecutivo, que los reenvía por correo a <strong>' + CORREO_MATERIALES + '</strong> — el Portal registra el hecho de la entrega, nunca los archivos.</p>';
 
-    (c.materialesInformes || []).slice(0, 3).forEach(function (i) {
-      html += '<div class="pv-materiales-informe">Informado por <strong>' + escapeHtml(i.informadoPor) + '</strong> el ' + fmtFecha(i.createdAt) +
+    // Cronológico: la entrega más reciente primero (el servidor ya la
+    // ordena así), pero el número de entrega identifica el orden real.
+    (c.materialesInformes || []).forEach(function (i) {
+      var badgeRevision = ESTADO_REVISION_BADGE[i.estadoRevision] || 'neutral';
+      html += '<div class="pv-materiales-informe">' +
+        '<div class="pv-materiales-informe-head">' +
+          '<strong>Entrega N.º ' + i.numeroEntrega + '</strong>' +
+          '<span class="pv-badge pv-badge--' + badgeRevision + '">' + escapeHtml(ESTADO_REVISION_LABEL[i.estadoRevision] || i.estadoRevision) + '</span>' +
+        '</div>' +
+        escapeHtml(i.informadoPorNombre || 'Usuario sin nombre configurado') + ' · ' + fmtFecha(i.createdAt) +
         (i.elementos && i.elementos.length ? ' — ' + i.elementos.map(escapeHtml).join(', ') : '') +
-        (i.observaciones ? '<br>"' + escapeHtml(i.observaciones) + '"' : '') + '</div>';
+        (i.cantidadArchivosAprox ? ' · ≈' + i.cantidadArchivosAprox + ' archivo(s)' : '') +
+        '<br>' + escapeHtml(i.descripcion || '—') +
+        (i.observaciones ? '<br><em>"' + escapeHtml(i.observaciones) + '"</em>' : '') +
+        (i.motivoRevision ? '<div class="pv-materiales-motivo-admin">Administración: ' + escapeHtml(i.motivoRevision) + '</div>' : '') +
+      '</div>';
     });
-    (c.materialesConfirmaciones || []).slice(0, 2).forEach(function (cf) {
-      html += '<div class="pv-materiales-informe">' + (cf.resultado === 'completos' ? '✓ Confirmado completo' : '✗ Confirmado incompleto') +
-        ' por administración el ' + fmtFecha(cf.createdAt) +
-        (cf.faltantes && cf.faltantes.length ? ' — falta: ' + cf.faltantes.map(escapeHtml).join(', ') : '') + '</div>';
-    });
+    if (!c.materialesInformes || c.materialesInformes.length === 0) {
+      html += '<p class="pv-materiales-vacio">Todavía no se informó ninguna entrega.</p>';
+    }
 
     if (c.costoDominioPendiente) {
       html += '<div class="pv-dominio-pendiente">El costo del dominio propio todavía no fue confirmado por administración — mientras tanto, la comisión de esta venta queda estimada, no definitiva.</div>';
     }
 
-    if (esVendedor && c.materialesEstado === 'pendiente') {
-      html += '<form class="pv-materiales-form" data-informar-materiales="' + escapeHtml(c.id) + '">' +
+    // RIO-118: el botón queda SIEMPRE disponible — "Materiales completos"
+    // nunca lo oculta ni cierra el registro (Brenda: "la posibilidad de
+    // informar materiales debe permanecer siempre abierta").
+    if (esVendedor) {
+      var asunto = construirAsuntoSugerido(detalle, c);
+      html += '<div class="pv-materiales-asunto">' +
+        '<span class="pv-materiales-asunto-label">Asunto sugerido para el correo:</span>' +
+        '<code class="pv-materiales-asunto-texto" data-asunto-texto>' + escapeHtml(asunto) + '</code>' +
+        '<button type="button" class="pv-btn" data-copiar-asunto="' + escapeHtml(asunto) + '">Copiar asunto</button>' +
+      '</div>' +
+      '<form class="pv-materiales-form" data-informar-materiales="' + escapeHtml(c.id) + '">' +
         '<div class="pv-materiales-checks">' +
           ELEMENTOS_MATERIALES.map(function (e) {
             return '<label><input type="checkbox" value="' + escapeHtml(e[0]) + '"> ' + escapeHtml(e[1]) + '</label>';
           }).join('') +
         '</div>' +
-        '<textarea placeholder="Observaciones (qué falta, cómo lo recibiste, etc.)"></textarea>' +
-        '<button type="submit" class="pv-btn pv-btn--primary">Informar materiales recibidos</button>' +
+        '<textarea class="pv-materiales-descripcion" placeholder="Descripción del material enviado (obligatorio) — qué es, qué contiene…" required></textarea>' +
+        '<input type="number" min="0" step="1" class="pv-materiales-cantidad" placeholder="Cantidad aproximada de archivos (opcional)">' +
+        '<textarea class="pv-materiales-observaciones" placeholder="Observación opcional"></textarea>' +
+        '<button type="submit" class="pv-btn pv-btn--primary">Informar nuevos materiales</button>' +
       '</form>';
     }
 
@@ -578,20 +627,39 @@
       });
     });
 
+    Array.prototype.forEach.call(body.querySelectorAll('button[data-copiar-asunto]'), function (btn) {
+      btn.addEventListener('click', async function () {
+        var texto = btn.getAttribute('data-copiar-asunto');
+        var original = btn.textContent;
+        try {
+          await navigator.clipboard.writeText(texto);
+          btn.textContent = '¡Copiado!';
+        } catch (e) {
+          btn.textContent = 'No se pudo copiar';
+        }
+        setTimeout(function () { btn.textContent = original; }, 1800);
+      });
+    });
+
     Array.prototype.forEach.call(body.querySelectorAll('form[data-informar-materiales]'), function (form) {
       form.addEventListener('submit', async function (e) {
         e.preventDefault();
         var componenteId = form.getAttribute('data-informar-materiales');
         var elementos = Array.prototype.map.call(form.querySelectorAll('input[type="checkbox"]:checked'), function (cb) { return cb.value; });
-        var observaciones = form.querySelector('textarea').value.trim() || null;
-        var btn = form.querySelector('button');
+        var descripcion = form.querySelector('.pv-materiales-descripcion').value.trim();
+        if (!descripcion) { alert('⚠️ Falta describir el material enviado.'); return; }
+        var cantidadInput = form.querySelector('.pv-materiales-cantidad').value;
+        var cantidadArchivosAprox = cantidadInput ? parseInt(cantidadInput, 10) : undefined;
+        var observaciones = form.querySelector('.pv-materiales-observaciones').value.trim() || null;
+        var btn = form.querySelector('button[type="submit"]');
+        var textoOriginal = btn.textContent;
         btn.disabled = true; btn.textContent = 'Informando…';
         var r = await apiFetch(
           '/interno/api/ventas/' + encodeURIComponent(detalle.venta.id) + '/componentes/' + encodeURIComponent(componenteId),
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'materiales-informados', elementos: elementos, observaciones: observaciones }) }
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'materiales-informados', elementos: elementos, descripcion: descripcion, cantidadArchivosAprox: cantidadArchivosAprox, observaciones: observaciones }) }
         );
         if (!r.ok) {
-          btn.disabled = false; btn.textContent = 'Informar materiales recibidos';
+          btn.disabled = false; btn.textContent = textoOriginal;
           alert((r.body && r.body.error && r.body.error.message) || 'No se pudo informar los materiales.');
           return;
         }

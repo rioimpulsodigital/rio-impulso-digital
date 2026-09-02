@@ -78,6 +78,12 @@ function fakeDb({ ventaExiste = true } = {}) {
     if (sql.startsWith('SELECT * FROM pagos_informados WHERE pago_esperado_id')) {
       return state.pagos_informados.filter((x) => x.pago_esperado_id === p[0]).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     }
+    if (sql.startsWith('SELECT COUNT(*) AS n FROM materiales_informados_detalle WHERE componente_id')) {
+      return [{ n: state.materiales_informados_detalle.filter((m) => m.componente_id === p[0]).length }];
+    }
+    if (sql.startsWith('SELECT * FROM materiales_informados_detalle WHERE id')) {
+      return state.materiales_informados_detalle.filter((m) => m.id === p[0] && m.componente_id === p[1]);
+    }
     return [];
   }
 
@@ -112,7 +118,13 @@ function fakeDb({ ventaExiste = true } = {}) {
     } else if (sql.startsWith('INSERT INTO incidencias')) {
       state.incidencias.push({ id: p[0], venta_id: p[1], tipo: p[2], motivo: p[3], estado: 'abierta', registrado_por: p[4] });
     } else if (sql.startsWith('INSERT INTO materiales_informados_detalle')) {
-      state.materiales_informados_detalle.push({ id: p[0], componente_id: p[1], informado_por: p[2], elementos_json: p[3], observaciones: p[4] });
+      state.materiales_informados_detalle.push({
+        id: p[0], componente_id: p[1], informado_por: p[2], elementos_json: p[3], observaciones: p[4],
+        numero_entrega: p[5], descripcion: p[6], cantidad_archivos_aprox: p[7], estado_revision: 'informada',
+      });
+    } else if (sql.startsWith("UPDATE materiales_informados_detalle SET estado_revision")) {
+      const row = state.materiales_informados_detalle.find((x) => x.id === p[3]);
+      if (row) { row.estado_revision = p[0]; row.revisado_por = p[1]; row.motivo_revision = p[2]; }
     } else if (sql.startsWith('INSERT INTO materiales_confirmaciones')) {
       state.materiales_confirmaciones.push({ id: p[0], componente_id: p[1], admin_email: p[2], resultado: p[3], faltantes_json: p[4] || null });
     }
@@ -139,15 +151,21 @@ function fakeContext({ method = 'POST', body, roleIdentity: ri, db, params = { i
 
 test('componentes: el vendedor de la venta puede reportar materiales-informados', async () => {
   const db = fakeDb();
-  const response = await componenteHandler(fakeContext({ body: { action: 'materiales-informados' }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  const response = await componenteHandler(fakeContext({ body: { action: 'materiales-informados', descripcion: 'Fotos del local.' }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
   assert.equal(response.status, 200);
   assert.equal(db._state.componentes.find((c) => c.id === 'comp-x').materiales_estado, 'informados');
 });
 
-test('componentes: materiales-informados registra elementos/observaciones/quién/cuándo, aparte de mover el estado', async () => {
+test('componentes: materiales-informados sin descripción devuelve 400 (correo central igual necesita saber qué se envió)', async () => {
+  const db = fakeDb();
+  const response = await componenteHandler(fakeContext({ body: { action: 'materiales-informados' }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  assert.equal(response.status, 400);
+});
+
+test('componentes: materiales-informados registra elementos/descripción/cantidad/observaciones/quién/cuándo, aparte de mover el estado', async () => {
   const db = fakeDb();
   const response = await componenteHandler(fakeContext({
-    body: { action: 'materiales-informados', elementos: ['logo', 'fotos'], observaciones: 'Llegaron por WhatsApp.' },
+    body: { action: 'materiales-informados', elementos: ['logo', 'fotos'], descripcion: 'Logo en PNG y 5 fotos del local.', cantidadArchivosAprox: 6, observaciones: 'Llegaron por WhatsApp.' },
     roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' },
   }));
   assert.equal(response.status, 200);
@@ -155,33 +173,81 @@ test('componentes: materiales-informados registra elementos/observaciones/quién
   assert.equal(detalle.componente_id, 'comp-x');
   assert.equal(detalle.informado_por, VENDEDOR);
   assert.deepEqual(JSON.parse(detalle.elementos_json), ['logo', 'fotos']);
+  assert.equal(detalle.descripcion, 'Logo en PNG y 5 fotos del local.');
+  assert.equal(detalle.cantidad_archivos_aprox, 6);
   assert.equal(detalle.observaciones, 'Llegaron por WhatsApp.');
+  assert.equal(detalle.numero_entrega, 1);
+  assert.equal(detalle.estado_revision, 'informada');
 });
 
-test('componentes: informar materiales dos veces seguidas (sin que administración confirme entre medio) se rechaza — nunca se pisa el informe anterior', async () => {
+// RIO-118 (corrección funcional — materiales por correo central,
+// 01/09/2026): el registro NUNCA se cierra — "Materiales completos" no
+// oculta el botón ni bloquea informar de nuevo.
+test('componentes: informar materiales varias veces seguidas SIEMPRE funciona — cada una es una entrega nueva, numerada, sin pisar la anterior', async () => {
   const db = fakeDb();
-  await componenteHandler(fakeContext({ body: { action: 'materiales-informados', elementos: ['logo'] }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
-  const response = await componenteHandler(fakeContext({ body: { action: 'materiales-informados', elementos: ['fotos'] }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
-  assert.equal(response.status, 409);
-  assert.equal(db._state.materiales_informados_detalle.length, 1, 'el segundo intento no agrega un registro nuevo');
+  const r1 = await componenteHandler(fakeContext({ body: { action: 'materiales-informados', elementos: ['logo'], descripcion: 'Primera entrega.' }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  const r2 = await componenteHandler(fakeContext({ body: { action: 'materiales-informados', elementos: ['fotos'], descripcion: 'Segunda entrega.' }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  assert.equal(r1.status, 200);
+  assert.equal(r2.status, 200);
+  assert.equal(db._state.materiales_informados_detalle.length, 2, 'cada informe agrega un registro nuevo, nunca reemplaza');
+  assert.equal(db._state.materiales_informados_detalle[0].descripcion, 'Primera entrega.', 'la primera entrega no se pisa');
+  assert.equal(db._state.materiales_informados_detalle[1].numero_entrega, 2);
 });
 
-test('componentes: administración marca materiales-incompletos — vuelve a pendiente y deja auditoría de lo que falta, sin borrar el informe del vendedor', async () => {
+test('componentes: informar materiales DESPUÉS de "materiales-completos" sigue funcionando, sin revertir el estado oficial', async () => {
   const db = fakeDb();
-  await componenteHandler(fakeContext({ body: { action: 'materiales-informados', elementos: ['logo'] }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
   const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL', 'AR'], permissions: PERMISSIONS.admin });
-  const response = await componenteHandler(fakeContext({ body: { action: 'materiales-incompletos', faltantes: ['fotos', 'textos'] }, roleIdentity: admin, db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
-  assert.equal(response.status, 200);
-  assert.equal(db._state.componentes.find((c) => c.id === 'comp-x').materiales_estado, 'pendiente');
-  assert.equal(db._state.materiales_informados_detalle.length, 1, 'el informe original del vendedor sigue existiendo');
-  const confirmacion = db._state.materiales_confirmaciones[0];
-  assert.equal(confirmacion.resultado, 'incompletos');
-  assert.deepEqual(JSON.parse(confirmacion.faltantes_json), ['fotos', 'textos']);
+  await componenteHandler(fakeContext({ body: { action: 'materiales-completos' }, roleIdentity: admin, db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-x').materiales_estado, 'completos');
 
-  // El vendedor puede volver a informar — un nuevo registro, no un reemplazo.
-  const segundo = await componenteHandler(fakeContext({ body: { action: 'materiales-informados', elementos: ['fotos', 'textos'] }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
-  assert.equal(segundo.status, 200);
-  assert.equal(db._state.materiales_informados_detalle.length, 2);
+  const response = await componenteHandler(fakeContext({ body: { action: 'materiales-informados', descripcion: 'El cliente mandó fotos nuevas después de la entrega inicial.' }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  assert.equal(response.status, 200);
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-x').materiales_estado, 'completos', 'nunca se revierte automáticamente');
+  assert.ok(db._state.eventos_historial.some((e) => e.entidad_id === 'comp-x' && e.estado_nuevo === 'material_adicional_informado'));
+});
+
+test('componentes: administración revisa una entrega puntual (revisar-entrega-materiales) sin borrar ni tocar las demás', async () => {
+  const db = fakeDb();
+  await componenteHandler(fakeContext({ body: { action: 'materiales-informados', elementos: ['logo'], descripcion: 'Primera entrega.' }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  const entregaId = db._state.materiales_informados_detalle[0].id;
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL', 'AR'], permissions: PERMISSIONS.admin });
+  const response = await componenteHandler(fakeContext({
+    body: { action: 'revisar-entrega-materiales', entregaId, resultado: 'requiere_material_adicional', motivo: 'Falta el logo en alta resolución.' },
+    roleIdentity: admin, db, params: { id: 'venta-1', componenteId: 'comp-x' },
+  }));
+  assert.equal(response.status, 200);
+  assert.equal(db._state.materiales_informados_detalle.length, 1, 'la entrega no se borra, solo se actualiza su revisión');
+  const entrega = db._state.materiales_informados_detalle[0];
+  assert.equal(entrega.estado_revision, 'requiere_material_adicional');
+  assert.equal(entrega.revisado_por, 'admin@example.com');
+  assert.equal(entrega.motivo_revision, 'Falta el logo en alta resolución.');
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-x').materiales_estado, 'informados', 'la revisión de una entrega nunca confirma el componente completo por sí sola');
+});
+
+test('componentes: revisar-entrega-materiales con un entregaId de OTRO componente no encuentra nada — manipular el id no da acceso', async () => {
+  const db = fakeDb();
+  db._state.componentes.push({ id: 'comp-landing', proyecto_id: 'proyecto-1', tipo: 'landing', estado_actual: 'bloqueada', materiales_estado: 'pendiente' });
+  await componenteHandler(fakeContext({ body: { action: 'materiales-informados', descripcion: 'De la Landing.' }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-landing' } }));
+  const entregaDeLanding = db._state.materiales_informados_detalle[0].id;
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL', 'AR'], permissions: PERMISSIONS.admin });
+  // Intenta revisar la entrega de Landing pero apuntando al componente Ficha en la ruta.
+  const response = await componenteHandler(fakeContext({
+    body: { action: 'revisar-entrega-materiales', entregaId: entregaDeLanding, resultado: 'aceptada' },
+    roleIdentity: admin, db, params: { id: 'venta-1', componenteId: 'comp-x' },
+  }));
+  assert.equal(response.status, 404);
+});
+
+test('componentes: revisar-entrega-materiales exige motivo para "requiere_material_adicional" y "descartada_con_motivo"', async () => {
+  const db = fakeDb();
+  await componenteHandler(fakeContext({ body: { action: 'materiales-informados', descripcion: 'x' }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  const entregaId = db._state.materiales_informados_detalle[0].id;
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL', 'AR'], permissions: PERMISSIONS.admin });
+  const response = await componenteHandler(fakeContext({
+    body: { action: 'revisar-entrega-materiales', entregaId, resultado: 'descartada_con_motivo' },
+    roleIdentity: admin, db, params: { id: 'venta-1', componenteId: 'comp-x' },
+  }));
+  assert.equal(response.status, 400);
 });
 
 test('componentes: el vendedor de la venta recibe 403 al intentar una transición oficial (aprobar) — incluso siendo el dueño', async () => {
@@ -259,12 +325,12 @@ test('pagos: un supervisor recibe 403 al acreditar (exclusivo de admin)', async 
   assert.equal(response.status, 403);
 });
 
-test('componentes: un supervisor NUNCA puede confirmar materiales (ni completos ni incompletos) — exclusivo de administración', async () => {
+test('componentes: un supervisor NUNCA puede confirmar materiales ni revisar una entrega — exclusivo de administración', async () => {
   const db = fakeDb();
   const completos = await componenteHandler(fakeContext({ body: { action: 'materiales-completos' }, roleIdentity: supervisorMismoMercado(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
   assert.equal(completos.status, 403);
-  const incompletos = await componenteHandler(fakeContext({ body: { action: 'materiales-incompletos', faltantes: ['fotos'] }, roleIdentity: supervisorMismoMercado(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
-  assert.equal(incompletos.status, 403);
+  const revision = await componenteHandler(fakeContext({ body: { action: 'revisar-entrega-materiales', entregaId: 'cualquiera', resultado: 'aceptada' }, roleIdentity: supervisorMismoMercado(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  assert.equal(revision.status, 403);
 });
 
 test('componentes: un supervisor de OTRO mercado recibe 404 (la venta ni siquiera es visible)', async () => {
@@ -287,7 +353,7 @@ test('supervisor vendedor: sobre SU PROPIA venta puede reportar materiales e inf
   const supervisorVendedor = roleIdentity({ email: 'supervisor.vende@example.com', role: 'supervisor', allowedMarkets: ['CL'], canSell: true, permissions: PERMISSIONS.supervisor });
   db._state.ventas[0].vendedor_email = supervisorVendedor.email; // esta venta es SUYA.
 
-  const reportar = await componenteHandler(fakeContext({ body: { action: 'materiales-informados' }, roleIdentity: supervisorVendedor, db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  const reportar = await componenteHandler(fakeContext({ body: { action: 'materiales-informados', descripcion: 'Fotos.' }, roleIdentity: supervisorVendedor, db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
   assert.equal(reportar.status, 200, 'sobre su propia venta, sí puede reportar materiales');
 
   const informar = await pagoHandler(fakeContext({ body: { action: 'informar', montoInformado: 1000 }, roleIdentity: supervisorVendedor, db, params: { id: 'venta-1', pagoId: 'pago-x' } }));
@@ -307,7 +373,7 @@ test('asistente vendedor: sobre su propia venta puede reportar, pero no acredita
   const asistenteVendedor = roleIdentity({ email: 'practicante@example.com', role: 'asistente', allowedMarkets: ['CL'], canSell: true, permissions: PERMISSIONS.asistente });
   db._state.ventas[0].vendedor_email = asistenteVendedor.email;
 
-  const reportar = await componenteHandler(fakeContext({ body: { action: 'materiales-informados' }, roleIdentity: asistenteVendedor, db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  const reportar = await componenteHandler(fakeContext({ body: { action: 'materiales-informados', descripcion: 'Fotos.' }, roleIdentity: asistenteVendedor, db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
   assert.equal(reportar.status, 200);
 
   const aprobar = await componenteHandler(fakeContext({ body: { action: 'aprobar' }, roleIdentity: asistenteVendedor, db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
@@ -347,7 +413,7 @@ test('pack: los materiales de Landing se pueden informar y confirmar completos M
   // el estado de la Ficha en ningún momento de este test.
   db._state.componentes.push({ id: 'comp-landing', proyecto_id: 'proyecto-1', tipo: 'landing', estado_actual: 'bloqueada', materiales_estado: 'pendiente' });
 
-  const informar = await componenteHandler(fakeContext({ body: { action: 'materiales-informados', elementos: ['fotos'] }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-landing' } }));
+  const informar = await componenteHandler(fakeContext({ body: { action: 'materiales-informados', elementos: ['fotos'], descripcion: 'Fotos de la Landing.' }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-landing' } }));
   assert.equal(informar.status, 200);
   assert.equal(db._state.componentes.find((c) => c.id === 'comp-landing').materiales_estado, 'informados');
   assert.equal(db._state.componentes.find((c) => c.id === 'comp-x').estado_actual, 'entregada', 'la Ficha no se tocó');

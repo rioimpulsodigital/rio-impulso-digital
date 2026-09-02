@@ -175,42 +175,83 @@ export async function aprobarComponente(db, requestId, { ventaId, componenteId, 
   return { gate };
 }
 
-// Informa la recepción de materiales de un componente (RIO-113
-// corrección, Brenda sección 4: "el vendedor recibió archivos" es un
-// dato reportado, nunca una confirmación oficial). Solo puede llamarse
-// desde 'pendiente' — no reemplaza ni adelanta la confirmación
-// administrativa de `marcarMaterialesCompletos`, y NO reevalúa el gate
-// de Landing (informado ≠ completo, igual criterio que los pagos).
-// RIO-117 (corrección tras validación real, 01/09/2026): además de mover
-// el estado (pendiente -> informados, ya existente desde RIO-113), deja un
-// registro auditable de QUÉ se recibió y las observaciones del vendedor —
-// "no depender de la memoria del equipo". Cada llamada agrega una fila
-// nueva (nunca reemplaza la anterior — Brenda sección 8: "corregir
-// mediante un nuevo registro, sin borrar el anterior"), lo que además
-// permite volver a informar después de un "incompletos" de administración
-// (ver marcarMaterialesIncompletos, que vuelve el estado a 'pendiente').
-export async function marcarMaterialesInformados(db, requestId, { ventaId, componenteId, actorEmail, elementos, observaciones }) {
+// Informa la recepción de materiales de un componente — RIO-118
+// (corrección funcional, 01/09/2026): el cliente entrega al ejecutivo,
+// que reenvía por correo a venta@rioimpulsodigital.com — el Portal NUNCA
+// almacena archivos, solo registra el HECHO de la entrega. Cada llamada
+// crea una entrega NUEVA E INMUTABLE, numerada secuencialmente por
+// componente — "Materiales completos" en el componente NUNCA cierra este
+// registro ni oculta la posibilidad de informar de nuevo (reemplaza el
+// límite de RIO-117, que exigía un reseteo administrativo para volver a
+// informar — ya no hace falta: siempre está abierto).
+//
+// Si el componente YA estaba 'completos' cuando llega esta entrega, es
+// "material adicional" — se deja constancia con su propio tipo de evento
+// (`material_adicional_informado`), pero NUNCA se toca automáticamente
+// materiales_estado, ni el gate, ni ningún plazo — esa decisión queda
+// exclusivamente para administración (ver revisarEntregaMateriales).
+export async function marcarMaterialesInformados(db, requestId, { ventaId, componenteId, actorEmail, elementos, descripcion, cantidadArchivosAprox, observaciones }) {
   const { componentes } = await loadVentaFull(db, requestId, ventaId);
   const componente = componentes.find((c) => c.id === componenteId);
   if (!componente) throw new ProyectoError('componente_no_encontrado', 'Componente no encontrado.');
-  if (componente.materiales_estado !== 'pendiente') {
-    throw new ProyectoError('materiales_ya_reportados', 'Los materiales de este componente ya fueron informados o confirmados como completos.');
-  }
+
+  const existentes = await query(db, requestId, 'SELECT COUNT(*) AS n FROM materiales_informados_detalle WHERE componente_id = ?', [componenteId]);
+  const numeroEntrega = (existentes[0]?.n || 0) + 1;
+  const esAdicionalTrasCompletos = componente.materiales_estado === 'completos';
 
   const detalleId = crypto.randomUUID();
   await execute(
     db, requestId,
-    'INSERT INTO materiales_informados_detalle (id, componente_id, informado_por, elementos_json, observaciones) VALUES (?, ?, ?, ?, ?)',
-    [detalleId, componenteId, actorEmail, JSON.stringify(elementos || []), observaciones || null]
+    `INSERT INTO materiales_informados_detalle
+       (id, componente_id, informado_por, elementos_json, observaciones, numero_entrega, descripcion, cantidad_archivos_aprox)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [detalleId, componenteId, actorEmail, JSON.stringify(elementos || []), observaciones || null, numeroEntrega, descripcion || '', Number.isInteger(cantidadArchivosAprox) ? cantidadArchivosAprox : null]
   );
-  await execute(db, requestId, "UPDATE componentes SET materiales_estado = 'informados' WHERE id = ?", [componenteId]);
+
+  if (esAdicionalTrasCompletos) {
+    await logEvento(db, requestId, {
+      ventaId, entidad: 'componente', entidadId: componenteId,
+      estadoNuevo: 'material_adicional_informado', usuarioEmail: actorEmail,
+      motivoNota: `Entrega adicional N.º ${numeroEntrega} — el componente ya estaba marcado como completos. Administración decide si se incorpora, reemplaza, requiere corrección, queda fuera de alcance o afecta el plazo.`,
+      proximaAccion: 'Revisar la entrega adicional', responsableProximaAccion: null,
+    });
+    return { detalleId, numeroEntrega, esAdicionalTrasCompletos: true };
+  }
+
+  if (componente.materiales_estado === 'pendiente') {
+    await execute(db, requestId, "UPDATE componentes SET materiales_estado = 'informados' WHERE id = ?", [componenteId]);
+  }
   await logEvento(db, requestId, {
     ventaId, entidad: 'componente', entidadId: componenteId,
-    estadoAnterior: 'materiales:pendiente', estadoNuevo: 'materiales:informados', usuarioEmail: actorEmail,
-    motivoNota: 'El vendedor informó la recepción de materiales — pendiente de confirmación oficial de administración.',
-    proximaAccion: 'Confirmar si los materiales alcanzan para producción', responsableProximaAccion: null,
+    estadoAnterior: `materiales:${componente.materiales_estado}`, estadoNuevo: 'materiales:informados', usuarioEmail: actorEmail,
+    motivoNota: `Entrega N.º ${numeroEntrega} informada — pendiente de revisión administrativa.`,
+    proximaAccion: 'Revisar la entrega y, si corresponde, confirmar materiales completos', responsableProximaAccion: null,
   });
-  return { detalleId };
+  return { detalleId, numeroEntrega, esAdicionalTrasCompletos: false };
+}
+
+// Revisión administrativa de UNA entrega puntual (RIO-118, corrección
+// funcional) — exclusivo de administración (se valida en el endpoint).
+// Nunca modifica materiales_estado del componente, el gate, ni ningún
+// plazo: eso queda para marcarMaterialesCompletos (acción aparte,
+// deliberadamente separada) o para lo que administración decida hacer
+// manualmente. `motivo` es obligatorio para 'requiere_material_adicional'
+// y 'descartada_con_motivo' — se valida en el endpoint.
+export async function revisarEntregaMateriales(db, requestId, { ventaId, componenteId, entregaId, actorEmail, resultado, motivo }) {
+  const entregas = await query(db, requestId, 'SELECT * FROM materiales_informados_detalle WHERE id = ? AND componente_id = ?', [entregaId, componenteId]);
+  const entrega = entregas[0];
+  if (!entrega) throw new ProyectoError('entrega_no_encontrada', 'Entrega de materiales no encontrada.');
+
+  await execute(
+    db, requestId,
+    "UPDATE materiales_informados_detalle SET estado_revision = ?, revisado_por = ?, revisado_en = datetime('now'), motivo_revision = ? WHERE id = ?",
+    [resultado, actorEmail, motivo || null, entregaId]
+  );
+  await logEvento(db, requestId, {
+    ventaId, entidad: 'componente', entidadId: componenteId,
+    estadoAnterior: `entrega:${entrega.estado_revision}`, estadoNuevo: `entrega:${resultado}`, usuarioEmail: actorEmail,
+    motivoNota: motivo || null,
+  });
 }
 
 // Confirma oficialmente los materiales de un componente como completos
@@ -244,37 +285,6 @@ export async function marcarMaterialesCompletos(db, requestId, { ventaId, compon
     gate = await evaluateLandingGate(db, requestId, ventaId, actorEmail);
   }
   return { gate };
-}
-
-// RIO-117 (corrección tras validación real, 01/09/2026): el reverso de
-// marcarMaterialesCompletos — administración confirma que lo recibido NO
-// alcanza, indicando qué falta. Vuelve el componente a 'pendiente' (nunca
-// deja el estado "colgado" en 'informados') para que el vendedor pueda
-// informar de nuevo con un registro nuevo — nunca borra el informe
-// anterior. Mismo patrón que rechazarPago (RIO-116) para pagos.
-export async function marcarMaterialesIncompletos(db, requestId, { ventaId, componenteId, actorEmail, faltantes }) {
-  const { componentes } = await loadVentaFull(db, requestId, ventaId);
-  const componente = componentes.find((c) => c.id === componenteId);
-  if (!componente) throw new ProyectoError('componente_no_encontrado', 'Componente no encontrado.');
-  if (componente.materiales_estado === 'completos') {
-    throw new ProyectoError('ya_completos', 'Los materiales de este componente ya estaban marcados como completos — no se puede revertir a incompletos.');
-  }
-  if (componente.materiales_estado === 'pendiente') {
-    throw new ProyectoError('nada_que_confirmar', 'Todavía no se informó ningún material de este componente.');
-  }
-
-  await execute(
-    db, requestId,
-    'INSERT INTO materiales_confirmaciones (id, componente_id, admin_email, resultado, faltantes_json) VALUES (?, ?, ?, ?, ?)',
-    [crypto.randomUUID(), componenteId, actorEmail, 'incompletos', JSON.stringify(faltantes || [])]
-  );
-  await execute(db, requestId, "UPDATE componentes SET materiales_estado = 'pendiente' WHERE id = ?", [componenteId]);
-  await logEvento(db, requestId, {
-    ventaId, entidad: 'componente', entidadId: componenteId,
-    estadoAnterior: 'materiales:informados', estadoNuevo: 'materiales:pendiente', usuarioEmail: actorEmail,
-    motivoNota: 'Administración confirmó que los materiales están incompletos.' + (faltantes && faltantes.length ? ' Falta: ' + faltantes.join(', ') + '.' : ''),
-    proximaAccion: 'Informar los materiales faltantes', responsableProximaAccion: null,
-  });
 }
 
 // Rollup del estado del proyecto a partir de sus componentes — nunca se

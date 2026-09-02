@@ -322,6 +322,20 @@
     return faltantes;
   }
 
+  // RIO-118 (corrección funcional — materiales por correo central,
+  // 01/09/2026): el supervisor solo consulta que existen entregas y su
+  // estado general — nunca confirma, nunca revisa, y no hay ningún
+  // archivo que mostrar (el correo central es la fuente documental, el
+  // Portal nunca almacena nada).
+  var ESTADO_REVISION_LABEL = {
+    informada: 'Informada', en_revision: 'En revisión', aceptada: 'Aceptada',
+    requiere_material_adicional: 'Requiere material adicional', descartada_con_motivo: 'Descartada',
+  };
+  var ESTADO_REVISION_BADGE = {
+    informada: 'neutral', en_revision: 'blue', aceptada: 'green',
+    requiere_material_adicional: 'amber', descartada_con_motivo: 'red',
+  };
+
   function renderMaterialesSoloLecturaHTML(c) {
     var badge = MATERIALES_ESTADO_BADGE[c.materialesEstado] || 'neutral';
     var html = '<div class="pv-materiales-box">' +
@@ -329,13 +343,13 @@
         '<span class="pv-materiales-titulo">Materiales</span>' +
         '<span class="pv-badge pv-badge--' + badge + '">' + escapeHtml(MATERIALES_ESTADO_LABEL[c.materialesEstado] || c.materialesEstado) + '</span>' +
       '</div>';
-    (c.materialesInformes || []).slice(0, 2).forEach(function (i) {
-      html += '<div class="pv-materiales-informe">Informado por <strong>' + escapeHtml(i.informadoPor) + '</strong> el ' + fmtFecha(i.createdAt) +
-        (i.elementos && i.elementos.length ? ' — ' + i.elementos.map(escapeHtml).join(', ') : '') + '</div>';
-    });
-    (c.materialesConfirmaciones || []).slice(0, 1).forEach(function (cf) {
-      html += '<div class="pv-materiales-informe">' + (cf.resultado === 'completos' ? '✓ Confirmado completo' : '✗ Confirmado incompleto') + ' por administración el ' + fmtFecha(cf.createdAt) + '</div>';
-    });
+    if (c.materialesInformes && c.materialesInformes.length) {
+      html += '<div class="pv-materiales-informe">' + c.materialesInformes.length + ' entrega(s) informada(s) — la más reciente: N.º ' + c.materialesInformes[0].numeroEntrega +
+        ' <span class="pv-badge pv-badge--' + (ESTADO_REVISION_BADGE[c.materialesInformes[0].estadoRevision] || 'neutral') + '">' + escapeHtml(ESTADO_REVISION_LABEL[c.materialesInformes[0].estadoRevision] || c.materialesInformes[0].estadoRevision) + '</span>' +
+      '</div>';
+    } else {
+      html += '<p class="pv-materiales-vacio">Todavía no se informó ninguna entrega.</p>';
+    }
     if (c.costoDominioPendiente) {
       html += '<div class="pv-dominio-pendiente">Costo del dominio propio todavía no confirmado por administración — la comisión de esta venta queda estimada.</div>';
     }
