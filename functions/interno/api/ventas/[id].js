@@ -20,9 +20,12 @@ export async function onRequest(context) {
   const ventaRows = await query(
     env.DB,
     requestId,
-    `SELECT v.*, c.negocio, c.contacto_nombre, c.telefono, c.email AS cliente_email, c.datos_facturacion_ar, u.nombre AS vendedor_nombre
+    `SELECT v.*, c.negocio, c.contacto_nombre, c.telefono, c.email AS cliente_email, c.datos_facturacion_ar,
+       u.nombre AS vendedor_nombre, e.nombre AS equipo_nombre, us.nombre AS supervisor_nombre
      FROM ventas v JOIN clientes c ON c.id = v.cliente_id
      LEFT JOIN usuarios u ON u.email = v.vendedor_email
+     LEFT JOIN equipos e ON e.id = v.equipo_id
+     LEFT JOIN usuarios us ON us.email = v.supervisor_snapshot_email
      WHERE v.id = ?`,
     [params.id]
   );
@@ -130,6 +133,23 @@ export async function onRequest(context) {
         vendedorNombre: venta.vendedor_nombre || null,
         estadoActual: venta.estado_actual,
         createdAt: venta.created_at,
+        // RIO-118 (corrección — ventas administrativas y comisión de
+        // supervisión, 01/09/2026): snapshot inmutable tomado al cerrar
+        // la venta — "Equipo no asignado" (equipoId null, tipoVenta
+        // 'equipo' por default) es un vacío estructural histórico o de un
+        // vendedor sin equipo; "directa_administracion_sin_supervision"
+        // es SIEMPRE una elección deliberada de administración, con su
+        // propio motivo — el frontend nunca confunde ambos casos.
+        tipoVenta: venta.tipo_venta,
+        equipoId: venta.equipo_id || null,
+        equipoNombre: venta.equipo_nombre || null,
+        supervisorEmail: venta.supervisor_snapshot_email || null,
+        supervisorNombre: venta.supervisor_nombre || null,
+        planSupervisionSnapshotId: venta.plan_supervision_snapshot_id || null,
+        supervisionAplica: !!venta.supervision_aplica,
+        motivoSinSupervision: venta.motivo_sin_supervision || null,
+        porcentajeSupervisionAplicado: venta.porcentaje_supervision_aplicado,
+        porcentajeFinalEmpresa: venta.porcentaje_final_empresa,
         // RIO-117 (corrección tras validación real): categorizado, nunca
         // repite lo que ya está en cabecera (cliente/producto/mercado/
         // precio) — ver Kit para el detalle de qué llena cada categoría.

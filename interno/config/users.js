@@ -59,6 +59,13 @@ async function resolveExecutive() {
     name: body.data.nombre,
     defaultMarket: body.data.defaultMarket,
     allowedMarkets: body.data.allowedMarkets,
+    // RIO-118 (corrección — ventas administrativas y comisión de
+    // supervisión, 02/09/2026): el Kit necesita saber si quien vende es
+    // administración para mostrar el selector de tipo de venta — el
+    // servidor vuelve a validar esto igual en POST /ventas, esto solo
+    // decide qué mostrar en la interfaz.
+    role: body.data.role,
+    permissions: body.data.permissions,
   };
 }
 

@@ -357,6 +357,26 @@
     return html;
   }
 
+  // RIO-118 (corrección — ventas administrativas y comisión de
+  // supervisión, 02/09/2026): mismos tres estados que panel-vendedor.js —
+  // venta directa de administración (motivo explícito) / equipo no
+  // asignado (vacío estructural, nunca inventado retroactivamente) /
+  // equipo con o sin supervisor vigente al cerrar la venta.
+  function renderTipoVentaSupervisionHTML(venta) {
+    if (venta.tipoVenta === 'directa_administracion_sin_supervision') {
+      return '<dt>Tipo de venta</dt><dd>Venta directa — sin supervisión</dd>';
+    }
+    if (!venta.equipoId) {
+      return '<dt>Equipo comercial</dt><dd>Equipo no asignado</dd>';
+    }
+    var filas = '<dt>Equipo comercial</dt><dd>' + escapeHtml(venta.equipoNombre || '—') + '</dd>' +
+      '<dt>Supervisor</dt><dd>' + (venta.supervisorNombre ? escapeHtml(venta.supervisorNombre) : 'Sin supervisor vigente al momento de la venta') + '</dd>';
+    if (venta.supervisionAplica) {
+      filas += '<dt>Plan de supervisión aplicado</dt><dd>' + venta.porcentajeSupervisionAplicado + '%</dd>';
+    }
+    return filas;
+  }
+
   function renderAntecedentesHTML(detalle) {
     var kit = detalle.venta.antecedentesKit;
     if (!kit) return '';
@@ -436,6 +456,7 @@
           '<dt>Mercado</dt><dd>' + escapeHtml(detalle.venta.mercado) + '</dd>' +
           '<dt>Precio pactado</dt><dd>' + fmtMoneda(detalle.venta.precioPactado, detalle.venta.moneda) + '</dd>' +
           '<dt>Fecha</dt><dd>' + fmtFecha(detalle.venta.createdAt) + '</dd>' +
+          renderTipoVentaSupervisionHTML(detalle.venta) +
         '</dl>' +
       '</div>' +
       '<div class="pv-detail-section"><p class="pv-detail-section-title">Cliente</p>' +

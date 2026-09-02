@@ -113,7 +113,7 @@ export async function costoDominioPendienteParaComision(db, requestId, comision)
 // 'responsable_con_practicante' | 'practicante', RIO-115 consolidación
 // 31/08/2026). Para el resto de los tipos se ignora (esos planes siempre
 // tienen contexto_realizacion NULL, sin ambigüedad).
-async function resolverAsignacionVigente(db, requestId, { usuarioEmail, tipo, producto, mercado, contextoRealizacion }) {
+export async function resolverAsignacionVigente(db, requestId, { usuarioEmail, tipo, producto, mercado, contextoRealizacion }) {
   const rows = await query(
     db, requestId,
     `SELECT ap.id AS asignacion_id, pl.id AS plan_id, pl.porcentaje, pl.base, pl.productos_alcanzados, pl.mercados_alcanzados, pl.contexto_realizacion
@@ -174,7 +174,7 @@ export async function resolverEquipoVigenteDeVendedor(db, requestId, usuarioEmai
 // supervisores del mercado" (Brenda: "no pagar automáticamente a todos
 // los supervisores de un mercado. Debe corresponder al supervisor
 // asignado al equipo de la venta").
-async function resolverSupervisorVigenteDeEquipo(db, requestId, equipoId) {
+export async function resolverSupervisorVigenteDeEquipo(db, requestId, equipoId) {
   const rows = await query(
     db, requestId,
     `SELECT usuario_email FROM equipo_supervisores

@@ -52,6 +52,7 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
   seed.asignaciones_realizacion = seed.asignaciones_realizacion || [];
   seed.equipo_miembros = seed.equipo_miembros || [];
   seed.equipo_supervisores = seed.equipo_supervisores || [];
+  seed.equipos = seed.equipos || [];
   seed.materiales_informados_detalle = seed.materiales_informados_detalle || [];
   seed.materiales_confirmaciones = seed.materiales_confirmaciones || [];
   const state = seed;
@@ -82,6 +83,12 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
         id: p[0], codigo_venta: p[1], cliente_id: p[2], mercado: p[3], producto: p[4], moneda: p[5],
         tipo_precio: p[6], precio_pactado: p[7], vendedor_email: p[8], equipo_id: p[9] || null,
         idempotency_key: p[10] || null, origen: p[11] || null, es_demo: p[12] || 0, antecedentes_kit_json: p[13] || null,
+        // RIO-118 (corrección — ventas administrativas y comisión de
+        // supervisión, 01/09/2026): snapshot inmutable de tipo de venta y
+        // supervisión, ver migración 0023.
+        tipo_venta: p[14] || 'equipo', supervisor_snapshot_email: p[15] || null, plan_supervision_snapshot_id: p[16] || null,
+        supervision_aplica: p[17] === undefined ? 1 : p[17], motivo_sin_supervision: p[18] || null,
+        porcentaje_supervision_aplicado: p[19] === undefined ? 10 : p[19], porcentaje_final_empresa: p[20] === undefined ? 20 : p[20],
         estado_actual: 'registrada', created_at: '2026-08-28 00:00:00',
       });
     } else if (sql.startsWith('INSERT INTO proyectos')) {
@@ -138,7 +145,15 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
       const v = state.ventas.find((x) => x.id === p[0]);
       if (!v) return [];
       const c = state.clientes.find((x) => x.id === v.cliente_id);
-      return [{ ...v, negocio: c?.negocio, contacto_nombre: c?.contacto_nombre, telefono: c?.telefono, cliente_email: c?.email, datos_facturacion_ar: c?.datos_facturacion_ar, vendedor_nombre: state.usuarios.find((u) => u.email === v.vendedor_email)?.nombre }];
+      return [{
+        ...v, negocio: c?.negocio, contacto_nombre: c?.contacto_nombre, telefono: c?.telefono, cliente_email: c?.email, datos_facturacion_ar: c?.datos_facturacion_ar,
+        vendedor_nombre: state.usuarios.find((u) => u.email === v.vendedor_email)?.nombre,
+        // RIO-118 (corrección — ventas administrativas y comisión de
+        // supervisión): equipo/supervisor resueltos por LEFT JOIN — pueden
+        // ser null (equipo no asignado / venta directa), igual que en D1 real.
+        equipo_nombre: state.equipos.find((e) => e.id === v.equipo_id)?.nombre || null,
+        supervisor_nombre: state.usuarios.find((u) => u.email === v.supervisor_snapshot_email)?.nombre || null,
+      }];
     }
     if (sql.startsWith('SELECT 1 FROM equipo_supervisores')) {
       const match = state.equipo_supervisores.find((s) => s.equipo_id === p[0] && s.usuario_email === p[1] && !s.valid_until);
@@ -199,6 +214,10 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
           productos_alcanzados: x.plan.productos_alcanzados, mercados_alcanzados: x.plan.mercados_alcanzados,
         }));
     }
+    if (sql.startsWith('SELECT id, mercado FROM equipos WHERE id')) {
+      const eq = state.equipos.find((e) => e.id === p[0]);
+      return eq ? [{ id: eq.id, mercado: eq.mercado }] : [];
+    }
     if (sql.startsWith('SELECT equipo_id FROM equipo_miembros')) {
       return state.equipo_miembros.filter((m) => m.usuario_email === p[0] && !m.valid_until);
     }
@@ -243,8 +262,13 @@ function fakeContext({ method = 'GET', url = 'https://rioimpulsodigital.com/inte
 // de plan + asignación versionada) que reemplazó la tabla por producto.
 let nextUsuarioId = 1;
 function seedAsignacionPlan(db, { email, tipo, porcentaje, productos = PRODUCTOS, mercados = ['CL', 'AR'] }) {
-  const usuarioId = nextUsuarioId++;
-  db._state.usuarios.push({ id: usuarioId, email });
+  // Una misma persona puede tener más de un plan vigente a la vez (ej. un
+  // supervisor que también vende: comercial + supervisión) — deben
+  // resolver al MISMO registro de usuarios, igual que en D1 real (email
+  // único), o la búsqueda por email en el mock solo encontraría el primero.
+  const existente = db._state.usuarios.find((u) => u.email === email);
+  const usuarioId = existente ? existente.id : nextUsuarioId++;
+  if (!existente) db._state.usuarios.push({ id: usuarioId, email });
   const planId = `plan-${tipo}-${porcentaje}-${usuarioId}`;
   db._state.planes_comision.push({
     id: planId, tipo, porcentaje, base: tipo === 'produccion' ? 'utilidad_neta_componente' : 'utilidad_neta_venta',
@@ -713,4 +737,203 @@ test('un cambio posterior en el precio canónico (markets.js) NO altera una vent
   } finally {
     MARKETS.CL.products.ficha.promo = backup; // no contaminar otras pruebas.
   }
+});
+
+// RIO-118 (corrección — ventas administrativas y comisión de supervisión,
+// 02/09/2026): la comisión de supervisión depende de que la venta esté
+// vinculada a un EQUIPO SUPERVISADO, nunca del rol principal ni del nombre
+// de quien vende. Administración elige explícitamente entre un equipo
+// autorizado o "venta directa — sin supervisión"; cualquier otro rol
+// siempre resuelve su equipo desde su propia asignación vigente.
+
+test('POST /ventas — administración registra una venta directa sin supervisión: no genera comisión de supervisor y empresa queda con el 30% completo', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  seedAsignacionPlan(db, { email: admin.email, tipo: 'comercial', porcentaje: 40 });
+  const response = await ventasHandler(fakeContext({
+    method: 'POST',
+    body: { ...CL_INDIVIDUAL, tipoVenta: 'directa_administracion_sin_supervision' },
+    roleIdentity: admin, db,
+  }));
+  assert.equal(response.status, 201);
+  const venta = (await response.json()).data.venta;
+  assert.equal(venta.tipoVenta, 'directa_administracion_sin_supervision');
+  assert.equal(venta.equipoId, null);
+  assert.equal(venta.supervisionAplica, false);
+  assert.equal(venta.motivoSinSupervision, 'venta_directa_administracion_sin_supervision');
+  assert.equal(db._state.ventas[0].porcentaje_supervision_aplicado, 0);
+  assert.equal(db._state.ventas[0].porcentaje_final_empresa, 30, 'el 10% liberado va explícitamente a empresa, nunca desaparece ni se redistribuye');
+  assert.equal(db._state.comisiones.filter((c) => c.tipo === 'supervision').length, 0, 'ninguna comisión de supervisión debe generarse');
+});
+
+test('POST /ventas — administración asigna su venta a un equipo supervisado: se genera el 10% para el supervisor vigente, aunque quien venda sea administración', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  seedAsignacionPlan(db, { email: admin.email, tipo: 'comercial', porcentaje: 40 });
+  seedAsignacionPlan(db, { email: 'alberto@example.com', tipo: 'supervision', porcentaje: 10 });
+  db._state.equipos.push({ id: 'equipo-cl-1', mercado: 'CL' });
+  db._state.equipo_supervisores.push({ equipo_id: 'equipo-cl-1', usuario_email: 'alberto@example.com', valid_until: null });
+
+  const response = await ventasHandler(fakeContext({
+    method: 'POST',
+    body: { ...CL_INDIVIDUAL, tipoVenta: 'equipo', equipoId: 'equipo-cl-1' },
+    roleIdentity: admin, db,
+  }));
+  assert.equal(response.status, 201);
+  const venta = (await response.json()).data.venta;
+  assert.equal(venta.equipoId, 'equipo-cl-1');
+  assert.equal(venta.supervisionAplica, true);
+  assert.equal(venta.motivoSinSupervision, null);
+  assert.equal(db._state.ventas[0].porcentaje_final_empresa, 20);
+  const supervision = db._state.comisiones.find((c) => c.tipo === 'supervision');
+  assert.ok(supervision, 'debe generarse la comisión de supervisión para Alberto, aunque quien vende sea administración y no un vendedor del equipo');
+  assert.equal(supervision.beneficiario_email, 'alberto@example.com');
+});
+
+test('POST /ventas — administración sin tipoVenta explícito es rechazada (nunca un default silencioso)', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  const response = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: admin, db }));
+  assert.equal(response.status, 400);
+  assert.equal(db._state.ventas.length, 0);
+});
+
+test('POST /ventas — administración: un equipoId de otro mercado es rechazado, cambiar el payload no logra alterar la distribución', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL', 'AR'], permissions: PERMISSIONS.admin });
+  db._state.equipos.push({ id: 'equipo-ar-1', mercado: 'AR' });
+  const response = await ventasHandler(fakeContext({
+    method: 'POST',
+    body: { ...CL_INDIVIDUAL, tipoVenta: 'equipo', equipoId: 'equipo-ar-1' },
+    roleIdentity: admin, db,
+  }));
+  assert.equal(response.status, 400);
+  assert.equal(db._state.ventas.length, 0, 'no debe registrarse ninguna venta con un equipo de otro mercado');
+});
+
+test('POST /ventas — un vendedor común no puede elegir un equipo ajeno: tipoVenta/equipoId enviados en el body se ignoran, su equipo se resuelve siempre desde su asignación vigente', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  seedAsignacionPlan(db, { email: ri.email, tipo: 'comercial', porcentaje: 40 });
+  seedAsignacionPlan(db, { email: 'supervisor.propio@example.com', tipo: 'supervision', porcentaje: 10 });
+  const equipoPropio = seedEquipo(db, { mercado: 'CL', miembroEmail: ri.email, supervisorEmail: 'supervisor.propio@example.com' });
+  db._state.equipos.push({ id: equipoPropio, mercado: 'CL' });
+  db._state.equipos.push({ id: 'equipo-ajeno', mercado: 'CL' });
+  db._state.equipo_supervisores.push({ equipo_id: 'equipo-ajeno', usuario_email: 'supervisor.ajeno@example.com', valid_until: null });
+
+  const response = await ventasHandler(fakeContext({
+    method: 'POST',
+    body: { ...CL_INDIVIDUAL, tipoVenta: 'directa_administracion_sin_supervision', equipoId: 'equipo-ajeno' },
+    roleIdentity: ri, db,
+  }));
+  assert.equal(response.status, 201);
+  const venta = (await response.json()).data.venta;
+  assert.equal(venta.equipoId, equipoPropio, 'debe usar su propio equipo vigente, nunca el equipoId recibido en el body');
+  assert.equal(venta.tipoVenta, 'equipo', 'un vendedor común nunca puede declarar una venta directa de administración');
+  const supervision = db._state.comisiones.find((c) => c.tipo === 'supervision');
+  assert.ok(supervision);
+  assert.equal(supervision.beneficiario_email, 'supervisor.propio@example.com', 'nunca el supervisor del equipo ajeno recibido en el body');
+});
+
+test('POST /ventas — un supervisor que vende dentro de su propio equipo recibe comercial y supervisión como participaciones separadas', async () => {
+  const db = fakeDb();
+  const alberto = roleIdentity({ email: 'alberto@example.com', role: 'supervisor', allowedMarkets: ['CL'], permissions: PERMISSIONS.supervisor });
+  seedAsignacionPlan(db, { email: alberto.email, tipo: 'comercial', porcentaje: 40 });
+  seedAsignacionPlan(db, { email: alberto.email, tipo: 'supervision', porcentaje: 10 });
+  seedEquipo(db, { equipoId: 'equipo-alberto', mercado: 'CL', miembroEmail: alberto.email, supervisorEmail: alberto.email });
+
+  const response = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: alberto, db }));
+  assert.equal(response.status, 201);
+  assert.equal(db._state.comisiones.length, 2, 'dos participaciones separadas, nunca fusionadas en una sola fila');
+  const comercial = db._state.comisiones.find((c) => c.tipo === 'comercial');
+  const supervision = db._state.comisiones.find((c) => c.tipo === 'supervision');
+  assert.equal(comercial.beneficiario_email, alberto.email);
+  assert.equal(supervision.beneficiario_email, alberto.email);
+  assert.equal(comercial.monto_comision, 20000);
+  assert.equal(supervision.monto_comision, 5000);
+});
+
+test('GET /ventas/:id — un vendedor sin equipo asignado expone un estado visible ("equipo no asignado"), nunca ausencia silenciosa del dato', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  const createResponse = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }));
+  const created = (await createResponse.json()).data.venta;
+  const response = await ventaDetailHandler(fakeContext({ roleIdentity: ri, db, params: { id: created.id } }));
+  const venta = (await response.json()).data.venta;
+  assert.equal(venta.equipoId, null);
+  assert.equal(venta.tipoVenta, 'equipo', 'default estructural — distinto de una venta directa deliberada');
+  assert.equal(venta.motivoSinSupervision, null, 'sin motivo: es un vacío estructural, no una elección de administración');
+  assert.equal(venta.supervisorNombre, null);
+});
+
+test('GET /ventas/:id — una venta directa de administración expone su motivo explícito, distinguible de "equipo no asignado"', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  const createResponse = await ventasHandler(fakeContext({
+    method: 'POST', body: { ...CL_INDIVIDUAL, tipoVenta: 'directa_administracion_sin_supervision' }, roleIdentity: admin, db,
+  }));
+  const created = (await createResponse.json()).data.venta;
+  const response = await ventaDetailHandler(fakeContext({ roleIdentity: admin, db, params: { id: created.id } }));
+  const venta = (await response.json()).data.venta;
+  assert.equal(venta.tipoVenta, 'directa_administracion_sin_supervision');
+  assert.equal(venta.motivoSinSupervision, 'venta_directa_administracion_sin_supervision');
+  assert.equal(venta.supervisionAplica, false);
+});
+
+test('GET /ventas/:id — una venta con supervisor expone el nombre del supervisor y del equipo', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  db._state.usuarios.push({ id: 999, email: 'supervisor.cl@example.com', nombre: 'Alberto Soto' });
+  seedEquipo(db, { equipoId: 'equipo-cl-1', mercado: 'CL', miembroEmail: ri.email, supervisorEmail: 'supervisor.cl@example.com' });
+  db._state.equipos.push({ id: 'equipo-cl-1', mercado: 'CL', nombre: 'Equipo CL 1' });
+
+  const createResponse = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }));
+  const created = (await createResponse.json()).data.venta;
+  const response = await ventaDetailHandler(fakeContext({ roleIdentity: ri, db, params: { id: created.id } }));
+  const venta = (await response.json()).data.venta;
+  assert.equal(venta.equipoNombre, 'Equipo CL 1');
+  assert.equal(venta.supervisorNombre, 'Alberto Soto');
+});
+
+test('el supervisor snapshotteado en una venta no cambia si el equipo cambia de supervisor vigente después (snapshot inmutable)', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  db._state.usuarios.push({ id: 901, email: 'alberto@example.com', nombre: 'Alberto Soto' });
+  db._state.usuarios.push({ id: 902, email: 'nuevo.supervisor@example.com', nombre: 'Nueva Supervisora' });
+  seedAsignacionPlan(db, { email: 'alberto@example.com', tipo: 'supervision', porcentaje: 10 });
+  const equipoId = seedEquipo(db, { mercado: 'CL', miembroEmail: ri.email, supervisorEmail: 'alberto@example.com' });
+  db._state.equipos.push({ id: equipoId, mercado: 'CL', nombre: 'Equipo CL' });
+
+  const createResponse = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }));
+  const created = (await createResponse.json()).data.venta;
+
+  // El equipo cambia de supervisor DESPUÉS de cerrada la venta — nunca debe
+  // alterar el snapshot ya guardado (misma lógica que el precio canónico).
+  db._state.equipo_supervisores.find((s) => s.equipo_id === equipoId && s.usuario_email === 'alberto@example.com').valid_until = '2026-09-02';
+  db._state.equipo_supervisores.push({ equipo_id: equipoId, usuario_email: 'nuevo.supervisor@example.com', valid_until: null });
+
+  const response = await ventaDetailHandler(fakeContext({ roleIdentity: ri, db, params: { id: created.id } }));
+  const venta = (await response.json()).data.venta;
+  assert.equal(venta.supervisorEmail, 'alberto@example.com', 'la venta histórica conserva el supervisor con el que se cerró, no el vigente actual');
+  assert.equal(venta.supervisorNombre, 'Alberto Soto');
+});
+
+test('la suma efectiva de porcentajes (supervisión + empresa) siempre es 30, con o sin supervisión aplicada', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  seedAsignacionPlan(db, { email: 'alberto@example.com', tipo: 'supervision', porcentaje: 10 });
+  db._state.equipos.push({ id: 'equipo-cl-1', mercado: 'CL' });
+  db._state.equipo_supervisores.push({ equipo_id: 'equipo-cl-1', usuario_email: 'alberto@example.com', valid_until: null });
+
+  const conSupervision = await ventasHandler(fakeContext({
+    method: 'POST', body: { ...CL_INDIVIDUAL, tipoVenta: 'equipo', equipoId: 'equipo-cl-1' }, roleIdentity: admin, db,
+  }));
+  const ventaConSupervision = (await conSupervision.json()).data.venta;
+  assert.equal(db._state.ventas.find((v) => v.id === ventaConSupervision.id).porcentaje_supervision_aplicado + db._state.ventas.find((v) => v.id === ventaConSupervision.id).porcentaje_final_empresa, 30);
+
+  const sinSupervision = await ventasHandler(fakeContext({
+    method: 'POST', body: { ...CL_INDIVIDUAL, tipoVenta: 'directa_administracion_sin_supervision' }, roleIdentity: admin, db,
+  }));
+  const ventaSinSupervision = (await sinSupervision.json()).data.venta;
+  assert.equal(db._state.ventas.find((v) => v.id === ventaSinSupervision.id).porcentaje_supervision_aplicado + db._state.ventas.find((v) => v.id === ventaSinSupervision.id).porcentaje_final_empresa, 30);
 });

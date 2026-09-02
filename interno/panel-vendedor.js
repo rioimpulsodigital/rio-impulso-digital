@@ -143,7 +143,9 @@
   }
 
   function renderReferenteCardHTML(ref) {
-    var metaHTML = '<div class="pv-referente-meta">' + escapeHtml(ref.equipoNombre || '—') + ' · ' + escapeHtml(ref.mercado || '—') + '</div>';
+    var metaHTML = (ref.equipoNombre || ref.mercado)
+      ? '<div class="pv-referente-meta">' + escapeHtml(ref.equipoNombre || '—') + ' · ' + escapeHtml(ref.mercado || '—') + '</div>'
+      : '';
 
     if (ref.esUnoMismo) {
       return (
@@ -198,14 +200,21 @@
     );
   }
 
+  // RIO-118 (corrección — "Mi referente comercial" nunca debe desaparecer
+  // silenciosamente, 01/09/2026): sin ningún equipo vigente (ej. Brenda,
+  // que no pertenece a ningún equipo_miembros — nunca se inventa un
+  // supervisor personal para ella ni para nadie), igual se muestra UNA
+  // tarjeta con el estado real "Sin supervisor asignado" — jamás una
+  // sección vacía. Un error de red se trata igual: nunca falla en
+  // silencio, muestra el mismo estado sin inventar un motivo distinto.
   async function cargarReferentes() {
     var contenedor = document.getElementById('pvReferentes');
     var r = await apiFetch('/interno/api/identidad/referente');
-    if (!r.ok || !r.body || !r.body.ok || !r.body.data.referentes || r.body.data.referentes.length === 0) {
-      contenedor.innerHTML = '';
-      return;
+    var referentes = (r.ok && r.body && r.body.ok && r.body.data.referentes) ? r.body.data.referentes : [];
+    if (referentes.length === 0) {
+      referentes = [{ equipoId: null, equipoNombre: null, mercado: null, supervisorId: null, supervisorNombre: null, esUnoMismo: false, whatsappLaboral: null, disponibilidad: 'sin_supervisor' }];
     }
-    contenedor.innerHTML = '<div class="pv-referentes">' + r.body.data.referentes.map(renderReferenteCardHTML).join('') + '</div>';
+    contenedor.innerHTML = '<div class="pv-referentes">' + referentes.map(renderReferenteCardHTML).join('') + '</div>';
   }
 
   function wireTabs() {
@@ -457,6 +466,30 @@
     return html;
   }
 
+  // RIO-118 (corrección — ventas administrativas y comisión de
+  // supervisión, 02/09/2026): la comisión de supervisión depende de que la
+  // venta esté vinculada a un equipo supervisado, nunca del rol de quien
+  // vende — acá se distinguen tres estados posibles, nunca se confunden:
+  // (1) venta directa de administración (motivo explícito, deliberado);
+  // (2) equipo no asignado (vacío estructural, ej. ventas históricas sin
+  // equipo, nunca se le inventa un equipo retroactivo); (3) equipo con o
+  // sin supervisor vigente al momento de cerrar la venta.
+  function renderTipoVentaSupervisionHTML(venta) {
+    var filas = '<dt>Vendedor</dt><dd>' + escapeHtml(venta.vendedorNombre || 'Usuario sin nombre configurado') + '</dd>';
+    if (venta.tipoVenta === 'directa_administracion_sin_supervision') {
+      filas += '<dt>Tipo de venta</dt><dd>Venta directa — sin supervisión</dd>';
+    } else if (!venta.equipoId) {
+      filas += '<dt>Equipo comercial</dt><dd>Equipo no asignado</dd>';
+    } else {
+      filas += '<dt>Equipo comercial</dt><dd>' + escapeHtml(venta.equipoNombre || '—') + '</dd>';
+      filas += '<dt>Supervisor</dt><dd>' + (venta.supervisorNombre ? escapeHtml(venta.supervisorNombre) : 'Sin supervisor vigente al momento de la venta') + '</dd>';
+      if (venta.supervisionAplica) {
+        filas += '<dt>Plan de supervisión aplicado</dt><dd>' + venta.porcentajeSupervisionAplicado + '%</dd>';
+      }
+    }
+    return filas;
+  }
+
   function renderAntecedentesHTML(detalle) {
     var kit = detalle.venta.antecedentesKit;
     if (!kit) return '';
@@ -525,6 +558,7 @@
           '<dt>Mercado</dt><dd>' + escapeHtml(detalle.venta.mercado) + '</dd>' +
           '<dt>Precio pactado</dt><dd>' + fmtMoneda(detalle.venta.precioPactado, detalle.venta.moneda) + '</dd>' +
           '<dt>Fecha</dt><dd>' + fmtFecha(detalle.venta.createdAt) + '</dd>' +
+          renderTipoVentaSupervisionHTML(detalle.venta) +
         '</dl>' +
       '</div>' +
       '<div class="pv-detail-section"><p class="pv-detail-section-title">Cliente</p>' +

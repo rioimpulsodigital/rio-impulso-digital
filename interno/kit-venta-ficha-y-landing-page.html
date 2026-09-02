@@ -427,6 +427,19 @@
     font-family: var(--ff-head); font-size: 1.15rem; font-weight: 800;
     color: var(--ink, #1a0d24); margin: 0 0 16px;
   }
+  /* RIO-118 (corrección — ventas administrativas y comisión de
+     supervisión, 02/09/2026): selector exclusivo de administración, nunca
+     visible para un vendedor común (su equipo se resuelve solo). */
+  .venta-tipo-field { margin: 0 0 18px; display: flex; flex-direction: column; gap: 6px; }
+  .venta-tipo-field label {
+    font-family: var(--ff-mono); font-size: .62rem; font-weight: 500;
+    color: var(--sec); text-transform: uppercase; letter-spacing: .05em;
+  }
+  .venta-tipo-field select {
+    border: 2px solid var(--line); border-radius: var(--r-s, 8px); background: #fff;
+    font-family: var(--ff-body); font-size: .88rem; padding: 8px 10px; color: var(--ink);
+  }
+  .venta-tipo-field select:focus { outline: none; border-color: var(--p); }
   .venta-confirm-summary { list-style: none; margin: 0 0 20px; padding: 0; font-size: .88rem; }
   .venta-confirm-summary li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid rgba(0,0,0,.08); }
   .venta-confirm-summary li span:first-child { color: var(--muted); }
@@ -912,6 +925,16 @@
     <div class="venta-confirm-overlay" id="ventaConfirmOverlay" role="dialog" aria-modal="true" aria-labelledby="ventaConfirmTitle">
       <div class="venta-confirm-modal">
         <p class="venta-confirm-title" id="ventaConfirmTitle">Confirmá antes de cerrar la venta</p>
+        <!-- RIO-118 (corrección — ventas administrativas y comisión de
+             supervisión, 02/09/2026): solo administración lo ve — un
+             vendedor común nunca elige equipo, el suyo se resuelve solo. -->
+        <div class="venta-tipo-field" id="ventaTipoField" style="display:none;">
+          <label for="ventaTipoVentaSelect">Tipo de venta</label>
+          <select id="ventaTipoVentaSelect">
+            <option value="">Seleccioná una opción…</option>
+            <option value="directa">Venta directa de Administración — sin supervisión</option>
+          </select>
+        </div>
         <ul class="venta-confirm-summary" id="ventaConfirmSummary"></ul>
         <div class="venta-confirm-actions">
           <button type="button" class="venta-confirm-btn-back" onclick="cerrarConfirmacionVenta()">Volver a revisar</button>
@@ -1536,12 +1559,59 @@
 
   let pendingVentaPayload = null;
 
+  // RIO-118 (corrección — ventas administrativas y comisión de
+  // supervisión, 02/09/2026): la comisión de supervisión depende de que la
+  // venta esté vinculada a un equipo supervisado, nunca del rol ni del
+  // nombre de quien vende. Solo administración elige explícitamente entre
+  // un equipo autorizado de su mercado o "venta directa — sin
+  // supervisión" — cualquier otro rol nunca ve ni puede enviar esto (el
+  // servidor lo ignora igual si llegara, ver functions/interno/api/ventas/index.js).
+  let equiposDisponibles = [];
+  let equiposCargados = false;
+
+  function esAdministracion(){
+    return !!(currentExecutive && currentExecutive.role === 'admin');
+  }
+
+  async function cargarEquiposAdmin(){
+    if(!esAdministracion() || equiposCargados) return;
+    equiposCargados = true;
+    try {
+      const res = await fetch('/interno/api/equipos', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      const body = await res.json().catch(() => null);
+      if(res.ok && body && body.ok){
+        equiposDisponibles = body.data.equipos || [];
+      }
+    } catch(e) {
+      console.error('[Kit RiO] No se pudieron cargar los equipos:', e);
+    }
+  }
+
+  function poblarSelectorTipoVenta(){
+    const select = document.getElementById('ventaTipoVentaSelect');
+    while(select.options.length > 2){ select.remove(2); }
+    equiposDisponibles.filter(eq => eq.mercado === currentMarket).forEach(eq => {
+      const opt = document.createElement('option');
+      opt.value = 'equipo:' + eq.id;
+      opt.textContent = eq.nombre;
+      select.appendChild(opt);
+    });
+    select.value = '';
+  }
+
   function runCloseVenta(){
     if(!currentExecutive || !currentMarket){ alert('No hay mercado autorizado para registrar esta venta.'); return; }
     if(currentExecutive.allowedMarkets.indexOf(currentMarket) === -1){ alert('El mercado activo no está autorizado para este usuario.'); return; }
 
     const faltante = validarCamposMinimos();
     if(faltante){ alert('⚠️ ' + faltante); return; }
+
+    if(esAdministracion()){
+      poblarSelectorTipoVenta();
+      document.getElementById('ventaTipoField').style.display = '';
+    } else {
+      document.getElementById('ventaTipoField').style.display = 'none';
+    }
 
     const { payload, resumen } = buildVentaPayload();
     pendingVentaPayload = payload;
@@ -1559,10 +1629,30 @@
 
   function cerrarConfirmacionVenta(){
     document.getElementById('ventaConfirmOverlay').classList.remove('show');
+    document.getElementById('ventaTipoVentaSelect').value = '';
   }
 
   async function confirmarYCerrarVenta(){
     if(!pendingVentaPayload) return;
+
+    // RIO-118 (corrección — ventas administrativas y comisión de
+    // supervisión): la elección se lee acá, al confirmar — nunca se
+    // infiere, nunca hay un default silencioso para administración.
+    if(esAdministracion()){
+      const seleccion = document.getElementById('ventaTipoVentaSelect').value;
+      if(!seleccion){
+        alert('⚠️ Elegí el tipo de venta (equipo o venta directa de Administración) antes de confirmar.');
+        return;
+      }
+      if(seleccion === 'directa'){
+        pendingVentaPayload.tipoVenta = 'directa_administracion_sin_supervision';
+        delete pendingVentaPayload.equipoId;
+      } else {
+        pendingVentaPayload.tipoVenta = 'equipo';
+        pendingVentaPayload.equipoId = seleccion.slice('equipo:'.length);
+      }
+    }
+
     const confirmBtn = document.getElementById('ventaConfirmBtn');
     const originalText = confirmBtn.textContent;
     confirmBtn.disabled = true;
@@ -1653,6 +1743,7 @@
     pendingVentaPayload = null;
     clearIdempotencyKey();
     document.getElementById('ventaConfirmOverlay').classList.remove('show');
+    document.getElementById('ventaTipoVentaSelect').value = '';
 
     applyFichaState();
     updateScript();
@@ -1855,6 +1946,7 @@
     applyArgentinaBillingVisibility();
     renderPricing();
     initKitInteractivity();
+    cargarEquiposAdmin();
   });
 </script>
 </body>

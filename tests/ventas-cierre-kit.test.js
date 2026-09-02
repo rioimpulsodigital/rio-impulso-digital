@@ -50,6 +50,8 @@ function fakeDb() {
         id: p[0], codigo_venta: p[1], cliente_id: p[2], mercado: p[3], producto: p[4], moneda: p[5],
         tipo_precio: p[6], precio_pactado: p[7], vendedor_email: p[8], equipo_id: p[9], idempotency_key: p[10],
         origen: p[11], es_demo: p[12], antecedentes_kit_json: p[13], estado_actual: 'registrada', created_at: '2026-09-01 00:00:00',
+        tipo_venta: p[14], supervisor_snapshot_email: p[15], plan_supervision_snapshot_id: p[16],
+        supervision_aplica: p[17], motivo_sin_supervision: p[18], porcentaje_supervision_aplicado: p[19], porcentaje_final_empresa: p[20],
       });
     } else if (sql.startsWith('INSERT INTO proyectos')) {
       state.proyectos.push({ id: p[0], venta_id: p[1], codigo_proyecto: p[2], estado_actual: 'registrado' });
@@ -228,7 +230,7 @@ test('una venta con una incidencia de cancelación aparece como "cancelada", con
 test('origen y esDemo quedan registrados como datos estructurados, no como texto libre', async () => {
   const db = fakeDb();
   const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL', 'AR'], permissions: PERMISSIONS.admin });
-  const response = await ventasHandler(fakeContext({ body: { ...CL_INDIVIDUAL, origen: 'kit_comercial', esDemo: true }, roleIdentity: admin, db }));
+  const response = await ventasHandler(fakeContext({ body: { ...CL_INDIVIDUAL, origen: 'kit_comercial', esDemo: true, tipoVenta: 'directa_administracion_sin_supervision' }, roleIdentity: admin, db }));
   assert.equal(response.status, 201);
   const body = await response.json();
   assert.equal(body.data.venta.origen, 'kit_comercial');
@@ -331,7 +333,7 @@ test('HubSpot: los datos demo NUNCA se sincronizan, aunque se envíen campos de 
     const db = fakeDb();
     const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL', 'AR'], permissions: PERMISSIONS.admin });
     const response = await ventasHandler(fakeContext({
-      body: { ...CL_INDIVIDUAL, esDemo: true, hubspot: { fields: [{ objectTypeId: '0-1', name: 'company', value: 'x' }], context: {} } },
+      body: { ...CL_INDIVIDUAL, esDemo: true, tipoVenta: 'directa_administracion_sin_supervision', hubspot: { fields: [{ objectTypeId: '0-1', name: 'company', value: 'x' }], context: {} } },
       roleIdentity: admin, db,
     }));
     const body = await response.json();

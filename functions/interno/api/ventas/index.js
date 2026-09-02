@@ -24,7 +24,10 @@ import { query, transaction } from '../../../_shared/db.js';
 import { assertMarketAllowed, AuthzError } from '../../../_shared/authz.js';
 import { isMethodAllowed, hasExpectedContentType, isBodyTooLarge } from '../../../_shared/security.js';
 import { isValidPrice, splitPackPrice, CURRENCY_BY_MARKET } from '../../../_shared/pricing.js';
-import { generarComisionesParaVenta, resolverEquipoVigenteDeVendedor } from '../../../_shared/comisiones.js';
+import {
+  generarComisionesParaVenta, resolverEquipoVigenteDeVendedor,
+  resolverSupervisorVigenteDeEquipo, resolverAsignacionVigente,
+} from '../../../_shared/comisiones.js';
 import { agregarAntecedente } from '../../../_shared/proyectos.js';
 import { intentarSincronizarHubSpot } from '../../../_shared/hubspot.js';
 
@@ -79,6 +82,13 @@ function serializeVenta(row) {
     // frontend decide el texto de reemplazo, nunca usa el email como tal).
     vendedorNombre: row.vendedor_nombre || null,
     equipoId: row.equipo_id || null,
+    // RIO-118 (corrección — ventas administrativas y comisión de
+    // supervisión, 01/09/2026): snapshot inmutable de la decisión tomada
+    // al cerrar la venta — nunca se recalcula si el equipo o el
+    // supervisor cambian después.
+    tipoVenta: row.tipo_venta,
+    supervisionAplica: !!row.supervision_aplica,
+    motivoSinSupervision: row.motivo_sin_supervision || null,
     estadoActual: row.estado_actual,
     // RIO-117: ventas.estado_actual es un placeholder que nunca transiciona
     // (RIO-113 solo actualiza proyectos.estado_actual) — el avance real de
@@ -131,6 +141,10 @@ async function serializarVentaCompletaExistente(db, requestId, ventaId) {
       origen: venta.origen || null,
       esDemo: !!venta.es_demo,
       estadoOperativo: calcularEstadoOperativo({ proyecto_estado: proyecto.estado_actual, pagos_acreditados_count: pagos.filter((p) => p.estado === 'acreditado').length, cancelacion_count: 0 }),
+      tipoVenta: venta.tipo_venta,
+      equipoId: venta.equipo_id || null,
+      supervisionAplica: !!venta.supervision_aplica,
+      motivoSinSupervision: venta.motivo_sin_supervision || null,
     },
     proyecto: { id: proyecto.id, codigoProyecto: proyecto.codigo_proyecto },
     componentes: componentes.map((c) => ({ id: c.id, tipo: c.tipo, precioAtribuido: c.precio_atribuido, estadoActual: c.estado_actual })),
@@ -285,7 +299,7 @@ async function handleCreate(context) {
     }
   }
 
-  const { mercado, cliente, producto, tipoPrecio, precioPactado, precioFichaIndividual, precioLandingIndividual, origen, esDemo, antecedentesKit, hubspot } = body || {};
+  const { mercado, cliente, producto, tipoPrecio, precioPactado, precioFichaIndividual, precioLandingIndividual, origen, esDemo, antecedentesKit, hubspot, tipoVenta, equipoId: equipoIdElegido } = body || {};
 
   if (!VALID_MERCADOS.includes(mercado)) {
     return Errors.validation('Mercado inválido.', requestId);
@@ -383,19 +397,113 @@ async function handleCreate(context) {
 
   const db = env.DB;
 
-  // RIO-115 (consolidación, Brenda 31/08/2026): equipo_id es una
-  // fotografía inmutable del equipo vigente del vendedor AL MOMENTO DE
-  // LA VENTA — se resuelve acá y nunca se recalcula después, para que un
-  // cambio de equipo futuro no reescriba a quién le tocó supervisión en
-  // ventas ya cerradas. Puede ser null (vendedor sin equipo asignado):
-  // la venta igual se registra, pero no genera comisión de supervisión.
-  const equipoId = await resolverEquipoVigenteDeVendedor(db, requestId, roleIdentity.email);
+  // RIO-118 (corrección — ventas administrativas y comisión de
+  // supervisión, 01/09/2026): la comisión de supervisión depende de que
+  // la venta esté vinculada a un EQUIPO SUPERVISADO — nunca del rol
+  // principal ni de a quién pertenece la venta (esto ya era así desde
+  // RIO-115: si Brenda vende dentro de un equipo que Alberto supervisa,
+  // Alberto igual cobra su 10%). Lo nuevo es una forma DELIBERADA para
+  // que administración registre una venta SIN equipo — nunca por
+  // accidente de no estar en ningún equipo_miembros, siempre auditable.
+  //
+  // - Cualquier persona SIN capacidad de ver datos ajenos (ejecutivo,
+  //   asistente, supervisor): el equipo se resuelve SIEMPRE desde su
+  //   propia asignación vigente — nunca puede elegir otro (ignora
+  //   cualquier tipoVenta/equipoId que le llegue en el body).
+  // - Administración (viewOthersData === true): DEBE elegir
+  //   explícitamente entre un equipo autorizado de su mercado o "venta
+  //   directa — sin supervisión" — nunca se infiere por el nombre de
+  //   quien vende, nunca hay un default silencioso.
+  const esAdmin = roleIdentity.permissions.viewOthersData === true;
+  let equipoId = null;
+  let tipoVentaFinal = 'equipo';
+
+  if (esAdmin) {
+    if (tipoVenta !== 'equipo' && tipoVenta !== 'directa_administracion_sin_supervision') {
+      return Errors.validation('tipoVenta es obligatorio para administración: "equipo" o "directa_administracion_sin_supervision".', requestId);
+    }
+    if (tipoVenta === 'directa_administracion_sin_supervision') {
+      tipoVentaFinal = 'directa_administracion_sin_supervision';
+      equipoId = null;
+    } else {
+      if (typeof equipoIdElegido !== 'string' || !equipoIdElegido.trim()) {
+        return Errors.validation('Falta equipoId para una venta de equipo.', requestId);
+      }
+      const equipoRows = await query(db, requestId, 'SELECT id, mercado FROM equipos WHERE id = ?', [equipoIdElegido]);
+      const equipoElegido = equipoRows[0];
+      if (!equipoElegido || equipoElegido.mercado !== mercado) {
+        return Errors.validation('equipoId inválido para este mercado.', requestId);
+      }
+      equipoId = equipoIdElegido;
+      tipoVentaFinal = 'equipo';
+    }
+  } else {
+    // RIO-115 (consolidación, Brenda 31/08/2026): equipo_id es una
+    // fotografía inmutable del equipo vigente del vendedor AL MOMENTO DE
+    // LA VENTA — se resuelve acá y nunca se recalcula después. Puede ser
+    // null (vendedor sin equipo asignado): la venta igual se registra,
+    // pero no genera comisión de supervisión — esto es un vacío
+    // estructural, no una elección deliberada (motivo_sin_supervision
+    // queda null, a diferencia de la venta directa de administración).
+    equipoId = await resolverEquipoVigenteDeVendedor(db, requestId, roleIdentity.email);
+    tipoVentaFinal = 'equipo';
+  }
+
+  // Snapshot inmutable del supervisor y su plan — nunca se recalcula si
+  // el supervisor o el plan cambian después (mismo criterio que el resto
+  // de los snapshots de esta venta). La comisión real la sigue generando
+  // generarComisionesParaVenta más abajo con su propia lógica ya
+  // probada — este bloque es documentación/auditoría a nivel de venta,
+  // no una segunda fuente de verdad para el cálculo.
+  let supervisorSnapshotEmail = null;
+  let planSupervisionSnapshotId = null;
+  let porcentajeSupervisionAplicado = 0;
+  let motivoSinSupervision = null;
+
+  if (tipoVentaFinal === 'directa_administracion_sin_supervision') {
+    motivoSinSupervision = 'venta_directa_administracion_sin_supervision';
+  } else if (equipoId) {
+    supervisorSnapshotEmail = await resolverSupervisorVigenteDeEquipo(db, requestId, equipoId);
+    if (supervisorSnapshotEmail) {
+      const asignacionSupervision = await resolverAsignacionVigente(db, requestId, {
+        usuarioEmail: supervisorSnapshotEmail, tipo: 'supervision', producto, mercado,
+      });
+      if (asignacionSupervision) {
+        planSupervisionSnapshotId = asignacionSupervision.plan_id;
+        porcentajeSupervisionAplicado = asignacionSupervision.porcentaje;
+      }
+    }
+  }
+  const supervisionAplica = porcentajeSupervisionAplicado > 0 ? 1 : 0;
+  // El 10% que la supervisión NO usa siempre pasa a empresa — nunca
+  // desaparece, nunca se redistribuye a otro beneficiario. Base
+  // confirmada desde RIO-115: comercial 40 + supervisión 10 +
+  // realización 30 + empresa 20 = 100%.
+  const porcentajeFinalEmpresa = 20 + (10 - porcentajeSupervisionAplicado);
+  if (porcentajeSupervisionAplicado + porcentajeFinalEmpresa !== 30) {
+    // Defensivo — la aritmética de arriba lo garantiza siempre; si esto
+    // se dispara es un bug real, nunca se completa el 100% inventando un
+    // valor.
+    console.error(JSON.stringify({ requestId, scope: 'ventas', reason: 'validacion_100_porciento_fallida' }));
+    return Errors.internal(requestId);
+  }
 
   const statements = [
     db.prepare('INSERT INTO clientes (id, negocio, contacto_nombre, telefono, email, mercado, datos_facturacion_ar, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(clienteId, cliente.negocio.trim(), cliente.contactoNombre || null, cliente.telefono || null, cliente.email || null, mercado, cliente.datosFacturacionAr || null, roleIdentity.email),
-    db.prepare('INSERT INTO ventas (id, codigo_venta, cliente_id, mercado, producto, moneda, tipo_precio, precio_pactado, vendedor_email, equipo_id, idempotency_key, origen, es_demo, antecedentes_kit_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(ventaId, codigoVenta, clienteId, mercado, producto, moneda, tipoPrecio, precioPactado, roleIdentity.email, equipoId, idempotencyKey, origen || null, esDemo ? 1 : 0, antecedentesKit ? JSON.stringify(antecedentesKit) : null),
+    db.prepare(
+      `INSERT INTO ventas (
+         id, codigo_venta, cliente_id, mercado, producto, moneda, tipo_precio, precio_pactado, vendedor_email, equipo_id,
+         idempotency_key, origen, es_demo, antecedentes_kit_json,
+         tipo_venta, supervisor_snapshot_email, plan_supervision_snapshot_id, supervision_aplica, motivo_sin_supervision,
+         porcentaje_supervision_aplicado, porcentaje_final_empresa
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      ventaId, codigoVenta, clienteId, mercado, producto, moneda, tipoPrecio, precioPactado, roleIdentity.email, equipoId,
+      idempotencyKey, origen || null, esDemo ? 1 : 0, antecedentesKit ? JSON.stringify(antecedentesKit) : null,
+      tipoVentaFinal, supervisorSnapshotEmail, planSupervisionSnapshotId, supervisionAplica, motivoSinSupervision,
+      porcentajeSupervisionAplicado, porcentajeFinalEmpresa
+    ),
     db.prepare('INSERT INTO proyectos (id, venta_id, codigo_proyecto) VALUES (?, ?, ?)')
       .bind(proyectoId, ventaId, codigoProyecto),
     ...componentesPlan.map((c) =>
@@ -469,6 +577,10 @@ async function handleCreate(context) {
         origen: origen || null,
         esDemo: !!esDemo,
         estadoOperativo: 'en_espera_pago',
+        tipoVenta: tipoVentaFinal,
+        equipoId,
+        supervisionAplica: !!supervisionAplica,
+        motivoSinSupervision,
       },
       proyecto: { id: proyectoId, codigoProyecto },
       componentes: componentesPlan.map((c) => ({ id: c.id, tipo: c.tipo, precioAtribuido: c.precioAtribuido, estadoActual: c.estado })),
