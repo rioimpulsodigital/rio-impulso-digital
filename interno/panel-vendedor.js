@@ -118,7 +118,83 @@
     wireFilters();
     wireDetailPanel();
     await cargarMisVentas();
+    await cargarReferentes();
   });
+
+  // ── Mi referente comercial (RIO-118, corrección 01/09/2026) ─────────
+  // Resuelto 100% server-side, sin ningún parámetro — nunca se arma con
+  // datos del cliente ni con un archivo estático del frontend.
+
+  function normalizarWhatsAppHref(numero) {
+    var soloDigitos = String(numero || '').replace(/[^\d]/g, '');
+    return 'https://wa.me/' + soloDigitos;
+  }
+
+  function renderReferenteCardHTML(ref) {
+    var metaHTML = '<div class="pv-referente-meta">' + escapeHtml(ref.equipoNombre || '—') + ' · ' + escapeHtml(ref.mercado || '—') + '</div>';
+
+    if (ref.esUnoMismo) {
+      return (
+        '<div class="pv-referente-card">' +
+          '<div class="pv-referente-info">' +
+            '<p class="pv-referente-titulo">Mi referente comercial</p>' +
+            '<p class="pv-referente-uno-mismo">Sos el supervisor asignado de este equipo.</p>' +
+            metaHTML +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    if (ref.disponibilidad === 'sin_supervisor') {
+      return (
+        '<div class="pv-referente-card">' +
+          '<div class="pv-referente-info">' +
+            '<p class="pv-referente-titulo">Mi referente comercial</p>' +
+            '<p class="pv-referente-pendiente">Sin supervisor asignado — contactar a Administración.</p>' +
+            metaHTML +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    var nombreMostrado = ref.supervisorNombre || 'Usuario sin nombre configurado';
+
+    if (ref.disponibilidad === 'pendiente') {
+      return (
+        '<div class="pv-referente-card">' +
+          '<div class="pv-referente-info">' +
+            '<p class="pv-referente-titulo">Mi referente comercial</p>' +
+            '<p class="pv-referente-nombre">' + escapeHtml(nombreMostrado) + '</p>' +
+            metaHTML +
+            '<p class="pv-referente-pendiente">WhatsApp laboral pendiente de configuración.</p>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    // disponibilidad === 'configurado'
+    return (
+      '<div class="pv-referente-card">' +
+        '<div class="pv-referente-info">' +
+          '<p class="pv-referente-titulo">Mi referente comercial</p>' +
+          '<p class="pv-referente-nombre">' + escapeHtml(nombreMostrado) + '</p>' +
+          metaHTML +
+          '<p class="pv-referente-whatsapp-label">WhatsApp laboral visible para mi equipo</p>' +
+        '</div>' +
+        '<a class="pv-referente-btn" href="' + escapeHtml(normalizarWhatsAppHref(ref.whatsappLaboral)) + '" target="_blank" rel="noopener noreferrer">Escribir por WhatsApp</a>' +
+      '</div>'
+    );
+  }
+
+  async function cargarReferentes() {
+    var contenedor = document.getElementById('pvReferentes');
+    var r = await apiFetch('/interno/api/identidad/referente');
+    if (!r.ok || !r.body || !r.body.ok || !r.body.data.referentes || r.body.data.referentes.length === 0) {
+      contenedor.innerHTML = '';
+      return;
+    }
+    contenedor.innerHTML = '<div class="pv-referentes">' + r.body.data.referentes.map(renderReferenteCardHTML).join('') + '</div>';
+  }
 
   function wireTabs() {
     var btnVentas = document.getElementById('pvTabVentasBtn');

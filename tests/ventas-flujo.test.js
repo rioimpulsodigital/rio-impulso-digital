@@ -35,7 +35,8 @@ function roleIdentity(overrides = {}) {
 // negocio ya completa en tests/proyectos.test.js.
 function fakeDb({ ventaExiste = true } = {}) {
   const state = {
-    ventas: ventaExiste ? [{ id: 'venta-1', vendedor_email: VENDEDOR, mercado: 'CL' }] : [],
+    ventas: ventaExiste ? [{ id: 'venta-1', vendedor_email: VENDEDOR, mercado: 'CL', equipo_id: 'equipo-1' }] : [],
+    equipo_supervisores: [],
     proyectos: [{ id: 'proyecto-1', venta_id: 'venta-1', estado_actual: 'registrado' }],
     componentes: [{ id: 'comp-x', proyecto_id: 'proyecto-1', tipo: 'ficha', estado_actual: 'entregada', materiales_estado: 'pendiente' }],
     pagos_esperados: [{ id: 'pago-x', venta_id: 'venta-1', tipo: 'total', monto: 50000, estado: 'pendiente' }],
@@ -61,10 +62,15 @@ function fakeDb({ ventaExiste = true } = {}) {
     if (sql.startsWith('SELECT * FROM eventos_historial')) return state.eventos_historial;
     if (
       sql.startsWith('SELECT id, vendedor_email, mercado FROM ventas')
+      || sql.startsWith('SELECT id, vendedor_email, mercado, equipo_id FROM ventas')
       || sql.startsWith('SELECT * FROM ventas WHERE id')
       || sql.startsWith('SELECT id FROM ventas WHERE id')
     ) {
       return state.ventas.filter((v) => v.id === p[0]);
+    }
+    if (sql.startsWith('SELECT 1 FROM equipo_supervisores')) {
+      const match = state.equipo_supervisores.find((s) => s.equipo_id === p[0] && s.usuario_email === p[1] && !s.valid_until);
+      return match ? [{ 1: 1 }] : [];
     }
     if (sql.startsWith('SELECT * FROM proyectos WHERE venta_id')) return state.proyectos.filter((pr) => pr.venta_id === p[0]);
     if (sql.startsWith('SELECT * FROM componentes WHERE proyecto_id')) return state.componentes.filter((c) => c.proyecto_id === p[0]);
@@ -405,10 +411,18 @@ test('historial: el vendedor dueño de la venta puede consultarlo', async () => 
   assert.ok(Array.isArray(body.data.eventos));
 });
 
-test('historial: un supervisor de su mismo mercado puede consultarlo aunque no sea el vendedor (capacidad de supervisión es de lectura)', async () => {
+test('historial: un supervisor VIGENTE del equipo de esta venta puede consultarlo aunque no sea el vendedor (capacidad de supervisión es de lectura)', async () => {
   const db = fakeDb();
+  db._state.equipo_supervisores.push({ equipo_id: 'equipo-1', usuario_email: 'supervisor@example.com', valid_until: null });
   const response = await historialHandler(fakeContext({ method: 'GET', roleIdentity: supervisorMismoMercado(), db }));
   assert.equal(response.status, 200);
+});
+
+test('historial: un supervisor del MISMO mercado pero de OTRO equipo NO puede consultarlo (RIO-118: "mercado no equivale a equipo" también en el detalle/historial)', async () => {
+  const db = fakeDb();
+  db._state.equipo_supervisores.push({ equipo_id: 'equipo-ajeno', usuario_email: 'supervisor@example.com', valid_until: null });
+  const response = await historialHandler(fakeContext({ method: 'GET', roleIdentity: supervisorMismoMercado(), db }));
+  assert.equal(response.status, 404);
 });
 
 // --- Seguridad: venta inexistente, método no permitido, cambio de id/payload ---

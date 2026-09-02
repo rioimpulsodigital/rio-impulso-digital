@@ -35,6 +35,7 @@ function fakeDb() {
     costos_directos: [],
     incidencias: [{ id: 'inc-1', venta_id: 'venta-1', tipo: 'disputa', estado: 'abierta', motivo: 'x' }],
     eventos_historial: [],
+    usuarios: [{ email: VENDEDOR, nombre: 'Gabriela Alero' }, { email: 'supervisor@example.com', nombre: 'Alberto Pérez' }],
   };
 
   function makeStatement(sql) {
@@ -66,6 +67,10 @@ function fakeDb() {
       return state.componentes.filter((c) => c.id === p[0]).filter(() => state.proyectos.some((pr) => pr.id === state.componentes.find((x) => x.id === p[0])?.proyecto_id && pr.venta_id === p[1]));
     }
     if (sql.startsWith('SELECT * FROM incidencias WHERE id')) return state.incidencias.filter((i) => i.id === p[0]);
+    if (sql.startsWith('SELECT nombre FROM usuarios WHERE email')) {
+      const u = state.usuarios.find((x) => x.email === p[0]);
+      return u ? [{ nombre: u.nombre }] : [];
+    }
     return [];
   }
 
@@ -127,6 +132,30 @@ test('comisiones: admin de ese mercado ve TODAS las comisiones de la venta', asy
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.data.comisiones.length, 2);
+});
+
+// RIO-118 (corrección — identidad visible, 01/09/2026): el nombre para
+// mostrar se resuelve server-side desde D1, nunca queda solo el email —
+// y el email SIGUE presente (es el identificador real de la fila).
+test('comisiones: cada fila incluye beneficiarioNombre resuelto desde D1, sin perder beneficiarioEmail', async () => {
+  const db = fakeDb();
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: admin(), db }));
+  const body = await response.json();
+  const comercial = body.data.comisiones.find((c) => c.tipo === 'comercial');
+  assert.equal(comercial.beneficiarioEmail, VENDEDOR);
+  assert.equal(comercial.beneficiarioNombre, 'Gabriela Alero');
+  const supervision = body.data.comisiones.find((c) => c.tipo === 'supervision');
+  assert.equal(supervision.beneficiarioNombre, 'Alberto Pérez');
+});
+
+test('comisiones: un beneficiario sin nombre configurado en D1 devuelve beneficiarioNombre null (nunca el email como reemplazo)', async () => {
+  const db = fakeDb();
+  db._state.usuarios = db._state.usuarios.filter((u) => u.email !== VENDEDOR);
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: admin(), db }));
+  const body = await response.json();
+  const comercial = body.data.comisiones.find((c) => c.tipo === 'comercial');
+  assert.equal(comercial.beneficiarioNombre, null);
+  assert.equal(comercial.beneficiarioEmail, VENDEDOR, 'el email sigue disponible como identificador estable, aunque no se use para mostrar');
 });
 
 test('comisiones: un ejecutivo totalmente ajeno (ni vendedor ni beneficiario) recibe 404', async () => {

@@ -261,6 +261,35 @@
     .pv-antecedente-categoria:last-child { margin-bottom: 0; }
     .pv-antecedente-categoria-titulo { font-size: .72rem; font-weight: 700; color: var(--sec); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
 
+    /* Mi referente comercial */
+    .pv-referentes { display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px; }
+    .pv-referente-card {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
+      border: 1px solid var(--border); border-radius: var(--r-l); background: var(--white);
+      padding: 16px 20px;
+    }
+    .pv-referente-info { flex: 1; min-width: 200px; }
+    .pv-referente-titulo {
+      font-family: var(--ff-mono); font-size: .64rem; text-transform: uppercase;
+      letter-spacing: .07em; color: var(--sec); margin: 0 0 6px;
+    }
+    .pv-referente-nombre { font-family: var(--ff-head); font-size: 1.02rem; font-weight: 800; color: var(--ink); margin: 0; }
+    .pv-referente-meta { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+    .pv-referente-whatsapp-label {
+      font-size: .72rem; color: var(--muted); margin-top: 4px;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .pv-referente-pendiente { font-size: .8rem; color: var(--pv-amber); }
+    .pv-referente-btn {
+      font-family: var(--ff-body); font-size: .82rem; font-weight: 700;
+      background: var(--pv-green); color: #fff; border: none; border-radius: 100px;
+      padding: 10px 20px; cursor: pointer; text-decoration: none; display: inline-flex;
+      align-items: center; gap: 6px; white-space: nowrap; min-height: 40px;
+    }
+    .pv-referente-btn:hover { filter: brightness(1.08); }
+    .pv-referente-btn:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
+    .pv-referente-uno-mismo { font-size: .82rem; color: var(--pv-blue); font-weight: 600; }
+
     @media (max-width: 640px) {
       .pv-filters { flex-direction: column; align-items: stretch; }
       .pv-filter-field { min-width: 0; }
@@ -270,6 +299,8 @@
       .pv-informar-form button { width: 100%; }
       .pv-upload-row button { width: 100%; }
       .pv-materiales-form button { width: 100%; }
+      .pv-referente-card { flex-direction: column; align-items: stretch; }
+      .pv-referente-btn { justify-content: center; width: 100%; }
     }
   </style>
 </head>
@@ -323,6 +354,8 @@
     </div>
 
     <div id="pvApp" style="display:none;">
+      <div id="pvReferentes"></div>
+
       <div class="pv-tabs" role="tablist">
         <button class="pv-tab active" id="pvTabVentasBtn" role="tab" aria-selected="true" aria-controls="pvTabVentas">Mis ventas</button>
         <button class="pv-tab" id="pvTabComisionesBtn" role="tab" aria-selected="false" aria-controls="pvTabComisiones">Mis comisiones</button>
@@ -467,7 +500,7 @@
 
 <script src="./config/users.js" defer></script>
 <script src="../assets/js/main.js?v=20260627" defer></script>
-<script src="./panel-vendedor.js?v=20260901c" defer></script>
+<script src="./panel-vendedor.js?v=20260901d" defer></script>
 
 </body>
 </html>

@@ -11,6 +11,7 @@
 // condición por nombre propio.
 
 import { Errors } from './response.js';
+import { query } from './db.js';
 
 export class AuthzError extends Error {
   constructor(reason) {
@@ -204,6 +205,44 @@ export function assertCanAccessOwner(roleIdentity, ownerEmail, ownerMarket) {
     || roleIdentity.permissions.viewOthersData === 'sameMarketOnly'; // supervisor
   if (canBypassOwnership && ownerMarket && roleIdentity.allowedMarkets.includes(ownerMarket)) {
     return;
+  }
+  throw new AuthzError('resource_not_owned');
+}
+
+// RIO-118 (corrección — decisiones de Brenda sobre equipos, 01/09/2026):
+// "no asumir que mercado equivale a equipo" también aplica al DETALLE de
+// una venta (y su historial), no solo al listado — un supervisor nunca
+// debe poder leer el detalle completo de una venta ajena manipulando su
+// id, aunque esa venta sea de un mercado que sí tiene autorizado, si el
+// equipo de esa venta no es uno de los que supervisa VIGENTE. Un admin
+// (viewOthersData === true) sigue sin esta restricción — no tiene
+// "equipos propios", su límite real es el mercado (sin cambios).
+//
+// Requiere DB porque, a diferencia de assertCanAccessOwner, necesita
+// consultar equipo_supervisores — por eso es una función aparte (async),
+// no un cambio de firma de la síncrona que usan las rutas de escritura
+// (esas ya están bloqueadas para un supervisor por sus propios permisos
+// específicos — manageProduccionOficial — así que no hay fuga real ahí:
+// ver comentario en ventas/[id].js sobre el alcance de este cambio).
+export async function assertCanViewVentaDetalle(db, requestId, roleIdentity, venta) {
+  if (venta.vendedor_email === roleIdentity.email) return; // siempre puede ver lo propio.
+  if (roleIdentity.permissions.viewOthersData === true) {
+    // admin: mismo criterio de siempre, solo mercado.
+    if (roleIdentity.allowedMarkets.includes(venta.mercado)) return;
+    throw new AuthzError('resource_not_owned');
+  }
+  if (roleIdentity.permissions.viewOthersData === 'sameMarketOnly') {
+    if (!roleIdentity.allowedMarkets.includes(venta.mercado) || !venta.equipo_id) {
+      throw new AuthzError('resource_not_owned');
+    }
+    const rows = await query(
+      db, requestId,
+      `SELECT 1 FROM equipo_supervisores
+       WHERE equipo_id = ? AND usuario_email = ? AND (valid_until IS NULL OR valid_until > datetime('now')) AND valid_from <= datetime('now')`,
+      [venta.equipo_id, roleIdentity.email]
+    );
+    if (rows[0]) return;
+    throw new AuthzError('resource_not_owned');
   }
   throw new AuthzError('resource_not_owned');
 }

@@ -71,6 +71,13 @@ function serializeVenta(row) {
     tipoPrecio: row.tipo_precio,
     precioPactado: row.precio_pactado,
     vendedorEmail: row.vendedor_email,
+    // RIO-118 (corrección — identidad visible, 01/09/2026): nombre para
+    // MOSTRAR, resuelto server-side desde D1 (nunca un mapa estático del
+    // frontend) — el email sigue siendo el identificador estable que
+    // usan los filtros y las relaciones internas, nunca se reemplaza.
+    // Puede ser null si el usuario no tiene nombre configurado en D1 (el
+    // frontend decide el texto de reemplazo, nunca usa el email como tal).
+    vendedorNombre: row.vendedor_nombre || null,
     equipoId: row.equipo_id || null,
     estadoActual: row.estado_actual,
     // RIO-117: ventas.estado_actual es un placeholder que nunca transiciona
@@ -138,10 +145,10 @@ async function handleList(context) {
   const { requestId, roleIdentity } = data;
 
   let rows;
-  if (roleIdentity.permissions.viewOthersData) {
-    // admin/supervisor (o cualquier capacidad futura equivalente):
-    // limitado a sus propios mercados autorizados — nunca "todas las
-    // ventas" sin condición (RIO-97 v2 sección 4).
+  if (roleIdentity.permissions.viewOthersData === true) {
+    // admin (bypass total de mercado, nunca de equipo — no tiene
+    // "equipos propios", ve todo lo de sus mercados autorizados. RIO-97
+    // v2 sección 4).
     if (roleIdentity.allowedMarkets.length === 0) {
       return ok({ ventas: [] }, requestId);
     }
@@ -149,7 +156,7 @@ async function handleList(context) {
     rows = await query(
       env.DB,
       requestId,
-      `SELECT v.*, c.negocio, p.estado_actual AS proyecto_estado,
+      `SELECT v.*, c.negocio, u.nombre AS vendedor_nombre, p.estado_actual AS proyecto_estado,
          (SELECT COUNT(*) FROM pagos_esperados pe WHERE pe.venta_id = v.id AND pe.estado = 'acreditado') AS pagos_acreditados_count,
          (SELECT COUNT(*) FROM incidencias i WHERE i.venta_id = v.id AND i.tipo = 'cancelacion') AS cancelacion_count,
          (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
@@ -162,8 +169,48 @@ async function handleList(context) {
             ELSE 'pendiente' END FROM componentes co WHERE co.proyecto_id = p.id) AS estado_materiales_resumen
        FROM ventas v JOIN clientes c ON c.id = v.cliente_id
        LEFT JOIN proyectos p ON p.venta_id = v.id
+       LEFT JOIN usuarios u ON u.email = v.vendedor_email
        WHERE v.mercado IN (${placeholders}) ORDER BY v.created_at DESC`,
       roleIdentity.allowedMarkets
+    );
+  } else if (roleIdentity.permissions.viewOthersData === 'sameMarketOnly') {
+    // supervisor: NUNCA "todo el mercado" — solo sus propias ventas más
+    // las de los equipos que supervisa VIGENTE (RIO-118, corrección
+    // 01/09/2026: "no asumir que mercado equivale a equipo" también
+    // aplica acá, no solo a comisiones). Un supervisor sin ningún equipo
+    // vigente en un mercado no ve ventas ajenas de ese mercado, aunque
+    // esté entre sus allowedMarkets.
+    if (roleIdentity.allowedMarkets.length === 0) {
+      return ok({ ventas: [] }, requestId);
+    }
+    const placeholders = roleIdentity.allowedMarkets.map(() => '?').join(',');
+    rows = await query(
+      env.DB,
+      requestId,
+      `SELECT v.*, c.negocio, u.nombre AS vendedor_nombre, p.estado_actual AS proyecto_estado,
+         (SELECT COUNT(*) FROM pagos_esperados pe WHERE pe.venta_id = v.id AND pe.estado = 'acreditado') AS pagos_acreditados_count,
+         (SELECT COUNT(*) FROM incidencias i WHERE i.venta_id = v.id AND i.tipo = 'cancelacion') AS cancelacion_count,
+         (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
+            WHEN SUM(CASE WHEN pe.estado = 'acreditado' THEN 1 ELSE 0 END) = COUNT(*) THEN 'acreditado'
+            WHEN SUM(CASE WHEN pe.estado IN ('informado', 'acreditado') THEN 1 ELSE 0 END) > 0 THEN 'informado'
+            ELSE 'pendiente' END FROM pagos_esperados pe WHERE pe.venta_id = v.id) AS estado_pago_resumen,
+         (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
+            WHEN SUM(CASE WHEN co.materiales_estado = 'completos' THEN 1 ELSE 0 END) = COUNT(*) THEN 'completos'
+            WHEN SUM(CASE WHEN co.materiales_estado IN ('informados', 'completos') THEN 1 ELSE 0 END) > 0 THEN 'informados'
+            ELSE 'pendiente' END FROM componentes co WHERE co.proyecto_id = p.id) AS estado_materiales_resumen
+       FROM ventas v JOIN clientes c ON c.id = v.cliente_id
+       LEFT JOIN proyectos p ON p.venta_id = v.id
+       LEFT JOIN usuarios u ON u.email = v.vendedor_email
+       WHERE v.mercado IN (${placeholders})
+         AND (
+           v.vendedor_email = ?
+           OR v.equipo_id IN (
+             SELECT equipo_id FROM equipo_supervisores
+             WHERE usuario_email = ? AND (valid_until IS NULL OR valid_until > datetime('now')) AND valid_from <= datetime('now')
+           )
+         )
+       ORDER BY v.created_at DESC`,
+      [...roleIdentity.allowedMarkets, roleIdentity.email, roleIdentity.email]
     );
   } else {
     // Sin capacidad de ver datos ajenos (ejecutivo, asistente, o
@@ -172,7 +219,7 @@ async function handleList(context) {
     rows = await query(
       env.DB,
       requestId,
-      `SELECT v.*, c.negocio, p.estado_actual AS proyecto_estado,
+      `SELECT v.*, c.negocio, u.nombre AS vendedor_nombre, p.estado_actual AS proyecto_estado,
          (SELECT COUNT(*) FROM pagos_esperados pe WHERE pe.venta_id = v.id AND pe.estado = 'acreditado') AS pagos_acreditados_count,
          (SELECT COUNT(*) FROM incidencias i WHERE i.venta_id = v.id AND i.tipo = 'cancelacion') AS cancelacion_count,
          (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
@@ -185,6 +232,7 @@ async function handleList(context) {
             ELSE 'pendiente' END FROM componentes co WHERE co.proyecto_id = p.id) AS estado_materiales_resumen
        FROM ventas v JOIN clientes c ON c.id = v.cliente_id
        LEFT JOIN proyectos p ON p.venta_id = v.id
+       LEFT JOIN usuarios u ON u.email = v.vendedor_email
        WHERE v.vendedor_email = ? ORDER BY v.created_at DESC`,
       [roleIdentity.email]
     );

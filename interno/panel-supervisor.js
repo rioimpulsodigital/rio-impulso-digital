@@ -150,12 +150,23 @@
     renderVentas();
   }
 
+  // RIO-118 (corrección — identidad visible, 01/09/2026): el filtro
+  // ENVÍA el email (identificador estable, el mismo que usa el servidor
+  // para scopear/filtrar), pero MUESTRA el nombre — nunca al revés.
+  function nombreParaMostrar(nombre) {
+    return nombre || 'Usuario sin nombre configurado';
+  }
+
   function poblarFiltroEjecutivo() {
     var select = document.getElementById('fEjecutivo');
     var actual = select.value;
-    var emails = Array.from(new Set(misVentas.map(function (v) { return v.vendedorEmail; }))).sort();
+    var porEmail = {};
+    misVentas.forEach(function (v) { porEmail[v.vendedorEmail] = v.vendedorNombre; });
+    var emails = Object.keys(porEmail).sort(function (a, b) {
+      return nombreParaMostrar(porEmail[a]).localeCompare(nombreParaMostrar(porEmail[b]));
+    });
     select.innerHTML = '<option value="">Todos</option>' + emails.map(function (e) {
-      return '<option value="' + escapeHtml(e) + '">' + escapeHtml(e) + '</option>';
+      return '<option value="' + escapeHtml(e) + '">' + escapeHtml(nombreParaMostrar(porEmail[e])) + '</option>';
     }).join('');
     select.value = actual;
   }
@@ -231,7 +242,7 @@
         '<tr tabindex="0" data-venta-id="' + escapeHtml(v.id) + '">' +
           '<td><span class="pv-cliente-nombre">' + escapeHtml(v.cliente && v.cliente.negocio || '—') + '</span><br>' +
             '<span class="pv-mono">' + escapeHtml(v.codigoVenta) + '</span></td>' +
-          '<td>' + escapeHtml(v.vendedorEmail) + '<br><span class="pv-badge pv-badge--' + (esPropia ? 'purple' : 'neutral') + '">' + (esPropia ? 'Propia' : 'Supervisada') + '</span></td>' +
+          '<td>' + escapeHtml(nombreParaMostrar(v.vendedorNombre)) + '<br><span class="pv-badge pv-badge--' + (esPropia ? 'purple' : 'neutral') + '">' + (esPropia ? 'Propia' : 'Supervisada') + '</span></td>' +
           '<td>' + escapeHtml(PRODUCTO_LABEL[v.producto] || v.producto) + '<br><span class="pv-badge pv-badge--neutral">' + escapeHtml(v.mercado) + '</span></td>' +
           '<td>' + fmtMoneda(v.precioPactado, v.moneda) + '</td>' +
           '<td><span class="pv-badge pv-badge--' + (ESTADO_OPERATIVO_BADGE[v.estadoOperativo] || 'neutral') + '">' + escapeHtml(ESTADO_OPERATIVO_LABEL[v.estadoOperativo] || v.estadoOperativo || '—') + '</span></td>' +
@@ -406,7 +417,7 @@
     return (
       '<div class="pv-detail-section"><p class="pv-detail-section-title">Venta</p>' +
         '<dl class="pv-kv">' +
-          '<dt>Ejecutivo</dt><dd>' + escapeHtml(detalle.venta.vendedorEmail) + '</dd>' +
+          '<dt>Ejecutivo</dt><dd>' + escapeHtml(nombreParaMostrar(detalle.venta.vendedorNombre)) + '</dd>' +
           '<dt>Producto</dt><dd>' + escapeHtml(PRODUCTO_LABEL[detalle.venta.producto] || detalle.venta.producto) + '</dd>' +
           '<dt>Mercado</dt><dd>' + escapeHtml(detalle.venta.mercado) + '</dd>' +
           '<dt>Precio pactado</dt><dd>' + fmtMoneda(detalle.venta.precioPactado, detalle.venta.moneda) + '</dd>' +
@@ -547,7 +558,7 @@
       '<tr>' +
         '<td><span class="pv-cliente-nombre">' + escapeHtml(c.cliente && c.cliente.negocio || '—') + '</span><br>' +
           '<span class="pv-mono">' + escapeHtml(c.codigoVenta) + '</span></td>' +
-        '<td>' + escapeHtml(c.beneficiarioEmail) + '</td>' +
+        '<td>' + escapeHtml(nombreParaMostrar(c.beneficiarioNombre)) + '</td>' +
         '<td>' + escapeHtml(TIPO_COMISION_LABEL[c.tipo] || c.tipo) + '</td>' +
         '<td><span class="pv-badge pv-badge--' + (c.origen === 'propia' ? 'purple' : 'neutral') + '">' + (c.origen === 'propia' ? 'Mía' : 'Equipo') + '</span></td>' +
         '<td>' + fmtMoneda(c.montoComision, c.moneda) + '</td>' +

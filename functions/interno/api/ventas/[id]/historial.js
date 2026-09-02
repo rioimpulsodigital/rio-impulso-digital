@@ -7,7 +7,7 @@
 
 import { ok, Errors } from '../../../../_shared/response.js';
 import { query } from '../../../../_shared/db.js';
-import { assertCanAccessOwner, AuthzError } from '../../../../_shared/authz.js';
+import { assertCanViewVentaDetalle, AuthzError } from '../../../../_shared/authz.js';
 import { isMethodAllowed } from '../../../../_shared/security.js';
 
 export async function onRequest(context) {
@@ -18,12 +18,16 @@ export async function onRequest(context) {
     return Errors.methodNotAllowed(requestId);
   }
 
-  const ventaRows = await query(env.DB, requestId, 'SELECT id, vendedor_email, mercado FROM ventas WHERE id = ?', [params.id]);
+  const ventaRows = await query(env.DB, requestId, 'SELECT id, vendedor_email, mercado, equipo_id FROM ventas WHERE id = ?', [params.id]);
   const venta = ventaRows[0];
   if (!venta) return Errors.notFound(requestId);
 
   try {
-    assertCanAccessOwner(roleIdentity, venta.vendedor_email, venta.mercado);
+    // RIO-118 (corrección — equipos, 01/09/2026): mismo criterio de
+    // ventas/[id].js — el historial expone motivos y notas internas, no
+    // solo un mercado, así que un supervisor necesita además pertenecer
+    // al equipo de esta venta.
+    await assertCanViewVentaDetalle(env.DB, requestId, roleIdentity, venta);
   } catch (e) {
     if (e instanceof AuthzError) return Errors.notFound(requestId);
     throw e;

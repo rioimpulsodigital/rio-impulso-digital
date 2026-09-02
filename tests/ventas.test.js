@@ -106,12 +106,31 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
     if (sql.includes('FROM ventas v JOIN clientes c') && sql.includes('WHERE v.vendedor_email')) {
       return state.ventas.filter((v) => v.vendedor_email === p[0]).map((v) => ({
         ...v, negocio: state.clientes.find((c) => c.id === v.cliente_id)?.negocio,
+        vendedor_nombre: state.usuarios.find((u) => u.email === v.vendedor_email)?.nombre,
         proyecto_estado: state.proyectos.find((pr) => pr.venta_id === v.id)?.estado_actual,
       }));
+    }
+    if (sql.includes('FROM ventas v JOIN clientes c') && sql.includes('equipo_supervisores')) {
+      // Rama del supervisor (RIO-118, corrección): propias + equipos que
+      // supervisa VIGENTE — nunca "todo el mercado" sin condición. p =
+      // [...allowedMarkets, email (propias), email (subquery de equipos)].
+      const email = p[p.length - 1];
+      const mercados = p.slice(0, p.length - 2);
+      const equiposSupervisados = state.equipo_supervisores
+        .filter((s) => s.usuario_email === email && !s.valid_until)
+        .map((s) => s.equipo_id);
+      return state.ventas
+        .filter((v) => mercados.includes(v.mercado) && (v.vendedor_email === email || (v.equipo_id && equiposSupervisados.includes(v.equipo_id))))
+        .map((v) => ({
+          ...v, negocio: state.clientes.find((c) => c.id === v.cliente_id)?.negocio,
+          vendedor_nombre: state.usuarios.find((u) => u.email === v.vendedor_email)?.nombre,
+          proyecto_estado: state.proyectos.find((pr) => pr.venta_id === v.id)?.estado_actual,
+        }));
     }
     if (sql.includes('FROM ventas v JOIN clientes c') && sql.includes('WHERE v.mercado IN')) {
       return state.ventas.filter((v) => p.includes(v.mercado)).map((v) => ({
         ...v, negocio: state.clientes.find((c) => c.id === v.cliente_id)?.negocio,
+        vendedor_nombre: state.usuarios.find((u) => u.email === v.vendedor_email)?.nombre,
         proyecto_estado: state.proyectos.find((pr) => pr.venta_id === v.id)?.estado_actual,
       }));
     }
@@ -119,7 +138,11 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
       const v = state.ventas.find((x) => x.id === p[0]);
       if (!v) return [];
       const c = state.clientes.find((x) => x.id === v.cliente_id);
-      return [{ ...v, negocio: c?.negocio, contacto_nombre: c?.contacto_nombre, telefono: c?.telefono, cliente_email: c?.email, datos_facturacion_ar: c?.datos_facturacion_ar }];
+      return [{ ...v, negocio: c?.negocio, contacto_nombre: c?.contacto_nombre, telefono: c?.telefono, cliente_email: c?.email, datos_facturacion_ar: c?.datos_facturacion_ar, vendedor_nombre: state.usuarios.find((u) => u.email === v.vendedor_email)?.nombre }];
+    }
+    if (sql.startsWith('SELECT 1 FROM equipo_supervisores')) {
+      const match = state.equipo_supervisores.find((s) => s.equipo_id === p[0] && s.usuario_email === p[1] && !s.valid_until);
+      return match ? [{ 1: 1 }] : [];
     }
     if (sql.startsWith('SELECT * FROM proyectos WHERE venta_id')) {
       return state.proyectos.filter((pr) => pr.venta_id === p[0]);
@@ -433,7 +456,7 @@ test('GET /ventas — expone el avance real del proyecto (RIO-117: ventas.estado
   assert.equal(body2.data.ventas[0].proyectoEstado, 'completado', 'el listado refleja el avance real, no el placeholder fijo de ventas.estado_actual');
 });
 
-test('GET /ventas — un admin/supervisor solo ve ventas de SUS mercados autorizados, no de otros', async () => {
+test('GET /ventas — un admin ve todas las ventas de SUS mercados autorizados, no de otros (sin restricción de equipo — no tiene equipos propios)', async () => {
   const db = fakeDb();
   const ejecutivoCl = roleIdentity({ email: 'ejecutivo.cl@example.com', allowedMarkets: ['CL'] });
   const ejecutivoAr = roleIdentity({ email: 'ejecutivo.ar@example.com', allowedMarkets: ['AR'] });
@@ -444,16 +467,70 @@ test('GET /ventas — un admin/supervisor solo ve ventas de SUS mercados autoriz
     roleIdentity: ejecutivoAr, db,
   }));
 
-  const supervisorCl = roleIdentity({ email: 'supervisor@example.com', role: 'supervisor', allowedMarkets: ['CL'], permissions: PERMISSIONS.supervisor });
-  const responseCl = await ventasHandler(fakeContext({ roleIdentity: supervisorCl, db }));
-  const bodyCl = await responseCl.json();
-  assert.equal(bodyCl.data.ventas.length, 1);
-  assert.equal(bodyCl.data.ventas[0].mercado, 'CL');
-
   const adminAmbos = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL', 'AR'], permissions: PERMISSIONS.admin });
   const responseAmbos = await ventasHandler(fakeContext({ roleIdentity: adminAmbos, db }));
   const bodyAmbos = await responseAmbos.json();
   assert.equal(bodyAmbos.data.ventas.length, 2);
+});
+
+// RIO-118 (corrección — modelo de equipos, 01/09/2026): "no asumir que
+// mercado equivale a equipo" aplica también al listado de ventas de un
+// supervisor, no solo a comisiones (RIO-115). Antes de esta corrección un
+// supervisor veía TODAS las ventas de su mercado, incluidas las de
+// equipos que no supervisa — acá se prueba explícitamente que eso ya no
+// pasa, y que sigue viendo lo que sí le corresponde: lo propio y lo de
+// sus equipos vigentes (potencialmente varios, en varios mercados).
+test('GET /ventas — un supervisor ve sus ventas propias y las de los equipos que supervisa VIGENTE, nunca las de un equipo ajeno del mismo mercado', async () => {
+  const db = fakeDb();
+  db._state.equipo_miembros.push({ equipo_id: 'equipo-cl-1', usuario_email: 'ejecutivo.cl@example.com', valid_until: null });
+  db._state.equipo_miembros.push({ equipo_id: 'equipo-cl-2', usuario_email: 'ejecutivo.cl.otro@example.com', valid_until: null });
+  db._state.equipo_supervisores.push({ equipo_id: 'equipo-cl-1', usuario_email: 'supervisor@example.com', valid_until: null });
+  // equipo-cl-2 tiene OTRO supervisor — supervisor@example.com no lo supervisa.
+  db._state.equipo_supervisores.push({ equipo_id: 'equipo-cl-2', usuario_email: 'otro.supervisor@example.com', valid_until: null });
+
+  const ejecutivoCl = roleIdentity({ email: 'ejecutivo.cl@example.com', allowedMarkets: ['CL'] });
+  const ejecutivoClOtroEquipo = roleIdentity({ email: 'ejecutivo.cl.otro@example.com', allowedMarkets: ['CL'] });
+  await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ejecutivoCl, db }));
+  await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ejecutivoClOtroEquipo, db }));
+
+  const supervisorCl = roleIdentity({ email: 'supervisor@example.com', role: 'supervisor', allowedMarkets: ['CL'], permissions: PERMISSIONS.supervisor });
+  const response = await ventasHandler(fakeContext({ roleIdentity: supervisorCl, db }));
+  const body = await response.json();
+  assert.equal(body.data.ventas.length, 1, 'solo ve la venta del equipo que supervisa, no la del equipo ajeno del mismo mercado');
+  assert.equal(body.data.ventas[0].vendedorEmail, 'ejecutivo.cl@example.com');
+});
+
+test('GET /ventas — un supervisor con equipos en AR y CL ve las ventas de AMBOS equipos', async () => {
+  const db = fakeDb();
+  db._state.equipo_miembros.push({ equipo_id: 'equipo-cl-1', usuario_email: 'ejecutivo.cl@example.com', valid_until: null });
+  db._state.equipo_miembros.push({ equipo_id: 'equipo-ar-1', usuario_email: 'ejecutivo.ar@example.com', valid_until: null });
+  db._state.equipo_supervisores.push({ equipo_id: 'equipo-cl-1', usuario_email: 'alberto@example.com', valid_until: null });
+  db._state.equipo_supervisores.push({ equipo_id: 'equipo-ar-1', usuario_email: 'alberto@example.com', valid_until: null });
+
+  const ejecutivoCl = roleIdentity({ email: 'ejecutivo.cl@example.com', allowedMarkets: ['CL'] });
+  const ejecutivoAr = roleIdentity({ email: 'ejecutivo.ar@example.com', allowedMarkets: ['AR'] });
+  await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ejecutivoCl, db }));
+  await ventasHandler(fakeContext({
+    method: 'POST',
+    body: { mercado: 'AR', cliente: { negocio: 'Estudio Uñas' }, producto: 'ficha', tipoPrecio: 'lanzamiento', precioPactado: 125000 },
+    roleIdentity: ejecutivoAr, db,
+  }));
+
+  const alberto = roleIdentity({ email: 'alberto@example.com', role: 'supervisor', allowedMarkets: ['CL', 'AR'], permissions: PERMISSIONS.supervisor });
+  const response = await ventasHandler(fakeContext({ roleIdentity: alberto, db }));
+  const body = await response.json();
+  assert.equal(body.data.ventas.length, 2, 've las ventas de sus dos equipos, uno por mercado — nunca "todo AR y todo CL" sin condición');
+});
+
+test('GET /ventas — un supervisor SIN ningún equipo vigente en un mercado no ve ventas ajenas de ese mercado, aunque esté en su allowedMarkets', async () => {
+  const db = fakeDb();
+  const ejecutivoCl = roleIdentity({ email: 'ejecutivo.cl@example.com', allowedMarkets: ['CL'] });
+  await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ejecutivoCl, db })); // sin equipo asignado.
+
+  const supervisorSinEquipo = roleIdentity({ email: 'supervisor.nuevo@example.com', role: 'supervisor', allowedMarkets: ['CL'], permissions: PERMISSIONS.supervisor });
+  const response = await ventasHandler(fakeContext({ roleIdentity: supervisorSinEquipo, db }));
+  const body = await response.json();
+  assert.equal(body.data.ventas.length, 0);
 });
 
 test('GET /ventas — un asistente puede listar (solo ve las suyas, igual que un ejecutivo — la capacidad de ver ajenas nunca depende del nombre del rol)', async () => {
@@ -505,8 +582,10 @@ test('GET /ventas/:id — un supervisor de OTRO mercado no puede ver la venta (a
   assert.equal(response.status, 404);
 });
 
-test('GET /ventas/:id — un supervisor del MISMO mercado sí puede ver la venta', async () => {
+test('GET /ventas/:id — un supervisor VIGENTE del equipo de esta venta sí puede verla', async () => {
   const db = fakeDb();
+  db._state.equipo_miembros.push({ equipo_id: 'equipo-cl-1', usuario_email: 'ejecutivo.cl@example.com', valid_until: null });
+  db._state.equipo_supervisores.push({ equipo_id: 'equipo-cl-1', usuario_email: 'supervisor.cl@example.com', valid_until: null });
   const a = roleIdentity({ email: 'ejecutivo.cl@example.com', allowedMarkets: ['CL'] });
   const createResponse = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: a, db }));
   const created = (await createResponse.json()).data.venta;
@@ -516,8 +595,23 @@ test('GET /ventas/:id — un supervisor del MISMO mercado sí puede ver la venta
   assert.equal(response.status, 200);
 });
 
+test('GET /ventas/:id — un supervisor del MISMO mercado pero de OTRO equipo NO puede ver la venta, ni manipulando el id (RIO-118: "mercado no equivale a equipo")', async () => {
+  const db = fakeDb();
+  db._state.equipo_miembros.push({ equipo_id: 'equipo-cl-1', usuario_email: 'ejecutivo.cl@example.com', valid_until: null });
+  db._state.equipo_supervisores.push({ equipo_id: 'equipo-cl-2', usuario_email: 'supervisor.ajeno@example.com', valid_until: null }); // supervisa OTRO equipo del mismo mercado.
+  const a = roleIdentity({ email: 'ejecutivo.cl@example.com', allowedMarkets: ['CL'] });
+  const createResponse = await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: a, db }));
+  const created = (await createResponse.json()).data.venta;
+
+  const supervisorAjeno = roleIdentity({ email: 'supervisor.ajeno@example.com', role: 'supervisor', allowedMarkets: ['CL'], permissions: PERMISSIONS.supervisor });
+  const response = await ventaDetailHandler(fakeContext({ roleIdentity: supervisorAjeno, db, params: { id: created.id } }));
+  assert.equal(response.status, 404, 'mismo criterio de siempre: no se distingue "no existe" de "no autorizado"');
+});
+
 test('GET /ventas/:id — un supervisor del mismo mercado NO recibe datos tributarios/de facturación ni la categoría "facturacion" de los antecedentes del Kit', async () => {
   const db = fakeDb();
+  db._state.equipo_miembros.push({ equipo_id: 'equipo-ar-1', usuario_email: 'ejecutivo.ar@example.com', valid_until: null });
+  db._state.equipo_supervisores.push({ equipo_id: 'equipo-ar-1', usuario_email: 'supervisor.ar@example.com', valid_until: null });
   const a = roleIdentity({ email: 'ejecutivo.ar@example.com', allowedMarkets: ['AR'] });
   const AR_CON_FACTURACION = {
     mercado: 'AR', cliente: { negocio: 'Estudio Uñas', datosFacturacionAr: 'Razón social: Uñas SRL | CUIT: 20-12345678-9' },

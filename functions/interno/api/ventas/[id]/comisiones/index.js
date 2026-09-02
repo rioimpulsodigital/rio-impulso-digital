@@ -28,11 +28,17 @@ import { isMethodAllowed } from '../../../../../_shared/security.js';
 import { costoDominioPendienteParaComision } from '../../../../../_shared/comisiones.js';
 
 async function serialize(db, requestId, c) {
+  // RIO-118 (corrección — identidad visible, 01/09/2026): nombre para
+  // mostrar, resuelto server-side — el email sigue siendo el
+  // identificador real de la fila (beneficiario_email), nunca se
+  // reemplaza. Null si la persona no tiene nombre configurado en D1.
+  const nombreRows = await query(db, requestId, 'SELECT nombre FROM usuarios WHERE email = ?', [c.beneficiario_email]);
   return {
     id: c.id,
     tipo: c.tipo,
     componenteId: c.componente_id,
     beneficiarioEmail: c.beneficiario_email,
+    beneficiarioNombre: nombreRows[0]?.nombre || null,
     porcentaje: c.porcentaje_snapshot,
     base: c.base_snapshot,
     montoBase: c.monto_base,

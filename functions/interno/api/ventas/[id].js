@@ -6,7 +6,7 @@
 
 import { ok, Errors } from '../../../_shared/response.js';
 import { query } from '../../../_shared/db.js';
-import { assertCanAccessOwner, AuthzError } from '../../../_shared/authz.js';
+import { assertCanViewVentaDetalle, AuthzError } from '../../../_shared/authz.js';
 import { isMethodAllowed } from '../../../_shared/security.js';
 
 export async function onRequest(context) {
@@ -20,8 +20,9 @@ export async function onRequest(context) {
   const ventaRows = await query(
     env.DB,
     requestId,
-    `SELECT v.*, c.negocio, c.contacto_nombre, c.telefono, c.email AS cliente_email, c.datos_facturacion_ar
+    `SELECT v.*, c.negocio, c.contacto_nombre, c.telefono, c.email AS cliente_email, c.datos_facturacion_ar, u.nombre AS vendedor_nombre
      FROM ventas v JOIN clientes c ON c.id = v.cliente_id
+     LEFT JOIN usuarios u ON u.email = v.vendedor_email
      WHERE v.id = ?`,
     [params.id]
   );
@@ -29,7 +30,14 @@ export async function onRequest(context) {
   if (!venta) return Errors.notFound(requestId);
 
   try {
-    assertCanAccessOwner(roleIdentity, venta.vendedor_email, venta.mercado);
+    // RIO-118 (corrección — equipos, 01/09/2026): a diferencia del resto
+    // de /ventas/:id/* (que siguen usando assertCanAccessOwner, solo por
+    // mercado — sus acciones de escritura ya están bloqueadas para un
+    // supervisor por permisos propios, no hay fuga real ahí), ESTE
+    // endpoint expone el detalle completo (cliente, antecedentes,
+    // materiales) y por eso exige además pertenecer al equipo, no solo al
+    // mercado, cuando quien mira es un supervisor.
+    await assertCanViewVentaDetalle(env.DB, requestId, roleIdentity, venta);
   } catch (e) {
     if (e instanceof AuthzError) {
       // Nunca se distingue "no existe" de "no autorizado" — ambos casos
@@ -96,6 +104,7 @@ export async function onRequest(context) {
         tipoPrecio: venta.tipo_precio,
         precioPactado: venta.precio_pactado,
         vendedorEmail: venta.vendedor_email,
+        vendedorNombre: venta.vendedor_nombre || null,
         estadoActual: venta.estado_actual,
         createdAt: venta.created_at,
         // RIO-117 (corrección tras validación real): categorizado, nunca
