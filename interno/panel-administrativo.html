@@ -319,6 +319,7 @@
         <button class="pv-tab active" id="pvTabVentasBtn" role="tab" aria-selected="true" aria-controls="pvTabVentas">Ventas y proyectos</button>
         <button class="pv-tab" id="pvTabNotifBtn" role="tab" aria-selected="false" aria-controls="pvTabNotif">Notificaciones<span class="pv-tab-badge" id="pvNotifBadge" style="display:none;"></span></button>
         <button class="pv-tab" id="pvTabPersonasBtn" role="tab" aria-selected="false" aria-controls="pvTabPersonas">Personas y equipos</button>
+        <button class="pv-tab" id="pvTabPlanesBtn" role="tab" aria-selected="false" aria-controls="pvTabPlanes">Planes de comisión</button>
       </div>
 
       <!-- ── VENTAS Y PROYECTOS ── -->
@@ -419,10 +420,118 @@
           <div id="pvEquiposResult"><div class="pv-loading">Cargando equipos…</div></div>
         </div>
       </div>
+
+      <!-- ── PLANES DE COMISIÓN ── -->
+      <!-- RIO-119 (tercer bloque, item 2/3, 02/09/2026): definición
+           versionada de planes (nunca se muta un porcentaje in place — una
+           "nueva versión" cierra el plan anterior y crea uno nuevo) y
+           asignación a personas con vigencia. "Empresa" nunca se modela
+           como fila — es siempre el remanente implícito, calculado por la
+           validación de distribución (ver simulador en "Nuevo proyecto
+           personalizado"). -->
+      <div class="pv-panel" id="pvTabPlanes" role="tabpanel">
+        <div class="pv-moneda-block">
+          <div class="pv-moneda-head"><span class="pv-moneda-titulo">Planes</span></div>
+          <div class="pv-btn-row" style="margin-bottom:12px;">
+            <button type="button" class="pv-btn pv-btn--primary" id="pvNuevoPlanBtn">+ Nuevo plan</button>
+            <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--muted);"><input type="checkbox" id="fPlanesInactivos"> Incluir inactivos</label>
+          </div>
+          <div id="pvPlanesResult"><div class="pv-loading">Cargando planes…</div></div>
+        </div>
+      </div>
     </div>
 
   </div>
 </div>
+
+<div class="pv-detail-overlay" id="pvPlanOverlay"></div>
+<aside class="pv-detail" id="pvPlanPanel" aria-hidden="true">
+  <div class="pv-detail-inner">
+    <div class="pv-detail-head">
+      <div><h2 style="font-family:var(--ff-head);font-size:1.15rem;margin:0;" id="pvPlanTitulo">Nuevo plan</h2></div>
+      <button class="pv-detail-close" id="pvPlanCloseBtn" aria-label="Cerrar">✕</button>
+    </div>
+
+    <form id="pvPlanCrearForm" class="pv-detail-section">
+      <label>Tipo de participación
+        <select id="plTipo" required>
+          <option value="comercial">Comercial</option>
+          <option value="supervision">Supervisión</option>
+          <option value="realizacion">Realización</option>
+          <option value="desarrollo">Desarrollo</option>
+          <option value="produccion">Producción</option>
+        </select>
+      </label>
+      <label id="plContextoWrap" style="display:none;">Contexto de realización
+        <select id="plContexto">
+          <option value="solo">Solo (sin practicante)</option>
+          <option value="responsable_con_practicante">Responsable, con practicante</option>
+          <option value="practicante">Practicante</option>
+        </select>
+      </label>
+      <label>Porcentaje
+        <input type="number" id="plPorcentaje" min="0" max="100" required>
+      </label>
+      <label>Base
+        <select id="plBase" required>
+          <option value="utilidad_neta_venta">Utilidad neta de la venta</option>
+          <option value="utilidad_neta_componente">Utilidad neta del componente</option>
+        </select>
+      </label>
+      <label>Productos alcanzados (separados por coma)
+        <input type="text" id="plProductos" placeholder="ficha, generico, personalizado, proyecto_personalizado" required>
+      </label>
+      <label>Mercados alcanzados (separados por coma)
+        <input type="text" id="plMercados" placeholder="CL, AR" required>
+      </label>
+      <label>Nota (opcional)
+        <input type="text" id="plNote">
+      </label>
+      <button type="submit" class="pv-btn pv-btn--primary">Crear plan</button>
+      <p id="plCrearStatus" class="pv-status-msg"></p>
+    </form>
+
+    <div id="pvPlanGestionWrap" style="display:none;">
+      <div id="pvPlanResumen" class="pv-notif-card" style="margin-bottom:16px;"></div>
+
+      <div class="pv-btn-row" style="margin-bottom:16px;">
+        <button type="button" class="pv-btn" id="pvPlanDesactivarBtn">Desactivar plan</button>
+      </div>
+
+      <div class="pv-detail-section">
+        <h3 style="font-size:.95rem;margin:0 0 8px;">Nueva versión (cambia el porcentaje solo para operaciones futuras)</h3>
+        <form id="pvPlanNuevaVersionForm" class="pv-accion-form" style="border-top:none;padding-top:0;">
+          <label>Nuevo porcentaje
+            <input type="number" id="plvPorcentaje" min="0" max="100" required>
+          </label>
+          <label>Motivo (opcional)
+            <input type="text" id="plvMotivo">
+          </label>
+          <button type="submit" class="pv-btn">Crear nueva versión</button>
+          <p id="plvStatus" class="pv-status-msg"></p>
+        </form>
+      </div>
+
+      <div class="pv-detail-section">
+        <h3 style="font-size:.95rem;margin:0 0 8px;">Asignaciones vigentes</h3>
+        <div id="pvPlanAsignacionesLista"></div>
+        <form id="pvPlanAsignarForm" class="pv-accion-form">
+          <label>Correo de la persona
+            <input type="email" id="ppcEmail" required>
+          </label>
+          <label>Vigente desde (opcional)
+            <input type="date" id="ppcDesde">
+          </label>
+          <label>Vigente hasta (opcional)
+            <input type="date" id="ppcHasta">
+          </label>
+          <button type="submit" class="pv-btn pv-btn--primary">Asignar</button>
+          <p id="ppcStatus" class="pv-status-msg"></p>
+        </form>
+      </div>
+    </div>
+  </div>
+</aside>
 
 <!-- ── PERSONA: crear / editar ── -->
 <div class="pv-detail-overlay" id="pvPersonaOverlay"></div>
@@ -717,7 +826,7 @@
 
 <script src="./config/users.js" defer></script>
 <script src="../assets/js/main.js?v=20260627" defer></script>
-<script src="./panel-administrativo.js?v=20260902a" defer></script>
+<script src="./panel-administrativo.js?v=20260902b" defer></script>
 
 </body>
 </html>

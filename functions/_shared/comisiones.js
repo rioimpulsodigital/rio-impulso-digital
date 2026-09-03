@@ -506,6 +506,54 @@ export async function marcarComisionPagada(db, requestId, { comisionId, actorEma
   });
 }
 
+// Validación de la distribución económica EFECTIVA — RIO-119 (tercer
+// bloque, item 4, 02/09/2026). Se aplica siempre sobre la distribución YA
+// RESUELTA (cada participación con su beneficiario concreto, después de
+// resolver equipo/supervisor/plan — nunca sobre porcentajes teóricos de un
+// plan aislado). El empresa NUNCA se modela como fila (ver principio
+// central arriba) — acá se calcula como el remanente 100 - suma, nunca
+// pedido como input.
+//
+// `participaciones`: [{ concepto: string (ej. 'comercial', 'supervision',
+// 'realizacion_responsable'), beneficiarioEmail: string|null, porcentaje:
+// number }]. `beneficiarioEmail: null` representa una participación
+// esperada pero SIN resolver (ej. una venta directa de administración sin
+// supervisor asignado) — nunca se omite la fila, para que quede visible
+// qué falta (Brenda: "una asignación faltante debe mostrar el porcentaje
+// sin asignar y bloquear el registro definitivo").
+export function validarDistribucion(participaciones) {
+  const errores = [];
+  const vistos = new Set();
+  let suma = 0;
+
+  for (const p of participaciones) {
+    if (!Number.isFinite(p.porcentaje) || p.porcentaje < 0) {
+      errores.push(`El porcentaje de "${p.concepto}" no puede ser negativo.`);
+      continue;
+    }
+    suma += p.porcentaje;
+    if (!p.beneficiarioEmail) {
+      errores.push(`Falta asignar beneficiario para "${p.concepto}" (${p.porcentaje}% sin resolver).`);
+      continue;
+    }
+    const clave = `${p.concepto}:${p.beneficiarioEmail}`;
+    if (vistos.has(clave)) errores.push(`Participación duplicada: "${p.concepto}" para ${p.beneficiarioEmail}.`);
+    vistos.add(clave);
+  }
+
+  if (suma > 100) errores.push(`La distribución suma ${suma}%, no puede exceder 100%.`);
+  const empresaPorcentaje = Math.max(100 - suma, 0);
+
+  return {
+    valida: errores.length === 0 && suma <= 100,
+    completa: errores.length === 0 && suma === 100,
+    suma,
+    empresaPorcentaje,
+    errores,
+    participaciones: participaciones.map((p) => ({ concepto: p.concepto, beneficiarioEmail: p.beneficiarioEmail || null, porcentaje: p.porcentaje })),
+  };
+}
+
 // Alta de un costo directo de un componente (ej. dominio propio de una
 // Landing Premium) — exclusivo de administración (autorizado_por, validado
 // en el endpoint). Se descuenta de la utilidad neta de ESE componente,

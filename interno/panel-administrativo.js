@@ -130,12 +130,13 @@
     wireDetailPanel();
     wireNuevoProyecto();
     wirePersonasEquipos();
+    wirePlanesComision();
     await cargarVentas();
     await cargarNotificacionesResumen();
     await cargarEquiposDisponibles();
   });
 
-  var TABS = ['ventas', 'notif', 'personas'];
+  var TABS = ['ventas', 'notif', 'personas', 'planes'];
 
   function wireTabs() {
     document.getElementById('pvTabVentasBtn').addEventListener('click', function () { activarTab('ventas'); });
@@ -148,8 +149,13 @@
       if (!personasYaCargadas) cargarPersonas();
       if (!equiposAdminYaCargados) cargarEquiposAdminTab();
     });
+    document.getElementById('pvTabPlanesBtn').addEventListener('click', function () {
+      activarTab('planes');
+      cargarPlanesComision();
+    });
     document.getElementById('fNotifPendientes').addEventListener('change', cargarNotificaciones);
     document.getElementById('fEquiposInactivos').addEventListener('change', cargarEquiposAdminTab);
+    document.getElementById('fPlanesInactivos').addEventListener('change', cargarPlanesComision);
   }
 
   function activarTab(nombre) {
@@ -1100,8 +1106,9 @@
   // ── Personas y equipos (segundo bloque de RIO-119, 02/09/2026) ───────
   // Administración de perfiles, rol/mercados/capacidad de vender, equipos,
   // miembros y supervisores — todo lo que antes solo existía sembrado por
-  // migración SQL directa. Datos de transferencia cifrados/enmascarados y
-  // planes de comisión editables quedan para un bloque posterior.
+  // migración SQL directa. Datos de transferencia cifrados/enmascarados
+  // (tercer bloque, item 1) y planes de comisión (tercer bloque, items 2-3)
+  // se agregan más abajo.
 
   var personasCache = [];
   var personasYaCargadas = false;
@@ -1617,6 +1624,208 @@
         if (!r2.ok || !r2.body || !r2.body.ok) { alert((r2.body && r2.body.error && r2.body.error.message) || 'No se pudo marcar como principal.'); btn.disabled = false; return; }
         await cargarSupervisoresEquipo(equipoId);
       });
+    });
+  }
+
+  // ── Planes de comisión (tercer bloque de RIO-119, items 2-3, 02/09/2026) ──
+  // Un plan es una DEFINICIÓN (tipo, porcentaje, base, alcance de
+  // producto/mercado) — nunca se muta un porcentaje in place, "nueva
+  // versión" cierra el plan viejo (consultable como historial) y crea uno
+  // nuevo. La asignación a una persona concreta, con vigencia, es un paso
+  // aparte. "Empresa" nunca aparece acá como fila — es siempre el
+  // remanente implícito.
+
+  var planesCache = [];
+  var TIPO_PLAN_LABEL = { comercial: 'Comercial', supervision: 'Supervisión', realizacion: 'Realización', desarrollo: 'Desarrollo', produccion: 'Producción' };
+  var CONTEXTO_PLAN_LABEL = { solo: 'Solo (sin practicante)', responsable_con_practicante: 'Responsable, con practicante', practicante: 'Practicante' };
+
+  async function cargarPlanesComision() {
+    document.getElementById('pvPlanesResult').innerHTML = '<div class="pv-loading">Cargando planes…</div>';
+    var r = await apiFetch('/interno/api/planes-comision');
+    if (!r.ok || !r.body || !r.body.ok) {
+      document.getElementById('pvPlanesResult').innerHTML = pvErrorHTML('No se pudieron cargar los planes.');
+      return;
+    }
+    planesCache = r.body.data.planes || [];
+    renderPlanesLista();
+  }
+
+  function renderPlanesLista() {
+    var el = document.getElementById('pvPlanesResult');
+    var incluirInactivos = document.getElementById('fPlanesInactivos').checked;
+    var visibles = planesCache.filter(function (p) { return incluirInactivos || p.estado === 'activo'; });
+    if (visibles.length === 0) {
+      el.innerHTML = pvEmptyHTML('💰', 'Todavía no hay planes de comisión registrados.');
+      return;
+    }
+    el.innerHTML = visibles.map(function (p) {
+      return (
+        '<div class="pv-notif-card" tabindex="0" data-plan-id="' + escapeHtml(p.id) + '">' +
+          '<div class="pv-notif-head">' +
+            '<span>' + escapeHtml(TIPO_PLAN_LABEL[p.tipo] || p.tipo) + (p.contextoRealizacion ? ' — ' + escapeHtml(CONTEXTO_PLAN_LABEL[p.contextoRealizacion] || p.contextoRealizacion) : '') +
+              ' — <strong>' + p.porcentaje + '%</strong></span>' +
+            '<span class="pv-badge pv-badge--' + (p.estado === 'activo' ? 'green' : 'red') + '">' + (p.estado === 'activo' ? 'Activo' : 'Inactivo') + '</span>' +
+          '</div>' +
+          '<div style="font-size:.82rem;color:var(--muted);">Base: ' + escapeHtml(p.base) + ' · Productos: ' + escapeHtml(p.productosAlcanzados.join(', ')) + ' · Mercados: ' + escapeHtml(p.mercadosAlcanzados.join(', ')) + '</div>' +
+        '</div>'
+      );
+    }).join('');
+    Array.prototype.forEach.call(el.querySelectorAll('[data-plan-id]'), function (card) {
+      card.addEventListener('click', function () { abrirPlanGestion(card.getAttribute('data-plan-id')); });
+      card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirPlanGestion(card.getAttribute('data-plan-id')); } });
+    });
+  }
+
+  function cerrarPlanPanel() {
+    document.getElementById('pvPlanOverlay').classList.remove('open');
+    document.getElementById('pvPlanPanel').classList.remove('open');
+    document.getElementById('pvPlanPanel').setAttribute('aria-hidden', 'true');
+  }
+
+  function abrirPlanCrear() {
+    document.getElementById('pvPlanTitulo').textContent = 'Nuevo plan';
+    document.getElementById('pvPlanCrearForm').style.display = '';
+    document.getElementById('pvPlanGestionWrap').style.display = 'none';
+    document.getElementById('pvPlanCrearForm').reset();
+    document.getElementById('plContextoWrap').style.display = document.getElementById('plTipo').value === 'realizacion' ? '' : 'none';
+    document.getElementById('plCrearStatus').textContent = '';
+    document.getElementById('pvPlanOverlay').classList.add('open');
+    document.getElementById('pvPlanPanel').classList.add('open');
+    document.getElementById('pvPlanPanel').setAttribute('aria-hidden', 'false');
+  }
+
+  async function abrirPlanGestion(planId) {
+    var plan = planesCache.find(function (p) { return p.id === planId; });
+    if (!plan) return;
+    document.getElementById('pvPlanTitulo').textContent = (TIPO_PLAN_LABEL[plan.tipo] || plan.tipo) + ' — ' + plan.porcentaje + '%';
+    document.getElementById('pvPlanCrearForm').style.display = 'none';
+    document.getElementById('pvPlanGestionWrap').style.display = '';
+    document.getElementById('pvPlanGestionWrap').setAttribute('data-plan-id', planId);
+    document.getElementById('pvPlanDesactivarBtn').style.display = plan.estado === 'activo' ? '' : 'none';
+    document.getElementById('pvPlanResumen').innerHTML =
+      '<div style="font-size:.85rem;">' +
+        '<div><strong>Base:</strong> ' + escapeHtml(plan.base) + '</div>' +
+        '<div><strong>Productos:</strong> ' + escapeHtml(plan.productosAlcanzados.join(', ')) + '</div>' +
+        '<div><strong>Mercados:</strong> ' + escapeHtml(plan.mercadosAlcanzados.join(', ')) + '</div>' +
+        (plan.note ? '<div><strong>Nota:</strong> ' + escapeHtml(plan.note) + '</div>' : '') +
+      '</div>';
+    document.getElementById('plvPorcentaje').value = plan.porcentaje;
+    document.getElementById('plvStatus').textContent = '';
+    document.getElementById('ppcStatus').textContent = '';
+    document.getElementById('pvPlanAsignarForm').reset();
+
+    document.getElementById('pvPlanOverlay').classList.add('open');
+    document.getElementById('pvPlanPanel').classList.add('open');
+    document.getElementById('pvPlanPanel').setAttribute('aria-hidden', 'false');
+
+    await cargarAsignacionesPlan(planId);
+  }
+
+  async function cargarAsignacionesPlan(planId) {
+    var el = document.getElementById('pvPlanAsignacionesLista');
+    el.innerHTML = '<div class="pv-loading">Cargando…</div>';
+    var r = await apiFetch('/interno/api/planes-comision/' + encodeURIComponent(planId) + '/asignaciones');
+    if (!r.ok || !r.body || !r.body.ok) { el.innerHTML = pvErrorHTML('No se pudieron cargar las asignaciones.'); return; }
+    var asignaciones = (r.body.data.asignaciones || []).filter(function (a) { return !a.validUntil; });
+    if (asignaciones.length === 0) { el.innerHTML = '<p class="pv-materiales-vacio">Todavía no hay asignaciones vigentes.</p>'; return; }
+    el.innerHTML = asignaciones.map(function (a) {
+      return (
+        '<div class="pv-notif-card">' +
+          '<div class="pv-notif-head">' +
+            '<span>' + escapeHtml(nombreParaMostrar(a.usuarioNombre)) + ' <span class="pv-mono">' + escapeHtml(a.usuarioEmail) + '</span></span>' +
+            '<button type="button" class="pv-btn pv-btn--danger" data-cerrar-asignacion="' + escapeHtml(a.id) + '">Cerrar</button>' +
+          '</div>' +
+          '<div style="font-size:.78rem;color:var(--muted);">Desde ' + escapeHtml(a.validFrom) + (a.validUntil ? ' hasta ' + escapeHtml(a.validUntil) : '') + '</div>' +
+        '</div>'
+      );
+    }).join('');
+    Array.prototype.forEach.call(el.querySelectorAll('[data-cerrar-asignacion]'), function (btn) {
+      btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        var r2 = await apiPost('/interno/api/planes-comision/' + encodeURIComponent(planId) + '/asignaciones', { action: 'cerrar', id: btn.getAttribute('data-cerrar-asignacion') });
+        if (!r2.ok || !r2.body || !r2.body.ok) { alert((r2.body && r2.body.error && r2.body.error.message) || 'No se pudo cerrar.'); btn.disabled = false; return; }
+        await cargarAsignacionesPlan(planId);
+      });
+    });
+  }
+
+  function wirePlanesComision() {
+    document.getElementById('pvNuevoPlanBtn').addEventListener('click', abrirPlanCrear);
+    document.getElementById('pvPlanCloseBtn').addEventListener('click', cerrarPlanPanel);
+    document.getElementById('pvPlanOverlay').addEventListener('click', cerrarPlanPanel);
+    document.getElementById('plTipo').addEventListener('change', function () {
+      document.getElementById('plContextoWrap').style.display = this.value === 'realizacion' ? '' : 'none';
+    });
+
+    document.getElementById('pvPlanCrearForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var statusEl = document.getElementById('plCrearStatus');
+      var tipo = document.getElementById('plTipo').value;
+      var productos = document.getElementById('plProductos').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      var mercados = document.getElementById('plMercados').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      var r = await apiPost('/interno/api/planes-comision', {
+        tipo: tipo,
+        contextoRealizacion: tipo === 'realizacion' ? document.getElementById('plContexto').value : undefined,
+        porcentaje: parseInt(document.getElementById('plPorcentaje').value, 10),
+        base: document.getElementById('plBase').value,
+        productosAlcanzados: productos,
+        mercadosAlcanzados: mercados,
+        note: document.getElementById('plNote').value.trim() || undefined,
+      });
+      if (!r.ok || !r.body || !r.body.ok) {
+        statusEl.textContent = (r.body && r.body.error && r.body.error.message) || 'No se pudo crear el plan.';
+        statusEl.className = 'pv-status-msg err';
+        return;
+      }
+      cerrarPlanPanel();
+      await cargarPlanesComision();
+    });
+
+    document.getElementById('pvPlanDesactivarBtn').addEventListener('click', async function () {
+      var planId = document.getElementById('pvPlanGestionWrap').getAttribute('data-plan-id');
+      if (!confirm('¿Desactivar este plan? Deja de poder asignarse a operaciones futuras.')) return;
+      var r = await apiPost('/interno/api/planes-comision/' + encodeURIComponent(planId), { action: 'desactivar' });
+      if (!r.ok || !r.body || !r.body.ok) { alert((r.body && r.body.error && r.body.error.message) || 'No se pudo desactivar.'); return; }
+      cerrarPlanPanel();
+      await cargarPlanesComision();
+    });
+
+    document.getElementById('pvPlanNuevaVersionForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var planId = document.getElementById('pvPlanGestionWrap').getAttribute('data-plan-id');
+      var statusEl = document.getElementById('plvStatus');
+      var r = await apiPost('/interno/api/planes-comision/' + encodeURIComponent(planId), {
+        action: 'nueva-version',
+        porcentaje: parseInt(document.getElementById('plvPorcentaje').value, 10),
+        motivo: document.getElementById('plvMotivo').value.trim() || undefined,
+      });
+      if (!r.ok || !r.body || !r.body.ok) {
+        statusEl.textContent = (r.body && r.body.error && r.body.error.message) || 'No se pudo crear la nueva versión.';
+        statusEl.className = 'pv-status-msg err';
+        return;
+      }
+      cerrarPlanPanel();
+      await cargarPlanesComision();
+    });
+
+    document.getElementById('pvPlanAsignarForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var planId = document.getElementById('pvPlanGestionWrap').getAttribute('data-plan-id');
+      var statusEl = document.getElementById('ppcStatus');
+      var r = await apiPost('/interno/api/planes-comision/' + encodeURIComponent(planId) + '/asignaciones', {
+        action: 'asignar',
+        usuarioEmail: document.getElementById('ppcEmail').value.trim(),
+        validFrom: document.getElementById('ppcDesde').value || undefined,
+        validUntil: document.getElementById('ppcHasta').value || undefined,
+      });
+      if (!r.ok || !r.body || !r.body.ok) {
+        statusEl.textContent = (r.body && r.body.error && r.body.error.message) || 'No se pudo asignar.';
+        statusEl.className = 'pv-status-msg err';
+        return;
+      }
+      statusEl.textContent = '';
+      document.getElementById('pvPlanAsignarForm').reset();
+      await cargarAsignacionesPlan(planId);
     });
   }
 })();
