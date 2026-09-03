@@ -93,6 +93,8 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
         nombre_proyecto: p[21] || null, descripcion_proyecto: p[22] || null, notion_url: p[23] || null,
         // RIO-119 (tercer bloque, item 5, 02/09/2026): snapshot inmutable de la distribución aprobada.
         distribucion_snapshot: p[24] || null,
+        // RIO-119 (tercer bloque, item 5, 03/09/2026): 'referencia'/'reconstruccion' o null.
+        modo_historico: p[25] || null,
         estado_actual: 'registrada', created_at: '2026-08-28 00:00:00',
       });
     } else if (sql.startsWith('INSERT INTO proyectos')) {
@@ -107,7 +109,7 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
         porcentaje_snapshot: p[8], base_snapshot: p[9], monto_base: p[10], moneda: p[11], monto_comision: p[12], estado: 'calculada_provisional',
       });
     } else if (sql.startsWith('INSERT INTO eventos_historial')) {
-      state.eventos_historial.push({ id: p[0], venta_id: p[1], entidad: p[2], entidad_id: p[3] });
+      state.eventos_historial.push({ id: p[0], venta_id: p[1], entidad: p[2], entidad_id: p[3], proxima_accion: p[8] || null, responsable_proxima_accion: p[9] || null });
     } else {
       throw new Error('INSERT inesperado en test: ' + sql);
     }
@@ -184,6 +186,15 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
     }
     if (sql.startsWith("SELECT id FROM costos_directos WHERE componente_id")) {
       return state.costos_directos.filter((c) => c.componente_id === p[0] && c.tipo === 'dominio');
+    }
+    if (sql.startsWith('SELECT modo_historico FROM ventas WHERE id')) {
+      const v = state.ventas.find((x) => x.id === p[0]);
+      return v ? [{ modo_historico: v.modo_historico }] : [];
+    }
+    if (sql.startsWith('SELECT proxima_accion, responsable_proxima_accion FROM eventos_historial')) {
+      const coincidencias = (state.eventos_historial || []).filter((e) => e.venta_id === p[0] && e.proxima_accion);
+      const ultimo = coincidencias[coincidencias.length - 1]; // orden de inserción = orden cronológico en este fake.
+      return ultimo ? [{ proxima_accion: ultimo.proxima_accion, responsable_proxima_accion: ultimo.responsable_proxima_accion }] : [];
     }
     if (sql.startsWith('SELECT producto FROM ventas WHERE id')) {
       const v = state.ventas.find((x) => x.id === p[0]);

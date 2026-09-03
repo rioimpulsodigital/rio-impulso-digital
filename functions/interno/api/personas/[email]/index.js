@@ -35,6 +35,26 @@ const VALID_MERCADOS = ['CL', 'AR'];
 const VALID_ACCESO_ESTADO = ['perfil_creado', 'acceso_pendiente', 'acceso_confirmado', 'desactivado'];
 const VALID_USER_STATUS = ['activo', 'inactivo'];
 
+// RIO-119 (identidad estable, confirmado explícitamente 03/09/2026):
+// `usuarios.id` (INTEGER PRIMARY KEY AUTOINCREMENT) es el ID INTERNO
+// CANÓNICO E INMUTABLE de cada persona — asignado una sola vez al crear el
+// perfil, nunca reasignado ni reescrito por ninguna acción de este
+// endpoint (la acción 'cambiar-correo' de abajo actualiza únicamente la
+// columna `email`, jamás `id`). El correo es la identidad de ACCESO
+// (cambia, y su cambio queda auditado en `usuarios_correos_historicos`),
+// nunca la identidad histórica principal del sistema.
+//
+// Hoy, ventas/comisiones/equipos/historial NO referencian usuario_id
+// directamente — usan el correo como puntero de identidad vigente,
+// mantenido en sincronía atómica por la cascada de abajo (nunca diverge
+// en silencio). La única tabla que sí referencia `usuarios.id`
+// directamente es `asignaciones_plan_comision.usuario_id` (planes de
+// comisión, RIO-119 tercer bloque). Migrar el resto del esquema a
+// usuario_id fue evaluado en RIO-118 y descartado por desproporcionado
+// para el alcance actual — la cascada de correo cumple la misma garantía
+// (ningún cambio de correo rompe ventas/equipos/comisiones/historial)
+// sin esa reescritura mayor.
+//
 // Tablas donde el correo representa la identidad VIGENTE de una persona —
 // se cascadea al cambiar de correo. Cada entrada: [tabla, columna].
 const TABLAS_IDENTIDAD_VIGENTE = [

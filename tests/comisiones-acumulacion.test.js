@@ -31,6 +31,7 @@ function fakeDb() {
   }
 
   function runSelect(sql, p) {
+    if (sql.startsWith('SELECT modo_historico FROM ventas WHERE id')) return [];
     if (sql.includes('FROM usuarios u') && sql.includes('JOIN asignaciones_plan_comision ap') && sql.includes('JOIN planes_comision pl')) {
       const usuario = state.usuarios.find((u) => u.email === p[0]);
       if (!usuario) return [];

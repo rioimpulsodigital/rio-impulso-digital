@@ -377,6 +377,9 @@
     document.getElementById('pvDetailNegocio').textContent = detalle.cliente.negocio;
     document.getElementById('pvDetailBody').innerHTML = await renderDetalleVentaHTML(detalle);
     wireDetalleVentaEventos(detalle);
+    if (detalle.venta.producto === 'proyecto_personalizado') {
+      await cargarDistribucionDelDetalle(detalle.venta.id);
+    }
   }
 
   function calcularFaltantesLanding(detalle) {
@@ -531,6 +534,192 @@
     );
   }
 
+  // RIO-119 (tercer bloque, item 5, 03/09/2026): metadata de gestión de
+  // una fase — orden/responsable operativo/fechas, deliberadamente
+  // separado de quién cobra un % (eso vive en la distribución económica,
+  // más abajo).
+  function faseGestionHTML(c) {
+    return (
+      '<form class="pv-accion-form" data-editar-fase="' + escapeHtml(c.id) + '" style="border-top:none;padding-top:0;">' +
+        '<div class="pv-costo-form-row">' +
+          '<div class="pv-costo-form-field" style="max-width:80px;"><label>Orden</label><input type="number" name="orden" min="0" value="' + (c.orden != null ? c.orden : '') + '"></div>' +
+          '<div class="pv-costo-form-field"><label>Responsable operativo</label><input type="email" name="responsableOperativoEmail" value="' + escapeHtml(c.responsableOperativoEmail || '') + '"></div>' +
+          '<div class="pv-costo-form-field"><label>Fecha prevista</label><input type="date" name="fechaPrevista" value="' + escapeHtml(c.fechaPrevista || '') + '"></div>' +
+          '<div class="pv-costo-form-field"><label>Fecha real</label><input type="date" name="fechaReal" value="' + escapeHtml(c.fechaReal || '') + '"></div>' +
+          '<button type="submit" class="pv-btn">Guardar</button>' +
+        '</div>' +
+        '<span class="pv-status-msg" data-status></span>' +
+      '</form>'
+    );
+  }
+
+  var TIPO_PLAN_LABEL_DIST = { comercial: 'Comercial', supervision: 'Supervisión', desarrollo: 'Desarrollo' };
+
+  function distribucionHTML(distribucion, participaciones, resumen) {
+    if (!distribucion) {
+      return (
+        '<form class="pv-accion-form" data-definir-pools style="border-top:none;padding-top:0;">' +
+          '<p style="font-size:.78rem;color:var(--muted);margin:0 0 8px;">Todavía no se definieron los pools de esta distribución. Elegí una plantilla como punto de partida (editable) o cargá los porcentajes a mano — nunca se aplica sola.</p>' +
+          '<label>Plantilla (opcional)</label>' +
+          '<select name="plantillaId" data-plantilla-select><option value="">— Sin plantilla, cargar a mano —</option></select>' +
+          '<label>Pool comercial %</label><input type="number" name="porcentajeComercial" min="0" max="100">' +
+          '<label>Pool supervisión %</label><input type="number" name="porcentajeSupervision" min="0" max="100">' +
+          '<label>Pool desarrollo (bolsa única del proyecto) %</label><input type="number" name="porcentajeDesarrollo" min="0" max="100">' +
+          '<button type="submit" class="pv-btn pv-btn--primary">Definir pools</button>' +
+          '<span class="pv-status-msg" data-status></span>' +
+        '</form>'
+      );
+    }
+
+    var filasHTML = participaciones.map(function (part) {
+      return (
+        '<div class="pv-notif-card">' +
+          '<div class="pv-notif-head">' +
+            '<span>' + escapeHtml(TIPO_PLAN_LABEL_DIST[part.concepto] || part.concepto) + ' — <strong>' + part.porcentaje + '%</strong> — ' +
+              (part.beneficiarioEmail ? escapeHtml(part.beneficiarioEmail) : '<em style="color:var(--pv-amber, #b8860b);">Pendiente de asignación</em>') +
+              (part.faseId ? ' <span class="pv-badge pv-badge--neutral">fase ' + escapeHtml(part.faseId) + '</span>' : '') + '</span>' +
+            (distribucion.estado === 'borrador' ? '<button type="button" class="pv-btn pv-btn--danger" data-quitar-participacion="' + escapeHtml(part.id) + '">Quitar</button>' : '') +
+          '</div>' +
+        '</div>'
+      );
+    }).join('') || '<p class="pv-materiales-vacio">Todavía no hay participaciones cargadas.</p>';
+
+    var resumenHTML = resumen ? (
+      '<dl class="pv-kv">' +
+        ['comercial', 'supervision', 'desarrollo'].map(function (k) {
+          return '<dt>' + TIPO_PLAN_LABEL_DIST[k] + '</dt><dd>Pool ' + resumen.resumen[k].pool + '% — asignado ' + resumen.resumen[k].asignado + '% — pendiente ' + resumen.resumen[k].pendiente + '%</dd>';
+        }).join('') +
+        '<dt>Empresa (remanente, nunca una fila)</dt><dd>' + resumen.empresaPorcentaje + '%</dd>' +
+      '</dl>'
+    ) : '';
+
+    var accionesHTML = '';
+    if (distribucion.estado === 'borrador') {
+      accionesHTML =
+        '<form class="pv-accion-form" data-agregar-participacion style="border-top:none;">' +
+          '<label>Concepto</label>' +
+          '<select name="concepto"><option value="comercial">Comercial</option><option value="supervision">Supervisión</option><option value="desarrollo">Desarrollo</option></select>' +
+          '<label>Beneficiario (correo, opcional — vacío = Pendiente de asignación)</label><input type="email" name="beneficiarioEmail">' +
+          '<label>Porcentaje</label><input type="number" name="porcentaje" min="1" max="100" required>' +
+          '<label>Fase (opcional, id del componente)</label><input type="text" name="faseId">' +
+          '<button type="submit" class="pv-btn">Agregar participación</button>' +
+          '<span class="pv-status-msg" data-status></span>' +
+        '</form>' +
+        '<div class="pv-btn-row"><button type="button" class="pv-btn pv-btn--primary" data-activar-distribucion>Activar (exige 100% asignado)</button></div>' +
+        '<p class="pv-status-msg" data-activar-status></p>';
+    } else if (distribucion.estado === 'confirmada') {
+      accionesHTML =
+        '<p style="font-size:.78rem;color:var(--muted);">Confirmada el ' + fmtFecha(distribucion.confirmedAt) + ' por ' + escapeHtml(distribucion.confirmedBy || '—') + '. Snapshot inmutable — un cambio posterior exige una corrección administrativa auditada.</p>' +
+        '<form class="pv-accion-form" data-corregir-distribucion style="border-top:none;">' +
+          '<label>Motivo de la corrección (obligatorio)</label><textarea name="motivo" required></textarea>' +
+          '<button type="submit" class="pv-btn pv-btn--danger">Corregir (crea una nueva versión auditada)</button>' +
+          '<span class="pv-status-msg" data-status></span>' +
+        '</form>';
+    }
+
+    return '<div class="pv-notif-card" style="margin-bottom:12px;"><strong>Estado: ' + escapeHtml(distribucion.estado) + ' (v' + distribucion.version + ')</strong>' + resumenHTML + '</div>' + filasHTML + accionesHTML;
+  }
+
+  async function cargarDistribucionDelDetalle(ventaId) {
+    var slot = document.getElementById('pvDistribucionSlot');
+    if (!slot) return;
+    var r = await apiFetch('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/distribucion');
+    if (!r.ok || !r.body || !r.body.ok) { slot.innerHTML = pvErrorHTML('No se pudo cargar la distribución económica.'); return; }
+    var data = r.body.data;
+    slot.innerHTML = distribucionHTML(data.distribucion, data.participaciones, data.resumen);
+
+    if (!data.distribucion) {
+      var rp = await apiFetch('/interno/api/plantillas-distribucion');
+      if (rp.ok && rp.body && rp.body.ok) {
+        var select = slot.querySelector('[data-plantilla-select]');
+        (rp.body.data.plantillas || []).filter(function (pl) { return pl.estado === 'activo'; }).forEach(function (pl) {
+          var opt = document.createElement('option');
+          opt.value = pl.id;
+          opt.textContent = pl.nombre + ' (' + pl.porcentajeComercial + '/' + pl.porcentajeSupervision + '/' + pl.porcentajeDesarrollo + '/' + pl.porcentajeEmpresa + ')';
+          select.appendChild(opt);
+        });
+      }
+    }
+    wireDistribucionEventos(ventaId);
+  }
+
+  function wireDistribucionEventos(ventaId) {
+    var slot = document.getElementById('pvDistribucionSlot');
+
+    var definirForm = slot.querySelector('[data-definir-pools]');
+    if (definirForm) {
+      definirForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var plantillaId = definirForm.querySelector('[name="plantillaId"]').value || undefined;
+        var pc = definirForm.querySelector('[name="porcentajeComercial"]').value;
+        var ps = definirForm.querySelector('[name="porcentajeSupervision"]').value;
+        var pd = definirForm.querySelector('[name="porcentajeDesarrollo"]').value;
+        var r = await apiPost('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/distribucion', {
+          action: 'definir-pools', plantillaId: plantillaId,
+          porcentajeComercial: pc !== '' ? parseInt(pc, 10) : undefined,
+          porcentajeSupervision: ps !== '' ? parseInt(ps, 10) : undefined,
+          porcentajeDesarrollo: pd !== '' ? parseInt(pd, 10) : undefined,
+        });
+        if (!r.ok || !r.body || !r.body.ok) { mostrarStatus(definirForm, (r.body && r.body.error && r.body.error.message) || 'No se pudo definir los pools.', true); return; }
+        await cargarDistribucionDelDetalle(ventaId);
+      });
+    }
+
+    var agregarForm = slot.querySelector('[data-agregar-participacion]');
+    if (agregarForm) {
+      agregarForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var r = await apiPost('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/distribucion', {
+          action: 'agregar-participacion',
+          concepto: agregarForm.querySelector('[name="concepto"]').value,
+          beneficiarioEmail: agregarForm.querySelector('[name="beneficiarioEmail"]').value.trim() || undefined,
+          porcentaje: parseInt(agregarForm.querySelector('[name="porcentaje"]').value, 10),
+          faseId: agregarForm.querySelector('[name="faseId"]').value.trim() || undefined,
+        });
+        if (!r.ok || !r.body || !r.body.ok) { mostrarStatus(agregarForm, (r.body && r.body.error && r.body.error.message) || 'No se pudo agregar la participación.', true); return; }
+        await cargarDistribucionDelDetalle(ventaId);
+      });
+    }
+
+    Array.prototype.forEach.call(slot.querySelectorAll('[data-quitar-participacion]'), function (btn) {
+      btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        var r = await apiPost('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/distribucion', { action: 'quitar-participacion', id: btn.getAttribute('data-quitar-participacion') });
+        if (!r.ok || !r.body || !r.body.ok) { alert((r.body && r.body.error && r.body.error.message) || 'No se pudo quitar.'); btn.disabled = false; return; }
+        await cargarDistribucionDelDetalle(ventaId);
+      });
+    });
+
+    var activarBtn = slot.querySelector('[data-activar-distribucion]');
+    if (activarBtn) {
+      activarBtn.addEventListener('click', async function () {
+        activarBtn.disabled = true;
+        var statusEl = slot.querySelector('[data-activar-status]');
+        var r = await apiPost('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/distribucion', { action: 'activar' });
+        if (!r.ok || !r.body || !r.body.ok) {
+          var detalleErr = (r.body && r.body.error && r.body.error.details && r.body.error.details.errores) || [];
+          statusEl.textContent = detalleErr.length ? detalleErr.join(' ') : ((r.body && r.body.error && r.body.error.message) || 'No se pudo activar.');
+          statusEl.className = 'pv-status-msg err';
+          activarBtn.disabled = false;
+          return;
+        }
+        await cargarDistribucionDelDetalle(ventaId);
+        await recargarDetalle(ventaId);
+      });
+    }
+
+    var corregirForm = slot.querySelector('[data-corregir-distribucion]');
+    if (corregirForm) {
+      corregirForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var motivo = corregirForm.querySelector('[name="motivo"]').value.trim();
+        var r = await apiPost('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/distribucion', { action: 'corregir', motivo: motivo });
+        if (!r.ok || !r.body || !r.body.ok) { mostrarStatus(corregirForm, (r.body && r.body.error && r.body.error.message) || 'No se pudo corregir.', true); return; }
+        await cargarDistribucionDelDetalle(ventaId);
+      });
+    }
+  }
+
   function renderDetalleVentaHTML(detalle) {
     var faltantesLanding = calcularFaltantesLanding(detalle);
 
@@ -549,6 +738,7 @@
           '</div>' +
           (c.tipo === 'personalizado' && c.descripcion ? '<div class="pv-componente-meta">' + escapeHtml(c.descripcion) + '</div>' : '') +
           '<div class="pv-componente-meta">Precio atribuido: ' + fmtMoneda(c.precioAtribuido, detalle.venta.moneda) + '</div>' +
+          (c.tipo === 'personalizado' ? faseGestionHTML(c) : '') +
           gateHTML +
           accionesComponenteHTML(c) +
           (c.tipo === 'personalizado' ? '' : renderMaterialesHTML(c)) +
@@ -565,6 +755,11 @@
     return historialPromise.then(function (historialHTML) {
       return (
         '<div class="pv-detail-section"><p class="pv-detail-section-title">Venta</p>' +
+          (detalle.venta.modoHistorico
+            ? '<div class="pv-notif-card" style="margin-bottom:8px;"><span class="pv-badge pv-badge--neutral">Importación histórica — ' +
+                escapeHtml(detalle.venta.modoHistorico === 'referencia' ? 'solo referencia' : 'con reconstrucción económica') +
+                '</span> <span style="font-size:.78rem;color:var(--muted);">Sin plazos, sin notificaciones, sin comisiones nuevas, nunca sincronizada con HubSpot.</span></div>'
+            : '') +
           '<dl class="pv-kv">' +
             (detalle.venta.producto === 'proyecto_personalizado'
               ? '<dt>Proyecto</dt><dd>' + escapeHtml(detalle.venta.nombreProyecto || '—') + '</dd>' +
@@ -574,10 +769,14 @@
             '<dt>Mercado</dt><dd>' + escapeHtml(detalle.venta.mercado) + '</dd>' +
             '<dt>Precio pactado</dt><dd>' + fmtMoneda(detalle.venta.precioPactado, detalle.venta.moneda) + '</dd>' +
             '<dt>Fecha</dt><dd>' + fmtFecha(detalle.venta.createdAt) + '</dd>' +
+            (detalle.venta.proximaAccion ? '<dt>Próxima acción</dt><dd>' + escapeHtml(detalle.venta.proximaAccion) + (detalle.venta.responsableProximaAccion ? ' (' + escapeHtml(detalle.venta.responsableProximaAccion) + ')' : '') + '</dd>' : '') +
             renderTipoVentaSupervisionHTML(detalle.venta) +
           '</dl>' +
           costoMedioPagoFormHTML(detalle.venta.id) +
         '</div>' +
+        (detalle.venta.producto === 'proyecto_personalizado'
+          ? '<div class="pv-detail-section"><p class="pv-detail-section-title">Distribución económica</p><div id="pvDistribucionSlot"><div class="pv-loading">Cargando…</div></div></div>'
+          : '') +
         '<div class="pv-detail-section"><p class="pv-detail-section-title">Cliente</p>' +
           '<dl class="pv-kv">' +
             '<dt>Negocio</dt><dd>' + escapeHtml(detalle.cliente.negocio) + '</dd>' +
@@ -743,6 +942,33 @@
           return;
         }
         await recargarDetalle(detalle.venta.id);
+      });
+    });
+
+    // Metadata de gestión de una fase (orden/responsable operativo/fechas)
+    // — nunca toca estado_actual, eso sigue viajando por las transiciones
+    // oficiales de arriba.
+    Array.prototype.forEach.call(body.querySelectorAll('[data-editar-fase]'), function (form) {
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var componenteId = form.getAttribute('data-editar-fase');
+        var ordenVal = form.querySelector('[name="orden"]').value;
+        var btn = form.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        var r = await apiPost('/interno/api/ventas/' + encodeURIComponent(detalle.venta.id) + '/componentes/' + encodeURIComponent(componenteId), {
+          action: 'editar-fase',
+          orden: ordenVal !== '' ? parseInt(ordenVal, 10) : undefined,
+          responsableOperativoEmail: form.querySelector('[name="responsableOperativoEmail"]').value.trim() || null,
+          fechaPrevista: form.querySelector('[name="fechaPrevista"]').value || null,
+          fechaReal: form.querySelector('[name="fechaReal"]').value || null,
+        });
+        if (!r.ok || !r.body || !r.body.ok) {
+          mostrarStatus(form, (r.body && r.body.error && r.body.error.message) || 'No se pudo guardar.', true);
+          btn.disabled = false;
+          return;
+        }
+        mostrarStatus(form, 'Guardado.', false);
+        btn.disabled = false;
       });
     });
 
@@ -1074,6 +1300,23 @@
     document.getElementById('npAgregarFase').addEventListener('click', agregarFilaFase);
     document.getElementById('npAgregarPago').addEventListener('click', agregarFilaPago);
     document.getElementById('npAgregarParticipacion').addEventListener('click', agregarFilaParticipacion);
+    // RIO-119 (tercer bloque, item 5, 03/09/2026): un proyecto histórico
+    // "permite información incompleta" — la fila vacía de fase/pago que se
+    // agrega por defecto tiene inputs `required`, que bloquearían el envío
+    // nativo del formulario aunque el JS ya no las exija. Al activar un
+    // modo histórico se limpian esas filas (nada que completar a la
+    // fuerza); al volver a "flujo normal" se restaura una fila de cada.
+    document.getElementById('npModoHistorico').addEventListener('change', function () {
+      if (this.value) {
+        document.getElementById('npFasesLista').innerHTML = '';
+        document.getElementById('npPagosLista').innerHTML = '';
+        recomputarSumaFases();
+        recomputarSumaPagos();
+      } else {
+        if (document.querySelectorAll('[data-fase-row]').length === 0) agregarFilaFase();
+        if (document.querySelectorAll('[data-pago-row]').length === 0) agregarFilaPago();
+      }
+    });
     document.getElementById('npMercado').addEventListener('change', poblarTipoVentaProyecto);
     document.getElementById('npPrecio').addEventListener('input', function () { recomputarSumaFases(); recomputarSumaPagos(); });
 
@@ -1098,12 +1341,18 @@
         };
       });
 
-      if (fases.length === 0) { statusEl.textContent = 'Agregá al menos una fase.'; statusEl.className = 'pv-status-msg err'; return; }
-      if (pagos.length === 0) { statusEl.textContent = 'Agregá al menos un pago.'; statusEl.className = 'pv-status-msg err'; return; }
-      var sumaFases = fases.reduce(function (s, f) { return s + (f.precioAtribuido || 0); }, 0);
-      var sumaPagos = pagos.reduce(function (s, p) { return s + (p.monto || 0); }, 0);
-      if (sumaFases !== precioPactado) { statusEl.textContent = 'La suma de las fases debe ser exactamente el precio pactado.'; statusEl.className = 'pv-status-msg err'; return; }
-      if (sumaPagos !== precioPactado) { statusEl.textContent = 'La suma de los pagos debe ser exactamente el precio pactado.'; statusEl.className = 'pv-status-msg err'; return; }
+      // RIO-119 (tercer bloque, item 5, 03/09/2026): un proyecto histórico
+      // "permite información incompleta claramente identificada" — nunca
+      // exige fases/pagos completos ni que reconcilien con el precio.
+      var modoHistorico = document.getElementById('npModoHistorico').value || undefined;
+      if (!modoHistorico) {
+        if (fases.length === 0) { statusEl.textContent = 'Agregá al menos una fase.'; statusEl.className = 'pv-status-msg err'; return; }
+        if (pagos.length === 0) { statusEl.textContent = 'Agregá al menos un pago.'; statusEl.className = 'pv-status-msg err'; return; }
+        var sumaFases = fases.reduce(function (s, f) { return s + (f.precioAtribuido || 0); }, 0);
+        var sumaPagos = pagos.reduce(function (s, p) { return s + (p.monto || 0); }, 0);
+        if (sumaFases !== precioPactado) { statusEl.textContent = 'La suma de las fases debe ser exactamente el precio pactado.'; statusEl.className = 'pv-status-msg err'; return; }
+        if (sumaPagos !== precioPactado) { statusEl.textContent = 'La suma de los pagos debe ser exactamente el precio pactado.'; statusEl.className = 'pv-status-msg err'; return; }
+      }
 
       var tipoVentaSel = document.getElementById('npTipoVenta').value;
       if (!tipoVentaSel) { statusEl.textContent = 'Elegí el tipo de venta (equipo o venta directa de Administración).'; statusEl.className = 'pv-status-msg err'; return; }
@@ -1140,6 +1389,7 @@
         fases: fases,
         pagos: pagos,
         distribucion: distribucion,
+        modoHistorico: modoHistorico,
       };
       if (tipoVentaSel === 'directa') {
         payload.tipoVenta = 'directa_administracion_sin_supervision';

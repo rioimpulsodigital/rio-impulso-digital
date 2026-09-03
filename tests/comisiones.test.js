@@ -75,6 +75,7 @@ function fakeDb() {
       return state.incidencias.filter((i) => i.venta_id === p[0] && i.estado === 'abierta');
     }
     if (sql.startsWith('SELECT * FROM pagos_esperados WHERE venta_id')) return state.pagos_esperados.filter((pg) => pg.venta_id === p[0]);
+    if (sql.startsWith('SELECT modo_historico FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]).map((v) => ({ modo_historico: v.modo_historico || null }));
     if (sql.startsWith('SELECT mercado FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]);
     if (sql.startsWith('SELECT producto FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]);
     if (sql.startsWith('SELECT id, tipo FROM componentes WHERE id')) return state.componentes.filter((c) => c.id === p[0]);

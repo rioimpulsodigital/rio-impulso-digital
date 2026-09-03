@@ -136,6 +136,15 @@ export async function resolverAsignacionVigente(db, requestId, { usuarioEmail, t
 }
 
 async function crearComisionSiCorresponde(db, requestId, { tipo, ventaId, componenteId, beneficiarioEmail, producto, mercado, moneda, montoBase, contextoRealizacion, rolRealizacion }) {
+  // RIO-119 (tercer bloque, item 5, 03/09/2026): puerta única — un
+  // proyecto marcado como importación histórica NUNCA programa una
+  // comisión nueva, sin importar desde qué flujo se dispare la generación
+  // (comercial/supervisión al registrar la venta, realización/desarrollo
+  // al aprobar un componente). Se verifica acá, en el punto más bajo
+  // común, para no depender de que cada llamador recuerde filtrarlo.
+  const ventaRows = await query(db, requestId, 'SELECT modo_historico FROM ventas WHERE id = ?', [ventaId]);
+  if (ventaRows[0]?.modo_historico) return null;
+
   const asignacion = await resolverAsignacionVigente(db, requestId, { usuarioEmail: beneficiarioEmail, tipo, producto, mercado, contextoRealizacion });
   if (!asignacion) return null;
 
@@ -552,6 +561,69 @@ export function validarDistribucion(participaciones) {
     errores,
     participaciones: participaciones.map((p) => ({ concepto: p.concepto, beneficiarioEmail: p.beneficiarioEmail || null, porcentaje: p.porcentaje })),
   };
+}
+
+// Valida la distribución de un PROYECTO PERSONALIZADO antes de activarlo —
+// RIO-119 (tercer bloque, item 5, 03/09/2026). A diferencia de
+// validarDistribucion() (donde "empresa" es el remanente de TODA la
+// distribución), acá cada concepto tiene su propio POOL fijo, reservado
+// por la plantilla elegida (o definido a mano) — "empresa" es siempre un
+// pool más, nunca completado con participaciones. Por eso "completo" acá
+// significa que cada pool (comercial/supervisión/desarrollo) está
+// enteramente asignado a beneficiarios reales, nunca que la suma de filas
+// llegue a 100.
+//
+// `pools`: { comercial, supervision, desarrollo } (los % reservados de
+// ESTE proyecto). `participaciones`: [{ concepto, beneficiarioEmail,
+// porcentaje, faseId }] — las filas ya cargadas (borrador o confirmada).
+// Una fila sin beneficiarioEmail es "Pendiente de asignación": cuenta para
+// el pool (no se puede superar) pero bloquea la activación, igual que
+// cualquier porción del pool que nadie cargó todavía (Brenda: "una
+// participación pendiente no genera una comisión personal ni puede
+// habilitarse para pago").
+export function validarActivacionProyecto(pools, participaciones) {
+  const CONCEPTOS = ['comercial', 'supervision', 'desarrollo'];
+  const errores = [];
+  const resumen = {};
+  const vistos = new Set();
+
+  for (const concepto of CONCEPTOS) {
+    const poolMax = Number.isFinite(pools[concepto]) ? pools[concepto] : 0;
+    const filas = participaciones.filter((p) => p.concepto === concepto);
+    let asignado = 0;
+    let pendienteEnFilas = 0;
+
+    for (const p of filas) {
+      if (!Number.isFinite(p.porcentaje) || p.porcentaje <= 0) {
+        errores.push(`Una participación de "${concepto}" tiene un porcentaje inválido.`);
+        continue;
+      }
+      asignado += p.porcentaje;
+      if (!p.beneficiarioEmail) {
+        pendienteEnFilas += p.porcentaje;
+      } else {
+        // Misma persona en la misma fase/concepto dos veces es un
+        // duplicado real — la misma persona en DOS fases distintas del
+        // mismo concepto (ej. desarrollo en dos componentes) no lo es.
+        const clave = `${concepto}:${p.beneficiarioEmail}:${p.faseId || ''}`;
+        if (vistos.has(clave)) errores.push(`Participación duplicada de "${concepto}" para ${p.beneficiarioEmail}.`);
+        vistos.add(clave);
+      }
+    }
+
+    if (asignado > poolMax) {
+      errores.push(`"${concepto}" suma ${asignado}%, supera el ${poolMax}% reservado por la plantilla/pool de este proyecto.`);
+    }
+    const remanenteSinAsignar = Math.max(poolMax - asignado, 0);
+    const pendienteTotal = pendienteEnFilas + remanenteSinAsignar;
+    if (pendienteTotal > 0) {
+      errores.push(`"${concepto}" tiene ${pendienteTotal}% pendiente de asignación.`);
+    }
+    resumen[concepto] = { pool: poolMax, asignado, pendiente: pendienteTotal };
+  }
+
+  const empresaPorcentaje = Math.max(100 - (pools.comercial || 0) - (pools.supervision || 0) - (pools.desarrollo || 0), 0);
+  return { puedeActivarse: errores.length === 0, errores, resumen, empresaPorcentaje };
 }
 
 // Alta de un costo directo de un componente (ej. dominio propio de una

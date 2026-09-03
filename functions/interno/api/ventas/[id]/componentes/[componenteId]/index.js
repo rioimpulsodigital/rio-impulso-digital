@@ -21,7 +21,7 @@ import { assertCanAccessOwner, AuthzError } from '../../../../../../_shared/auth
 import { isMethodAllowed, hasExpectedContentType } from '../../../../../../_shared/security.js';
 import {
   marcarMaterialesInformados, marcarMaterialesCompletos, revisarEntregaMateriales,
-  iniciarProduccion, marcarEntregada, aprobarComponente, ProyectoError,
+  iniciarProduccion, marcarEntregada, aprobarComponente, editarFase, ProyectoError,
 } from '../../../../../../_shared/proyectos.js';
 import { crearNotificacionSiCorresponde } from '../../../../../../_shared/notificaciones.js';
 
@@ -48,6 +48,11 @@ const ACTIONS = {
   'iniciar-produccion': iniciarProduccion,
   entregar: marcarEntregada,
   aprobar: aprobarComponente,
+  // RIO-119 (tercer bloque, item 5, 03/09/2026): metadata de gestión de
+  // una fase — nunca toca estado_actual (ver editarFase en proyectos.js).
+  'editar-fase': (db, requestId, args, body) => editarFase(db, requestId, {
+    ...args, orden: body?.orden, responsableOperativoEmail: body?.responsableOperativoEmail, fechaPrevista: body?.fechaPrevista, fechaReal: body?.fechaReal,
+  }),
 };
 
 function errorStatusFor(code) {
@@ -85,7 +90,7 @@ export async function onRequest(context) {
   }
   const handler = ACTIONS[body?.action];
   if (!handler) {
-    return Errors.validation('action inválida. Valores permitidos: materiales-informados, materiales-completos, revisar-entrega-materiales, iniciar-produccion, entregar, aprobar.', requestId);
+    return Errors.validation('action inválida. Valores permitidos: materiales-informados, materiales-completos, revisar-entrega-materiales, iniciar-produccion, entregar, aprobar, editar-fase.', requestId);
   }
 
   const esVendedor = roleIdentity.email === venta.vendedor_email;
@@ -103,6 +108,14 @@ export async function onRequest(context) {
   // válido.
   if (body.action === 'materiales-informados' && (typeof body.descripcion !== 'string' || !body.descripcion.trim())) {
     return Errors.validation('Falta la descripción del material enviado.', requestId);
+  }
+  if (body.action === 'editar-fase') {
+    if (body.orden !== undefined && !Number.isInteger(body.orden)) return Errors.validation('orden debe ser un entero.', requestId);
+    if (body.responsableOperativoEmail !== undefined && body.responsableOperativoEmail !== null && typeof body.responsableOperativoEmail !== 'string') {
+      return Errors.validation('responsableOperativoEmail debe ser texto.', requestId);
+    }
+    if (body.fechaPrevista !== undefined && body.fechaPrevista !== null && typeof body.fechaPrevista !== 'string') return Errors.validation('fechaPrevista debe ser texto (ISO).', requestId);
+    if (body.fechaReal !== undefined && body.fechaReal !== null && typeof body.fechaReal !== 'string') return Errors.validation('fechaReal debe ser texto (ISO).', requestId);
   }
   if (body.action === 'revisar-entrega-materiales') {
     if (typeof body.entregaId !== 'string' || !body.entregaId.trim()) {

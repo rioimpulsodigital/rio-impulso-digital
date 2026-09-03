@@ -382,6 +382,7 @@ test('cambiar-correo — cascadea el nuevo correo a ventas/comisiones/equipos, y
   const db = fakeDb();
   const admin = roleIdentity();
   await personasHandler(fakeContext({ method: 'POST', db, roleIdentity: admin, body: { email: 'viejo@example.com', nombre: 'Persona', role: 'ejecutivo', allowedMarkets: ['CL'] } }));
+  const idCanonicoOriginal = db._state.usuarios.find((u) => u.nombre === 'Persona').id;
 
   // Simula relaciones ya existentes con el correo viejo, en tablas de negocio reales.
   db._state.ventas = [{ id: 'venta-1', vendedor_email: 'viejo@example.com' }];
@@ -396,6 +397,8 @@ test('cambiar-correo — cascadea el nuevo correo a ventas/comisiones/equipos, y
   assert.equal(response.status, 200);
 
   assert.equal(db._state.usuarios.find((u) => u.nombre === 'Persona').email, 'nuevo@example.com');
+  // El ID interno canónico e inmutable (usuarios.id) nunca lo toca la cascada — solo el correo.
+  assert.equal(db._state.usuarios.find((u) => u.nombre === 'Persona').id, idCanonicoOriginal, 'cambiar el correo nunca reemplaza ni modifica el ID estable de la persona');
   assert.equal(db._state.ventas[0].vendedor_email, 'nuevo@example.com', 'la venta sigue vinculada a la misma persona');
   assert.equal(db._state.comisiones[0].beneficiario_email, 'nuevo@example.com', 'la comisión sigue vinculada a la misma persona');
   assert.equal(db._state.equipo_miembros.find((m) => m.id === 'm-1').usuario_email, 'nuevo@example.com', 'la membresía de equipo sigue vinculada');

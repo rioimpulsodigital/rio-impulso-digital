@@ -84,6 +84,7 @@ function fakeDbLiquidaciones() {
     };
   }
   function runSelect(sql, p) {
+    if (sql.startsWith('SELECT modo_historico FROM ventas WHERE id')) return [];
     if (sql.includes('FROM conversiones conv JOIN comisiones com') && sql.includes('WHERE conv.id')) {
       const conv = state.conversiones.find((c) => c.id === p[0]);
       if (!conv) return [];

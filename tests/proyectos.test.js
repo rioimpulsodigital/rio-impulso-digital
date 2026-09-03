@@ -102,6 +102,7 @@ function fakeDb() {
     if (sql.startsWith('SELECT * FROM materiales_informados_detalle WHERE id')) {
       return state.materiales_informados_detalle.filter((m) => m.id === p[0] && m.componente_id === p[1]);
     }
+    if (sql.startsWith('SELECT modo_historico FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]).map((v) => ({ modo_historico: v.modo_historico || null }));
     if (sql.startsWith('SELECT * FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]);
     if (sql.startsWith('SELECT * FROM proyectos WHERE venta_id')) return state.proyectos.filter((pr) => pr.venta_id === p[0]);
     if (sql.startsWith('SELECT * FROM componentes WHERE proyecto_id')) return state.componentes.filter((c) => c.proyecto_id === p[0]);

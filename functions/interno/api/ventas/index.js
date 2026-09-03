@@ -129,6 +129,9 @@ function serializeVenta(row) {
     // la distribución aprobada al registrar un proyecto personalizado —
     // nunca se recalcula después, aunque cambien los planes de comisión.
     distribucionSnapshot: row.distribucion_snapshot ? JSON.parse(row.distribucion_snapshot) : null,
+    // RIO-119 (tercer bloque, item 5, 03/09/2026): 'referencia' o
+    // 'reconstruccion' — null en cualquier venta del flujo normal.
+    modoHistorico: row.modo_historico || null,
     createdAt: row.created_at,
   };
 }
@@ -339,7 +342,24 @@ async function handleCreate(context) {
     // propia del proyecto — opcional en este paso ("preparación"), nunca
     // aplicada a la distribución de catálogo (planes_comision).
     distribucion,
+    // RIO-119 (tercer bloque, item 5, 03/09/2026): 'referencia' o
+    // 'reconstruccion' — un proyecto histórico nunca inicia plazos, nunca
+    // genera notificaciones ni comisiones nuevas (puertas centrales en
+    // _shared/notificaciones.js y _shared/comisiones.js), nunca se
+    // sincroniza con HubSpot, y permite fases/pagos incompletos.
+    modoHistorico,
   } = body || {};
+
+  const VALID_MODOS_HISTORICOS = ['referencia', 'reconstruccion'];
+  if (modoHistorico !== undefined && modoHistorico !== null && !VALID_MODOS_HISTORICOS.includes(modoHistorico)) {
+    return Errors.validation(`modoHistorico inválido. Valores permitidos: ${VALID_MODOS_HISTORICOS.join(', ')}.`, requestId);
+  }
+  // Importar un proyecto histórico es una decisión administrativa, nunca
+  // algo que un vendedor cargue por su cuenta — mismo criterio que
+  // proyecto_personalizado.
+  if (modoHistorico && roleIdentity.permissions.viewOthersData !== true) {
+    return Errors.forbidden(requestId);
+  }
 
   if (!VALID_MERCADOS.includes(mercado)) {
     return Errors.validation('Mercado inválido.', requestId);
@@ -402,12 +422,17 @@ async function handleCreate(context) {
     if (notionUrl !== undefined && notionUrl !== null && typeof notionUrl !== 'string') {
       return Errors.validation('notionUrl debe ser texto.', requestId);
     }
-    if (!Array.isArray(fases) || fases.length === 0) {
+    // RIO-119 (tercer bloque, item 5, 03/09/2026): un proyecto histórico
+    // "permite información incompleta claramente identificada" — nunca
+    // exige fases/pagos ni que reconcilien exacto con el precio pactado.
+    // Lo que SÍ se cargue sigue validándose campo por campo (un dato mal
+    // tipeado sigue siendo un error, incompleto no es lo mismo que inválido).
+    if (!modoHistorico && (!Array.isArray(fases) || fases.length === 0)) {
       return Errors.validation('Un proyecto personalizado requiere al menos una fase.', requestId);
     }
     componentesPlan = [];
     let sumaFases = 0;
-    for (const f of fases) {
+    for (const f of (fases || [])) {
       if (!f || typeof f.nombre !== 'string' || !f.nombre.trim()) {
         return Errors.validation('Cada fase requiere un nombre.', requestId);
       }
@@ -421,15 +446,15 @@ async function handleCreate(context) {
         precioIndividualReferencia: f.precioAtribuido, precioAtribuido: f.precioAtribuido, estado: 'pendiente',
       });
     }
-    if (sumaFases !== precioPactado) {
+    if (!modoHistorico && sumaFases !== precioPactado) {
       return Errors.validation('La suma de las fases debe ser exactamente igual al precio pactado — nunca queda un resto sin asignar.', requestId);
     }
-    if (!Array.isArray(pagosPersonalizados) || pagosPersonalizados.length === 0) {
+    if (!modoHistorico && (!Array.isArray(pagosPersonalizados) || pagosPersonalizados.length === 0)) {
       return Errors.validation('Un proyecto personalizado requiere al menos un pago.', requestId);
     }
     pagosPlanPersonalizado = [];
     let sumaPagos = 0;
-    for (const p of pagosPersonalizados) {
+    for (const p of (pagosPersonalizados || [])) {
       if (!p || typeof p.etiqueta !== 'string' || !p.etiqueta.trim()) {
         return Errors.validation('Cada pago requiere una etiqueta.', requestId);
       }
@@ -439,7 +464,7 @@ async function handleCreate(context) {
       sumaPagos += p.monto;
       pagosPlanPersonalizado.push({ tipo: 'personalizado', etiqueta: p.etiqueta.trim(), monto: p.monto });
     }
-    if (sumaPagos !== precioPactado) {
+    if (!modoHistorico && sumaPagos !== precioPactado) {
       return Errors.validation('La suma de los pagos debe ser exactamente igual al precio pactado.', requestId);
     }
 
@@ -636,8 +661,8 @@ async function handleCreate(context) {
          idempotency_key, origen, es_demo, antecedentes_kit_json,
          tipo_venta, supervisor_snapshot_email, plan_supervision_snapshot_id, supervision_aplica, motivo_sin_supervision,
          porcentaje_supervision_aplicado, porcentaje_final_empresa,
-         nombre_proyecto, descripcion_proyecto, notion_url, distribucion_snapshot
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         nombre_proyecto, descripcion_proyecto, notion_url, distribucion_snapshot, modo_historico
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       ventaId, codigoVenta, clienteId, mercado, producto, moneda, tipoPrecioFinal, precioPactado, roleIdentity.email, equipoId,
       idempotencyKey, origen || null, esDemo ? 1 : 0, antecedentesKit ? JSON.stringify(antecedentesKit) : null,
@@ -646,7 +671,7 @@ async function handleCreate(context) {
       esProyectoPersonalizado ? nombreProyecto.trim() : null,
       esProyectoPersonalizado ? ((descripcionProyecto && descripcionProyecto.trim()) || null) : null,
       esProyectoPersonalizado ? ((notionUrl && notionUrl.trim()) || null) : null,
-      distribucionSnapshot
+      distribucionSnapshot, modoHistorico || null
     ),
     db.prepare('INSERT INTO proyectos (id, venta_id, codigo_proyecto) VALUES (?, ?, ?)')
       .bind(proyectoId, ventaId, codigoProyecto),
@@ -666,17 +691,23 @@ async function handleCreate(context) {
     return Errors.internal(requestId);
   }
 
-  try {
-    // RIO-114: comisión comercial (+ supervisión si corresponde) — nunca
-    // condiciona la venta ya registrada. Si falla, la venta queda creada
-    // igual (es una consecuencia contable, no un requisito para vender) y
-    // el error queda solo en el log técnico.
-    await generarComisionesParaVenta(db, requestId, {
-      ventaId, vendedorEmail: roleIdentity.email, mercado, producto, moneda, equipoId,
-      componentes: componentesPlan.map((c) => ({ id: c.id, precio_atribuido: c.precioAtribuido })),
-    });
-  } catch (e) {
-    console.error(JSON.stringify({ requestId, scope: 'comisiones', reason: 'generacion_fallida' }));
+  // RIO-119 (tercer bloque, item 5, 03/09/2026): un proyecto histórico
+  // nunca programa comisiones nuevas — ni acá ni en ningún punto
+  // posterior (crearComisionSiCorresponde en _shared/comisiones.js
+  // verifica modo_historico igual, esto solo evita la consulta de más).
+  if (!modoHistorico) {
+    try {
+      // RIO-114: comisión comercial (+ supervisión si corresponde) — nunca
+      // condiciona la venta ya registrada. Si falla, la venta queda creada
+      // igual (es una consecuencia contable, no un requisito para vender) y
+      // el error queda solo en el log técnico.
+      await generarComisionesParaVenta(db, requestId, {
+        ventaId, vendedorEmail: roleIdentity.email, mercado, producto, moneda, equipoId,
+        componentes: componentesPlan.map((c) => ({ id: c.id, precio_atribuido: c.precioAtribuido })),
+      });
+    } catch (e) {
+      console.error(JSON.stringify({ requestId, scope: 'comisiones', reason: 'generacion_fallida' }));
+    }
   }
 
   // RIO-117 (corrección tras validación real, 01/09/2026): el historial
@@ -702,8 +733,11 @@ async function handleCreate(context) {
   // el Kit ya llamaba desde el navegador — no es la integración segura
   // server-to-server de RIO-120 (todavía no iniciada), ver
   // functions/_shared/hubspot.js para el alcance exacto.
+  // RIO-119 (tercer bloque, item 5, 03/09/2026): "no vuelve a enviarse a
+  // HubSpot" — un proyecto histórico nunca sincroniza, sin importar lo que
+  // el body haya mandado en `hubspot`.
   let hubspotSync = null;
-  if (!esDemo && hubspot && Array.isArray(hubspot.fields)) {
+  if (!modoHistorico && !esDemo && hubspot && Array.isArray(hubspot.fields)) {
     hubspotSync = await intentarSincronizarHubSpot(db, requestId, { ventaId, fields: hubspot.fields, context: hubspot.context });
   }
 
@@ -729,6 +763,7 @@ async function handleCreate(context) {
         descripcionProyecto: esProyectoPersonalizado ? ((descripcionProyecto && descripcionProyecto.trim()) || null) : null,
         notionUrl: esProyectoPersonalizado ? ((notionUrl && notionUrl.trim()) || null) : null,
         distribucionSnapshot: distribucionSnapshot ? JSON.parse(distribucionSnapshot) : null,
+        modoHistorico: modoHistorico || null,
       },
       proyecto: { id: proyectoId, codigoProyecto },
       componentes: componentesPlan.map((c) => ({ id: c.id, tipo: c.tipo, nombre: c.nombre || null, descripcion: c.descripcion || null, precioAtribuido: c.precioAtribuido, estadoActual: c.estado })),

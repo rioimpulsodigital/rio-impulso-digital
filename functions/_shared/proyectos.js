@@ -291,6 +291,40 @@ export async function marcarMaterialesCompletos(db, requestId, { ventaId, compon
   return { gate };
 }
 
+// Edita los campos de gestión de una fase (RIO-119, tercer bloque item 5,
+// 03/09/2026) — orden, responsable OPERATIVO, fechas prevista/real. NUNCA
+// toca `estado_actual`: ese sigue viajando exclusivamente por las
+// transiciones ya gateadas (iniciar-produccion/entregar/aprobar en
+// proyectos.js) — editar-fase es metadata de gestión, no un atajo que
+// bypasee esos gates. Deliberadamente separado de
+// `venta_participaciones` (quién cobra un %): una persona puede ser
+// responsable operativo de una fase sin recibir participación económica,
+// y viceversa — administración confirma cada uno por separado, nunca se
+// infiere uno del otro.
+export async function editarFase(db, requestId, { ventaId, componenteId, actorEmail, orden, responsableOperativoEmail, fechaPrevista, fechaReal }) {
+  const { componentes } = await loadVentaFull(db, requestId, ventaId);
+  const componente = componentes.find((c) => c.id === componenteId);
+  if (!componente) throw new ProyectoError('componente_no_encontrado', 'Componente no encontrado.');
+
+  await execute(
+    db, requestId,
+    'UPDATE componentes SET orden = ?, responsable_operativo_email = ?, fecha_prevista = ?, fecha_real = ? WHERE id = ?',
+    [
+      orden !== undefined ? orden : componente.orden,
+      responsableOperativoEmail !== undefined ? responsableOperativoEmail : componente.responsable_operativo_email,
+      fechaPrevista !== undefined ? fechaPrevista : componente.fecha_prevista,
+      fechaReal !== undefined ? fechaReal : componente.fecha_real,
+      componenteId,
+    ]
+  );
+  await logEvento(db, requestId, {
+    ventaId, entidad: 'componente', entidadId: componenteId,
+    estadoAnterior: null, estadoNuevo: 'fase_editada', usuarioEmail: actorEmail,
+    motivoNota: 'Edición de fase (responsable operativo/fechas/orden).',
+  });
+  return {};
+}
+
 // Rollup del estado del proyecto a partir de sus componentes — nunca se
 // guarda a mano en paralelo, se recalcula desde los componentes reales
 // cada vez (sin segunda fuente de verdad).

@@ -749,6 +749,13 @@
           <textarea id="npDescripcion" placeholder="Opcional"></textarea>
           <label for="npNotionUrl">Enlace a la página operativa de Notion</label>
           <input type="url" id="npNotionUrl" placeholder="https://…">
+          <label for="npModoHistorico">Importación histórica (opcional)</label>
+          <select id="npModoHistorico">
+            <option value="">No — proyecto nuevo, flujo normal</option>
+            <option value="referencia">Sí — solo referencia (sin reconstrucción económica)</option>
+            <option value="reconstruccion">Sí — con reconstrucción económica</option>
+          </select>
+          <p style="font-size:.72rem;color:var(--muted);margin:2px 0 0;">Un proyecto histórico nunca inicia plazos, nunca genera notificaciones ni comisiones nuevas, y nunca se sincroniza con HubSpot. Permite fases/pagos incompletos.</p>
         </div>
       </div>
 
@@ -840,7 +847,7 @@
 
 <script src="./config/users.js" defer></script>
 <script src="../assets/js/main.js?v=20260627" defer></script>
-<script src="./panel-administrativo.js?v=20260902c" defer></script>
+<script src="./panel-administrativo.js?v=20260903a" defer></script>
 
 </body>
 </html>

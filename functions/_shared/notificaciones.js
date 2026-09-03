@@ -27,6 +27,15 @@ function nowSql() {
 export async function crearNotificacionSiCorresponde(db, requestId, {
   tipo, claveIdempotencia, ventaId, pagoId, mercado, clienteNegocio, vendedorEmail, rutaPortal,
 }) {
+  // RIO-119 (tercer bloque, item 5, 03/09/2026): un proyecto marcado como
+  // importación histórica nunca genera notificaciones operativas — puerta
+  // única acá para cubrir los tres puntos que hoy disparan notificaciones
+  // desde /ventas/:id/* sin que cada uno tenga que recordar filtrarlo.
+  if (ventaId) {
+    const ventaRows = await query(db, requestId, 'SELECT modo_historico FROM ventas WHERE id = ?', [ventaId]);
+    if (ventaRows[0]?.modo_historico) return null;
+  }
+
   const existentes = await query(db, requestId, 'SELECT id FROM notificaciones WHERE clave_idempotencia = ?', [claveIdempotencia]);
   if (existentes[0]) return existentes[0].id;
 

@@ -54,9 +54,17 @@ export async function onRequest(context) {
   const proyectoRows = await query(env.DB, requestId, 'SELECT * FROM proyectos WHERE venta_id = ?', [venta.id]);
   const proyecto = proyectoRows[0] || null;
   const componentes = proyecto
-    ? await query(env.DB, requestId, 'SELECT * FROM componentes WHERE proyecto_id = ? ORDER BY tipo', [proyecto.id])
+    ? await query(env.DB, requestId, 'SELECT * FROM componentes WHERE proyecto_id = ? ORDER BY orden IS NULL, orden ASC, tipo ASC', [proyecto.id])
     : [];
   const pagos = await query(env.DB, requestId, 'SELECT * FROM pagos_esperados WHERE venta_id = ? ORDER BY tipo', [venta.id]);
+  // RIO-119 (tercer bloque, item 5, 03/09/2026): "próxima acción y
+  // responsable" ya se registra por evento (historial.js) — se expone acá
+  // la más reciente en vez de duplicar el dato en la venta.
+  const proximaAccionRows = await query(
+    env.DB, requestId,
+    "SELECT proxima_accion, responsable_proxima_accion FROM eventos_historial WHERE venta_id = ? AND proxima_accion IS NOT NULL ORDER BY created_at DESC LIMIT 1",
+    [venta.id]
+  );
 
   // RIO-117 (corrección tras validación real, 01/09/2026): datos
   // tributarios/de facturación — nunca automáticos para un supervisor
@@ -92,6 +100,12 @@ export async function onRequest(context) {
       precioAtribuido: c.precio_atribuido,
       estadoActual: c.estado_actual,
       materialesEstado: c.materiales_estado,
+      // RIO-119 (tercer bloque, item 5, 03/09/2026): metadata de gestión
+      // de fase — null en componentes de catálogo que nunca la usaron.
+      orden: c.orden ?? null,
+      responsableOperativoEmail: c.responsable_operativo_email || null,
+      fechaPrevista: c.fecha_prevista || null,
+      fechaReal: c.fecha_real || null,
       materialesInformes: informes.map((i) => ({
         id: i.id, informadoPor: i.informado_por,
         // RIO-118 (corrección — identidad visible): nombre para mostrar,
@@ -163,6 +177,11 @@ export async function onRequest(context) {
         // de la distribución aprobada al registrar el proyecto — nunca se
         // recalcula después.
         distribucionSnapshot: venta.distribucion_snapshot ? JSON.parse(venta.distribucion_snapshot) : null,
+        // RIO-119 (tercer bloque, item 5, 03/09/2026): 'referencia' o
+        // 'reconstruccion' — null en cualquier venta del flujo normal.
+        modoHistorico: venta.modo_historico || null,
+        proximaAccion: proximaAccionRows[0]?.proxima_accion || null,
+        responsableProximaAccion: proximaAccionRows[0]?.responsable_proxima_accion || null,
         // RIO-117 (corrección tras validación real): categorizado, nunca
         // repite lo que ya está en cabecera (cliente/producto/mercado/
         // precio) — ver Kit para el detalle de qué llena cada categoría.
