@@ -159,6 +159,10 @@ export async function onRequest(context) {
         nombreProyecto: venta.nombre_proyecto || null,
         descripcionProyecto: venta.descripcion_proyecto || null,
         notionUrl: venta.notion_url || null,
+        // RIO-119 (tercer bloque, item 5, 02/09/2026): snapshot INMUTABLE
+        // de la distribución aprobada al registrar el proyecto — nunca se
+        // recalcula después.
+        distribucionSnapshot: venta.distribucion_snapshot ? JSON.parse(venta.distribucion_snapshot) : null,
         // RIO-117 (corrección tras validación real): categorizado, nunca
         // repite lo que ya está en cabecera (cliente/producto/mercado/
         // precio) — ver Kit para el detalle de qué llena cada categoría.

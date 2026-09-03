@@ -91,6 +91,8 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
         porcentaje_supervision_aplicado: p[19] === undefined ? 10 : p[19], porcentaje_final_empresa: p[20] === undefined ? 20 : p[20],
         // RIO-119 (ampliación de alcance — proyectos personalizados, 02/09/2026).
         nombre_proyecto: p[21] || null, descripcion_proyecto: p[22] || null, notion_url: p[23] || null,
+        // RIO-119 (tercer bloque, item 5, 02/09/2026): snapshot inmutable de la distribución aprobada.
+        distribucion_snapshot: p[24] || null,
         estado_actual: 'registrada', created_at: '2026-08-28 00:00:00',
       });
     } else if (sql.startsWith('INSERT INTO proyectos')) {
@@ -984,6 +986,78 @@ test('POST /ventas — administración registra un proyecto personalizado (fases
   assert.equal(body.pagosEsperados.length, 2);
   assert.equal(body.pagosEsperados[0].etiqueta, 'Pago inicial');
   assert.equal(body.pagosEsperados.reduce((s, p) => s + p.monto, 0), 1000000);
+});
+
+test('POST /ventas — proyecto personalizado sin distribucion se registra igual, sin snapshot (item 5: preparación, nunca bloqueante)', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  const response = await ventasHandler(fakeContext({ method: 'POST', body: PROYECTO_PERSONALIZADO_BASE, roleIdentity: admin, db }));
+  assert.equal(response.status, 201);
+  const body = (await response.json()).data;
+  assert.equal(body.venta.distribucionSnapshot, null);
+});
+
+test('POST /ventas — proyecto personalizado con distribucion válida (sin fila de empresa) guarda un snapshot inmutable, empresa queda como remanente implícito', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  const distribucion = [
+    { concepto: 'comercial', beneficiarioEmail: 'vendedor.ficticio@example.com', porcentaje: 25 },
+    { concepto: 'supervision', beneficiarioEmail: 'supervisor.ficticio@example.com', porcentaje: 10 },
+    { concepto: 'desarrollo', beneficiarioEmail: 'desarrollador.ficticio@example.com', porcentaje: 45 },
+  ];
+  const response = await ventasHandler(fakeContext({ method: 'POST', body: { ...PROYECTO_PERSONALIZADO_BASE, distribucion }, roleIdentity: admin, db }));
+  assert.equal(response.status, 201);
+  const body = (await response.json()).data;
+  assert.ok(body.venta.distribucionSnapshot);
+  assert.equal(body.venta.distribucionSnapshot.valida, true);
+  assert.equal(body.venta.distribucionSnapshot.suma, 80);
+  assert.equal(body.venta.distribucionSnapshot.empresaPorcentaje, 20); // nunca una fila — remanente calculado, nunca escrito a mano.
+  assert.equal(body.venta.distribucionSnapshot.participaciones.length, 3);
+});
+
+test('POST /ventas — proyecto personalizado con una sola participación parcial (suma < 100) se registra igual — "empresa" nunca se exige como fila explícita', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  const distribucion = [{ concepto: 'comercial', beneficiarioEmail: 'vendedor.ficticio@example.com', porcentaje: 25 }];
+  const response = await ventasHandler(fakeContext({ method: 'POST', body: { ...PROYECTO_PERSONALIZADO_BASE, distribucion }, roleIdentity: admin, db }));
+  assert.equal(response.status, 201);
+  const body = (await response.json()).data;
+  assert.equal(body.venta.distribucionSnapshot.empresaPorcentaje, 75);
+});
+
+test('POST /ventas — proyecto personalizado con distribucion sin beneficiario (participación sin resolver) se rechaza', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  const distribucion = [
+    { concepto: 'comercial', beneficiarioEmail: 'vendedor.ficticio@example.com', porcentaje: 40 },
+    { concepto: 'supervision', beneficiarioEmail: null, porcentaje: 60 },
+  ];
+  const response = await ventasHandler(fakeContext({ method: 'POST', body: { ...PROYECTO_PERSONALIZADO_BASE, distribucion }, roleIdentity: admin, db }));
+  assert.equal(response.status, 400);
+  assert.equal(db._state.ventas.length, 0);
+});
+
+test('POST /ventas — proyecto personalizado con distribucion que suma más de 100% se rechaza', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  const distribucion = [
+    { concepto: 'comercial', beneficiarioEmail: 'a@example.com', porcentaje: 60 },
+    { concepto: 'desarrollo', beneficiarioEmail: 'b@example.com', porcentaje: 60 },
+  ];
+  const response = await ventasHandler(fakeContext({ method: 'POST', body: { ...PROYECTO_PERSONALIZADO_BASE, distribucion }, roleIdentity: admin, db }));
+  assert.equal(response.status, 400);
+  assert.equal(db._state.ventas.length, 0);
+});
+
+test('GET /ventas/:id — el snapshot de distribución guardado nunca se recalcula al leer la venta de nuevo', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  const distribucion = [{ concepto: 'comercial', beneficiarioEmail: 'a@example.com', porcentaje: 80 }];
+  const createResponse = await ventasHandler(fakeContext({ method: 'POST', body: { ...PROYECTO_PERSONALIZADO_BASE, distribucion }, roleIdentity: admin, db }));
+  const created = (await createResponse.json()).data.venta;
+  const response = await ventaDetailHandler(fakeContext({ roleIdentity: admin, db, params: { id: created.id } }));
+  const detalle = (await response.json()).data.venta;
+  assert.deepEqual(detalle.distribucionSnapshot, created.distribucionSnapshot);
 });
 
 test('POST /ventas — proyecto personalizado: la suma de las fases debe ser exactamente el precio pactado', async () => {

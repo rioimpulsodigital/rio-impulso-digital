@@ -780,6 +780,20 @@
         <p class="pv-status-msg" id="npPagosSuma"></p>
       </div>
 
+      <div class="pv-detail-section">
+        <p class="pv-detail-section-title">Distribución económica (opcional)</p>
+        <p style="font-size:.78rem;color:var(--muted);margin:0 0 8px;">
+          Si ya conocés los participantes reales, definilos acá — queda como snapshot inmutable, nunca se recalcula después.
+          No agregues una fila de "empresa": lo que no repartís acá es siempre su remanente implícito, calculado solo.
+          Si todavía no está definida, el proyecto se registra igual y podés completarla más adelante.
+        </p>
+        <div id="npDistribucionLista"></div>
+        <div class="pv-btn-row">
+          <button type="button" class="pv-btn" id="npAgregarParticipacion">+ Agregar participación</button>
+        </div>
+        <p class="pv-status-msg" id="npDistribucionSuma"></p>
+      </div>
+
       <div class="pv-btn-row">
         <button type="submit" class="pv-btn pv-btn--primary" id="npSubmitBtn">Registrar proyecto</button>
       </div>
@@ -826,7 +840,7 @@
 
 <script src="./config/users.js" defer></script>
 <script src="../assets/js/main.js?v=20260627" defer></script>
-<script src="./panel-administrativo.js?v=20260902b" defer></script>
+<script src="./panel-administrativo.js?v=20260902c" defer></script>
 
 </body>
 </html>

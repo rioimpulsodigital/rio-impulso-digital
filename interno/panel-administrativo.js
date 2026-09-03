@@ -961,6 +961,43 @@
     );
   }
 
+  function participacionRowHTML() {
+    return (
+      '<div class="np-row" data-participacion-row>' +
+        '<div class="np-row-field" style="max-width:160px;"><label>Concepto</label><input type="text" data-part-concepto placeholder="comercial, supervision, desarrollo…" required></div>' +
+        '<div class="np-row-field"><label>Beneficiario (correo)</label><input type="email" data-part-email required></div>' +
+        '<div class="np-row-field" style="max-width:110px;"><label>Porcentaje</label><input type="number" min="0" max="100" step="1" data-part-porcentaje required></div>' +
+        '<button type="button" class="pv-btn pv-btn--danger np-row-remove" data-quitar-fila>Quitar</button>' +
+      '</div>'
+    );
+  }
+
+  function agregarFilaParticipacion() {
+    var contenedor = document.getElementById('npDistribucionLista');
+    var wrapper = document.createElement('div');
+    wrapper.innerHTML = participacionRowHTML();
+    var fila = wrapper.firstElementChild;
+    contenedor.appendChild(fila);
+    fila.querySelector('[data-quitar-fila]').addEventListener('click', function () { fila.remove(); recomputarSumaDistribucion(); });
+    fila.querySelector('[data-part-porcentaje]').addEventListener('input', recomputarSumaDistribucion);
+    recomputarSumaDistribucion();
+  }
+
+  // "Empresa" nunca se modela como fila que administración completa a
+  // mano — es siempre el remanente implícito (100 - suma de las
+  // participaciones cargadas), calculado acá igual que
+  // validarDistribucion() en el servidor (_shared/comisiones.js).
+  function recomputarSumaDistribucion() {
+    var filas = document.querySelectorAll('[data-participacion-row]');
+    var el = document.getElementById('npDistribucionSuma');
+    if (filas.length === 0) { el.textContent = ''; el.className = 'pv-status-msg'; return; }
+    var suma = 0;
+    Array.prototype.forEach.call(filas, function (fila) { suma += parseInt(fila.querySelector('[data-part-porcentaje]').value, 10) || 0; });
+    var empresa = Math.max(100 - suma, 0);
+    el.textContent = 'Suma de participaciones: ' + suma + '% · Empresa (remanente, nunca se carga a mano): ' + empresa + '%' + (suma > 100 ? ' — excede el 100%' : '');
+    el.className = 'pv-status-msg ' + (suma <= 100 ? 'ok' : 'err');
+  }
+
   function recomputarSumaFases() {
     var precio = parseInt(document.getElementById('npPrecio').value, 10) || 0;
     var suma = 0;
@@ -1006,8 +1043,10 @@
     form.reset();
     document.getElementById('npFasesLista').innerHTML = '';
     document.getElementById('npPagosLista').innerHTML = '';
+    document.getElementById('npDistribucionLista').innerHTML = '';
     document.getElementById('npFasesSuma').textContent = '';
     document.getElementById('npPagosSuma').textContent = '';
+    document.getElementById('npDistribucionSuma').textContent = '';
     document.getElementById('npStatus').textContent = '';
     document.getElementById('npStatus').className = 'pv-status-msg';
     agregarFilaFase();
@@ -1034,6 +1073,7 @@
     document.getElementById('pvNuevoProyectoOverlay').addEventListener('click', cerrarNuevoProyecto);
     document.getElementById('npAgregarFase').addEventListener('click', agregarFilaFase);
     document.getElementById('npAgregarPago').addEventListener('click', agregarFilaPago);
+    document.getElementById('npAgregarParticipacion').addEventListener('click', agregarFilaParticipacion);
     document.getElementById('npMercado').addEventListener('change', poblarTipoVentaProyecto);
     document.getElementById('npPrecio').addEventListener('input', function () { recomputarSumaFases(); recomputarSumaPagos(); });
 
@@ -1067,6 +1107,27 @@
 
       var tipoVentaSel = document.getElementById('npTipoVenta').value;
       if (!tipoVentaSel) { statusEl.textContent = 'Elegí el tipo de venta (equipo o venta directa de Administración).'; statusEl.className = 'pv-status-msg err'; return; }
+
+      // Distribución: opcional (item 5 — "preparación", nunca bloqueante
+      // si no se define todavía), pero si administración cargó filas,
+      // tiene que cerrar exacto en 100% antes de poder guardar — mismo
+      // criterio que valida el servidor (validarDistribucion).
+      var filasDistribucion = document.querySelectorAll('[data-participacion-row]');
+      var distribucion;
+      if (filasDistribucion.length > 0) {
+        distribucion = Array.prototype.map.call(filasDistribucion, function (fila) {
+          return {
+            concepto: fila.querySelector('[data-part-concepto]').value.trim(),
+            beneficiarioEmail: fila.querySelector('[data-part-email]').value.trim(),
+            porcentaje: parseInt(fila.querySelector('[data-part-porcentaje]').value, 10) || 0,
+          };
+        });
+        var sumaDistribucion = distribucion.reduce(function (s, p) { return s + p.porcentaje; }, 0);
+        var faltaBeneficiario = distribucion.some(function (p) { return !p.beneficiarioEmail; });
+        if (faltaBeneficiario) { statusEl.textContent = 'Cada participación de la distribución necesita un beneficiario.'; statusEl.className = 'pv-status-msg err'; return; }
+        if (sumaDistribucion > 100) { statusEl.textContent = 'La distribución no puede exceder el 100% — no agregues una fila de "empresa", es siempre el remanente.'; statusEl.className = 'pv-status-msg err'; return; }
+      }
+
       var payload = {
         mercado: document.getElementById('npMercado').value,
         cliente: { negocio: document.getElementById('npCliente').value.trim() },
@@ -1078,6 +1139,7 @@
         notionUrl: document.getElementById('npNotionUrl').value.trim() || undefined,
         fases: fases,
         pagos: pagos,
+        distribucion: distribucion,
       };
       if (tipoVentaSel === 'directa') {
         payload.tipoVenta = 'directa_administracion_sin_supervision';

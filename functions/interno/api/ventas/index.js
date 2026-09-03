@@ -26,7 +26,7 @@ import { isMethodAllowed, hasExpectedContentType, isBodyTooLarge } from '../../.
 import { isValidPrice, splitPackPrice, CURRENCY_BY_MARKET } from '../../../_shared/pricing.js';
 import {
   generarComisionesParaVenta, resolverEquipoVigenteDeVendedor,
-  resolverSupervisorVigenteDeEquipo, resolverAsignacionVigente,
+  resolverSupervisorVigenteDeEquipo, resolverAsignacionVigente, validarDistribucion,
 } from '../../../_shared/comisiones.js';
 import { agregarAntecedente } from '../../../_shared/proyectos.js';
 import { intentarSincronizarHubSpot } from '../../../_shared/hubspot.js';
@@ -125,6 +125,10 @@ function serializeVenta(row) {
     nombreProyecto: row.nombre_proyecto || null,
     descripcionProyecto: row.descripcion_proyecto || null,
     notionUrl: row.notion_url || null,
+    // RIO-119 (tercer bloque, item 5, 02/09/2026): snapshot INMUTABLE de
+    // la distribución aprobada al registrar un proyecto personalizado —
+    // nunca se recalcula después, aunque cambien los planes de comisión.
+    distribucionSnapshot: row.distribucion_snapshot ? JSON.parse(row.distribucion_snapshot) : null,
     createdAt: row.created_at,
   };
 }
@@ -165,6 +169,7 @@ async function serializarVentaCompletaExistente(db, requestId, ventaId) {
       nombreProyecto: venta.nombre_proyecto || null,
       descripcionProyecto: venta.descripcion_proyecto || null,
       notionUrl: venta.notion_url || null,
+      distribucionSnapshot: venta.distribucion_snapshot ? JSON.parse(venta.distribucion_snapshot) : null,
     },
     proyecto: { id: proyecto.id, codigoProyecto: proyecto.codigo_proyecto },
     componentes: componentes.map((c) => ({ id: c.id, tipo: c.tipo, nombre: c.nombre || null, descripcion: c.descripcion || null, precioAtribuido: c.precio_atribuido, estadoActual: c.estado_actual })),
@@ -330,6 +335,10 @@ async function handleCreate(context) {
     origen, esDemo, antecedentesKit, hubspot, tipoVenta, equipoId: equipoIdElegido,
     // RIO-119 (ampliación de alcance — proyectos personalizados, 02/09/2026).
     nombreProyecto, descripcionProyecto, notionUrl, fases, pagos: pagosPersonalizados,
+    // RIO-119 (tercer bloque, item 5, 02/09/2026): distribución económica
+    // propia del proyecto — opcional en este paso ("preparación"), nunca
+    // aplicada a la distribución de catálogo (planes_comision).
+    distribucion,
   } = body || {};
 
   if (!VALID_MERCADOS.includes(mercado)) {
@@ -375,6 +384,7 @@ async function handleCreate(context) {
   const pack = isPack(producto);
   let componentesPlan;
   let pagosPlanPersonalizado = null;
+  let distribucionSnapshot = null;
   if (esProyectoPersonalizado) {
     // RIO-119: "sin clasificarlos falsamente como productos del catálogo
     // vigente" — cada fase es su propio componente, con su nombre y
@@ -431,6 +441,32 @@ async function handleCreate(context) {
     }
     if (sumaPagos !== precioPactado) {
       return Errors.validation('La suma de los pagos debe ser exactamente igual al precio pactado.', requestId);
+    }
+
+    // RIO-119 (tercer bloque, item 5): si administración ya define la
+    // distribución al registrar el proyecto, cada participación cargada
+    // tiene que estar resuelta (beneficiario real, sin duplicados, sin
+    // negativos) y no puede exceder el 100% — "empresa" NUNCA se carga
+    // como fila (mismo principio que en el resto del sistema): lo que no
+    // se reparte explícitamente es su remanente implícito, calculado por
+    // validarDistribucion(), nunca un dato que administración deba
+    // escribir a mano. Si la distribución todavía no está definida, el
+    // proyecto se registra igual (Brenda: esto es preparación, no un
+    // requisito bloqueante) y queda sin snapshot — se resuelve más
+    // adelante como siempre, vía planes_comision + asignaciones_plan_comision.
+    if (distribucion !== undefined) {
+      if (!Array.isArray(distribucion) || distribucion.length === 0) {
+        return Errors.validation('distribucion debe ser un arreglo no vacío de participaciones.', requestId);
+      }
+      for (const p of distribucion) {
+        if (typeof p?.concepto !== 'string' || !p.concepto.trim()) return Errors.validation('Cada participación de la distribución requiere un concepto.', requestId);
+        if (typeof p.porcentaje !== 'number') return Errors.validation(`Falta porcentaje numérico para "${p.concepto}".`, requestId);
+      }
+      const resultado = validarDistribucion(distribucion);
+      if (!resultado.valida) {
+        return Errors.validation(`La distribución no es válida: ${resultado.errores.join(' ')}`, requestId);
+      }
+      distribucionSnapshot = JSON.stringify(resultado);
     }
   } else if (pack) {
     if (!Number.isInteger(precioFichaIndividual) || !Number.isInteger(precioLandingIndividual)) {
@@ -600,8 +636,8 @@ async function handleCreate(context) {
          idempotency_key, origen, es_demo, antecedentes_kit_json,
          tipo_venta, supervisor_snapshot_email, plan_supervision_snapshot_id, supervision_aplica, motivo_sin_supervision,
          porcentaje_supervision_aplicado, porcentaje_final_empresa,
-         nombre_proyecto, descripcion_proyecto, notion_url
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         nombre_proyecto, descripcion_proyecto, notion_url, distribucion_snapshot
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       ventaId, codigoVenta, clienteId, mercado, producto, moneda, tipoPrecioFinal, precioPactado, roleIdentity.email, equipoId,
       idempotencyKey, origen || null, esDemo ? 1 : 0, antecedentesKit ? JSON.stringify(antecedentesKit) : null,
@@ -609,7 +645,8 @@ async function handleCreate(context) {
       porcentajeSupervisionAplicado, porcentajeFinalEmpresa,
       esProyectoPersonalizado ? nombreProyecto.trim() : null,
       esProyectoPersonalizado ? ((descripcionProyecto && descripcionProyecto.trim()) || null) : null,
-      esProyectoPersonalizado ? ((notionUrl && notionUrl.trim()) || null) : null
+      esProyectoPersonalizado ? ((notionUrl && notionUrl.trim()) || null) : null,
+      distribucionSnapshot
     ),
     db.prepare('INSERT INTO proyectos (id, venta_id, codigo_proyecto) VALUES (?, ?, ?)')
       .bind(proyectoId, ventaId, codigoProyecto),
@@ -691,6 +728,7 @@ async function handleCreate(context) {
         nombreProyecto: esProyectoPersonalizado ? nombreProyecto.trim() : null,
         descripcionProyecto: esProyectoPersonalizado ? ((descripcionProyecto && descripcionProyecto.trim()) || null) : null,
         notionUrl: esProyectoPersonalizado ? ((notionUrl && notionUrl.trim()) || null) : null,
+        distribucionSnapshot: distribucionSnapshot ? JSON.parse(distribucionSnapshot) : null,
       },
       proyecto: { id: proyectoId, codigoProyecto },
       componentes: componentesPlan.map((c) => ({ id: c.id, tipo: c.tipo, nombre: c.nombre || null, descripcion: c.descripcion || null, precioAtribuido: c.precioAtribuido, estadoActual: c.estado })),
