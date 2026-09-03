@@ -1,24 +1,55 @@
-// POST /interno/api/personas/:email — RIO-119 (segundo bloque, 02/09/2026).
+// POST /interno/api/personas/:email — RIO-119 (segundo bloque, 02/09/2026;
+// tercer bloque — identidad estable y RUT/DNI protegido, 02/09/2026).
 // Exclusivo de administración (permissions.manageUsers).
 //
 // action 'editar-perfil': nombre/documentoIdentidad/telefono/
 //   whatsappLaboral/accesoEstado — edición directa (no versionada), pero
-//   siempre auditada (valor anterior y nuevo completos en eventos_historial).
+//   siempre auditada. El documento se guarda CIFRADO (crypto.js) — el
+//   registro de auditoría nunca contiene el texto plano, solo si había o
+//   no un valor y si cambió.
+// action 'revelar-documento': descifra y devuelve el RUT/DNI UNA vez —
+//   nunca en el listado ni en el perfil por defecto. Auditado (queda
+//   registrado QUIÉN reveló y CUÁNDO, nunca el valor en el propio evento).
 // action 'cambiar-asignacion': role/allowedMarkets/defaultMarket/canSell/
 //   userStatus — SIEMPRE una fila nueva versionada; la vigente anterior se
-//   cierra con valid_until, nunca se sobrescribe (mismo criterio que ya
-//   rige equipo_supervisores/planes_comision desde RIO-115/118 — "nunca
-//   retroactivo, siempre nueva versión").
+//   cierra con valid_until, nunca se sobrescribe.
+// action 'cambiar-correo': identidad estable — el correo es el valor que
+//   hoy funciona como clave real en casi todo el sistema (RIO-118: "una
+//   migración mayor a usuario_id, fuera de proporción"), así que en vez de
+//   reescribir todo el modelo a FKs numéricas, esta acción CASCADEA el
+//   cambio atómicamente a cada tabla de identidad VIGENTE (nunca a
+//   eventos_historial ni a ningún snapshot histórico deliberado, como
+//   ventas.supervisor_snapshot_email — esos representan un hecho "tal como
+//   era en ese momento", no la identidad actual) — así ninguna venta,
+//   equipo, comisión, liquidación o entrega queda huérfana. Registra el
+//   cambio en usuarios_correos_historicos y en eventos_historial.
 
 import { ok, Errors } from '../../../../_shared/response.js';
-import { query, execute } from '../../../../_shared/db.js';
+import { query, execute, transaction } from '../../../../_shared/db.js';
 import { isMethodAllowed, hasExpectedContentType } from '../../../../_shared/security.js';
 import { logEvento } from '../../../../_shared/historial.js';
+import { encryptField, decryptField, CryptoConfigError } from '../../../../_shared/crypto.js';
 
 const VALID_ROLES = ['admin', 'supervisor', 'ejecutivo', 'asistente'];
 const VALID_MERCADOS = ['CL', 'AR'];
 const VALID_ACCESO_ESTADO = ['perfil_creado', 'acceso_pendiente', 'acceso_confirmado', 'desactivado'];
 const VALID_USER_STATUS = ['activo', 'inactivo'];
+
+// Tablas donde el correo representa la identidad VIGENTE de una persona —
+// se cascadea al cambiar de correo. Cada entrada: [tabla, columna].
+const TABLAS_IDENTIDAD_VIGENTE = [
+  ['ventas', 'vendedor_email'],
+  ['comisiones', 'beneficiario_email'],
+  ['transferencias_comision', 'beneficiario_email'],
+  ['equipo_miembros', 'usuario_email'],
+  ['equipo_supervisores', 'usuario_email'],
+  ['asignaciones_realizacion', 'usuario_email'],
+  ['materiales_informados_detalle', 'informado_por'],
+  ['materiales_informados_detalle', 'revisado_por'],
+  ['materiales_confirmaciones', 'admin_email'],
+  ['notificaciones', 'vendedor_email'],
+  ['datos_transferencia', 'usuario_email'],
+];
 
 export async function onRequest(context) {
   const { request, env, params, data } = context;
@@ -53,27 +84,61 @@ export async function onRequest(context) {
       return Errors.validation('accesoEstado inválido.', requestId);
     }
 
-    const valorAnterior = JSON.stringify({
-      nombre: usuario.nombre, documentoIdentidad: usuario.documento_identidad,
-      telefono: usuario.telefono, whatsappLaboral: usuario.whatsapp_laboral, accesoEstado: usuario.acceso_estado,
-    });
     const nombreFinal = nombre !== undefined ? nombre.trim() : usuario.nombre;
-    const documentoFinal = documentoIdentidad !== undefined ? ((documentoIdentidad && documentoIdentidad.trim()) || null) : usuario.documento_identidad;
     const telefonoFinal = telefono !== undefined ? ((telefono && telefono.trim()) || null) : usuario.telefono;
     const whatsappFinal = whatsappLaboral !== undefined ? ((whatsappLaboral && whatsappLaboral.trim()) || null) : usuario.whatsapp_laboral;
     const accesoFinal = accesoEstado !== undefined ? accesoEstado : usuario.acceso_estado;
+
+    let documentoFinal = usuario.documento_identidad;
+    let documentoCambio = false;
+    if (documentoIdentidad !== undefined) {
+      documentoCambio = true;
+      try {
+        documentoFinal = await encryptField(env, documentoIdentidad && documentoIdentidad.trim());
+      } catch (e) {
+        if (e instanceof CryptoConfigError) return Errors.internal(requestId);
+        throw e;
+      }
+    }
+
+    // Se calcula ANTES de escribir — nunca depender de que el objeto
+    // `usuario` leído al principio de la función siga reflejando el valor
+    // previo después de la escritura (defensivo, aunque D1 real ya
+    // devuelve filas independientes, no una referencia viva).
+    // RIO-119 (tercer bloque): el RUT/DNI NUNCA aparece en el historial, ni
+    // el anterior ni el nuevo — solo si el campo cambió (booleano).
+    const valorAnterior = JSON.stringify({ nombre: usuario.nombre, telefono: usuario.telefono, whatsappLaboral: usuario.whatsapp_laboral, accesoEstado: usuario.acceso_estado });
+    const valorNuevo = JSON.stringify({ nombre: nombreFinal, telefono: telefonoFinal, whatsappLaboral: whatsappFinal, accesoEstado: accesoFinal, documentoIdentidadCambiado: documentoCambio });
 
     await execute(
       env.DB, requestId,
       'UPDATE usuarios SET nombre = ?, documento_identidad = ?, telefono = ?, whatsapp_laboral = ?, acceso_estado = ? WHERE id = ?',
       [nombreFinal, documentoFinal, telefonoFinal, whatsappFinal, accesoFinal, usuario.id]
     );
-    const valorNuevo = JSON.stringify({ nombre: nombreFinal, documentoIdentidad: documentoFinal, telefono: telefonoFinal, whatsappLaboral: whatsappFinal, accesoEstado: accesoFinal });
     await logEvento(env.DB, requestId, {
       ventaId: null, entidad: 'usuario', entidadId: email, estadoAnterior: valorAnterior, estadoNuevo: valorNuevo,
       usuarioEmail: roleIdentity.email, motivoNota: body.motivo || null,
     });
     return ok({ action: 'editar-perfil' }, requestId);
+  }
+
+  if (body?.action === 'revelar-documento') {
+    if (!usuario.documento_identidad) {
+      return ok({ action: 'revelar-documento', documentoIdentidad: null }, requestId);
+    }
+    let documentoPlano;
+    try {
+      documentoPlano = await decryptField(env, usuario.documento_identidad);
+    } catch (e) {
+      if (e instanceof CryptoConfigError) return Errors.internal(requestId);
+      throw e;
+    }
+    // Auditado — nunca el valor revelado, solo el hecho y quién lo pidió.
+    await logEvento(env.DB, requestId, {
+      ventaId: null, entidad: 'usuario', entidadId: email, estadoAnterior: null, estadoNuevo: 'documento_revelado',
+      usuarioEmail: roleIdentity.email, motivoNota: body.motivo || null,
+    });
+    return ok({ action: 'revelar-documento', documentoIdentidad: documentoPlano }, requestId);
   }
 
   if (body?.action === 'cambiar-asignacion') {
@@ -116,5 +181,39 @@ export async function onRequest(context) {
     return ok({ action: 'cambiar-asignacion' }, requestId);
   }
 
-  return Errors.validation('action inválida. Valores permitidos: editar-perfil, cambiar-asignacion.', requestId);
+  if (body?.action === 'cambiar-correo') {
+    const nuevoEmail = typeof body.nuevoEmail === 'string' ? body.nuevoEmail.trim().toLowerCase() : '';
+    if (!nuevoEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nuevoEmail)) {
+      return Errors.validation('Falta un nuevoEmail válido.', requestId);
+    }
+    if (nuevoEmail === email) {
+      return Errors.validation('El nuevo correo debe ser distinto al actual.', requestId);
+    }
+    const yaExiste = await query(env.DB, requestId, 'SELECT id FROM usuarios WHERE email = ?', [nuevoEmail]);
+    if (yaExiste[0]) {
+      return Errors.validation('Ya existe otro usuario con ese correo.', requestId);
+    }
+
+    const statements = [
+      env.DB.prepare('UPDATE usuarios SET email = ? WHERE id = ?').bind(nuevoEmail, usuario.id),
+      ...TABLAS_IDENTIDAD_VIGENTE.map(([tabla, columna]) =>
+        env.DB.prepare(`UPDATE ${tabla} SET ${columna} = ? WHERE ${columna} = ?`).bind(nuevoEmail, email)
+      ),
+      env.DB.prepare('INSERT INTO usuarios_correos_historicos (id, usuario_id, correo_anterior, correo_nuevo, changed_by) VALUES (?, ?, ?, ?, ?)')
+        .bind(crypto.randomUUID(), usuario.id, email, nuevoEmail, roleIdentity.email),
+    ];
+    try {
+      await transaction(env.DB, requestId, statements);
+    } catch (e) {
+      return Errors.internal(requestId);
+    }
+
+    await logEvento(env.DB, requestId, {
+      ventaId: null, entidad: 'usuario', entidadId: nuevoEmail, estadoAnterior: email, estadoNuevo: nuevoEmail,
+      usuarioEmail: roleIdentity.email, motivoNota: body.motivo || 'Cambio de correo — todas las relaciones vigentes se actualizaron en la misma operación.',
+    });
+    return ok({ action: 'cambiar-correo', email: nuevoEmail }, requestId);
+  }
+
+  return Errors.validation('action inválida. Valores permitidos: editar-perfil, revelar-documento, cambiar-asignacion, cambiar-correo.', requestId);
 }

@@ -3,3 +3,7 @@
 # Notion, chat o capturas de pantalla.
 
 CF_ACCESS_AUD=
+# RIO-119 (tercer bloque — datos sensibles cifrados, 02/09/2026): clave
+# AES-GCM de 256 bits en base64 (ej. `openssl rand -base64 32`) — exclusiva
+# de este entorno local, nunca la misma que Preview o Producción.
+DATOS_SENSIBLES_KEY_V1=

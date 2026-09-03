@@ -469,8 +469,12 @@
         <form id="pvPersonaEditarPerfilForm" class="pv-accion-form" style="border-top:none;padding-top:0;">
           <label for="peNombre">Nombre completo</label>
           <input type="text" id="peNombre" required>
-          <label for="peDocumento">RUT / DNI</label>
-          <input type="text" id="peDocumento">
+          <label>RUT / DNI</label>
+          <div class="pv-btn-row" style="margin:0 0 6px;">
+            <span class="pv-mono" id="peDocumentoEstado">—</span>
+            <button type="button" class="pv-btn" id="peRevelarDocumentoBtn">Revelar</button>
+          </div>
+          <input type="text" id="peDocumento" placeholder="Dejar vacío para no cambiarlo — escribí un valor para reemplazarlo">
           <label for="peTelefono">Teléfono</label>
           <input type="text" id="peTelefono">
           <label for="peWhatsapp">WhatsApp laboral</label>
@@ -507,6 +511,48 @@
           <p style="font-size:.72rem;color:var(--muted);margin:0;">Esto crea una nueva versión — nunca sobrescribe la anterior, que queda cerrada en el historial.</p>
           <button type="submit" class="pv-btn">Guardar nueva asignación</button>
           <span class="pv-status-msg" id="paStatus"></span>
+        </form>
+      </div>
+      <div class="pv-detail-section">
+        <p class="pv-detail-section-title">Datos de transferencia</p>
+        <p style="font-size:.72rem;color:var(--muted);margin:0 0 8px;">Titular, identificación, número de cuenta, alias y observaciones se guardan cifrados — nunca contraseñas, PIN ni tokens bancarios.</p>
+        <div id="pvDatosTransferenciaLista"></div>
+        <form id="pvNuevoDatoTransferenciaForm" class="pv-accion-form">
+          <div class="pv-costo-form-row">
+            <div class="np-row-field"><label>País</label><select id="dtPais"><option value="CL">CL</option><option value="AR">AR</option></select></div>
+            <div class="np-row-field"><label>Moneda</label><select id="dtMoneda"><option value="CLP">CLP</option><option value="ARS">ARS</option></select></div>
+          </div>
+          <label for="dtBanco">Banco o proveedor</label>
+          <input type="text" id="dtBanco" required>
+          <label for="dtTipoCuenta">Tipo de cuenta</label>
+          <input type="text" id="dtTipoCuenta" placeholder="Opcional">
+          <label for="dtTipoDocumento">Tipo de documento</label>
+          <input type="text" id="dtTipoDocumento" placeholder="Opcional — RUT, DNI, CUIT…">
+          <label for="dtTitular">Titular</label>
+          <input type="text" id="dtTitular" placeholder="Opcional">
+          <label for="dtIdentificacion">RUT / DNI / identificación</label>
+          <input type="text" id="dtIdentificacion" placeholder="Opcional">
+          <label for="dtNumeroCuenta">Número de cuenta</label>
+          <input type="text" id="dtNumeroCuenta" placeholder="Opcional">
+          <label for="dtAlias">Alias / CBU / CVU</label>
+          <input type="text" id="dtAlias" placeholder="Opcional">
+          <label for="dtObservaciones">Observaciones</label>
+          <textarea id="dtObservaciones" placeholder="Opcional"></textarea>
+          <button type="submit" class="pv-btn">Agregar registro</button>
+          <span class="pv-status-msg" id="dtStatus"></span>
+        </form>
+      </div>
+
+      <div class="pv-detail-section">
+        <p class="pv-detail-section-title">Correo (identidad estable)</p>
+        <form id="pvPersonaCorreoForm" class="pv-accion-form" style="border-top:none;padding-top:0;">
+          <p style="font-size:.72rem;color:var(--muted);margin:0;">Cambiar el correo actualiza automáticamente sus ventas, equipos, comisiones y demás relaciones vigentes — nunca quedan huérfanas. El historial ya registrado con el correo anterior no se reescribe.</p>
+          <label for="pcNuevoEmail">Nuevo correo</label>
+          <input type="email" id="pcNuevoEmail" required>
+          <label for="pcMotivo">Motivo</label>
+          <input type="text" id="pcMotivo" placeholder="Opcional">
+          <button type="submit" class="pv-btn pv-btn--danger">Cambiar correo</button>
+          <span class="pv-status-msg" id="pcStatus"></span>
         </form>
       </div>
     </div>

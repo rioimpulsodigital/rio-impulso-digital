@@ -1112,6 +1112,10 @@
     perfil_creado: 'Perfil creado', acceso_pendiente: 'Acceso pendiente', acceso_confirmado: 'Acceso confirmado', desactivado: 'Desactivado',
   };
   var ACCESO_ESTADO_BADGE = { perfil_creado: 'neutral', acceso_pendiente: 'amber', acceso_confirmado: 'green', desactivado: 'red' };
+  // RIO-119 (tercer bloque — datos sensibles cifrados): enmascarado
+  // GENÉRICO, nunca derivado del valor real — mismo criterio que
+  // functions/_shared/crypto.js MASKED_PLACEHOLDER.
+  var MASKED_PLACEHOLDER = '••••••••';
 
   async function cargarPersonas() {
     document.getElementById('pvPersonasResult').innerHTML = '<div class="pv-loading">Cargando personas…</div>';
@@ -1222,7 +1226,11 @@
     document.getElementById('pvPersonaEditarWrap').setAttribute('data-email', email);
 
     document.getElementById('peNombre').value = persona.nombre || '';
-    document.getElementById('peDocumento').value = persona.documentoIdentidad || '';
+    // RIO-119 (tercer bloque — RUT/DNI protegido): el valor real NUNCA
+    // viaja en el listado — el campo arranca vacío ("dejar vacío = no
+    // cambiar"), solo un estado enmascarado indica si hay uno cargado.
+    document.getElementById('peDocumento').value = '';
+    document.getElementById('peDocumentoEstado').textContent = persona.tieneDocumento ? MASKED_PLACEHOLDER : 'Sin RUT/DNI cargado';
     document.getElementById('peTelefono').value = persona.telefono || '';
     document.getElementById('peWhatsapp').value = persona.whatsappLaboral || '';
     document.getElementById('peAcceso').value = persona.accesoEstado || 'perfil_creado';
@@ -1236,9 +1244,65 @@
     document.getElementById('paMotivo').value = '';
     document.getElementById('paStatus').textContent = '';
 
+    document.getElementById('pcNuevoEmail').value = '';
+    document.getElementById('pcMotivo').value = '';
+    document.getElementById('pcStatus').textContent = '';
+    document.getElementById('pvNuevoDatoTransferenciaForm').reset();
+    document.getElementById('dtStatus').textContent = '';
+
     document.getElementById('pvPersonaOverlay').classList.add('open');
     document.getElementById('pvPersonaPanel').classList.add('open');
     document.getElementById('pvPersonaPanel').setAttribute('aria-hidden', 'false');
+
+    cargarDatosTransferencia(email);
+  }
+
+  // RIO-119 (tercer bloque — datos de transferencia protegidos,
+  // 02/09/2026): la lista SIEMPRE llega enmascarada del servidor (nunca se
+  // descifra acá sin una acción explícita de "Revelar").
+  async function cargarDatosTransferencia(email) {
+    var el = document.getElementById('pvDatosTransferenciaLista');
+    el.innerHTML = '<div class="pv-loading">Cargando…</div>';
+    var r = await apiFetch('/interno/api/personas/' + encodeURIComponent(email) + '/datos-transferencia');
+    if (!r.ok || !r.body || !r.body.ok) { el.innerHTML = pvErrorHTML('No se pudieron cargar los datos de transferencia.'); return; }
+    var registros = r.body.data.datosTransferencia || [];
+    if (registros.length === 0) { el.innerHTML = '<p class="pv-materiales-vacio">Todavía no hay datos de transferencia cargados.</p>'; return; }
+    el.innerHTML = registros.map(function (reg) {
+      return (
+        '<div class="pv-notif-card" data-dt-id="' + escapeHtml(reg.id) + '">' +
+          '<div class="pv-notif-head">' +
+            '<span>' + escapeHtml(reg.bancoProveedor) + ' — <span class="pv-badge pv-badge--neutral">' + escapeHtml(reg.pais) + ' / ' + escapeHtml(reg.moneda) + '</span></span>' +
+          '</div>' +
+          '<div class="pv-notif-meta" data-dt-detalle>Titular: ' + escapeHtml(reg.titular || '—') + ' · Identificación: ' + escapeHtml(reg.identificacion || '—') + ' · Cuenta: ' + escapeHtml(reg.numeroCuenta || '—') + ' · Alias: ' + escapeHtml(reg.alias || '—') + '</div>' +
+          '<div class="pv-btn-row">' +
+            '<button type="button" class="pv-btn" data-revelar-dt="' + escapeHtml(reg.id) + '">Revelar</button>' +
+            '<button type="button" class="pv-btn pv-btn--danger" data-eliminar-dt="' + escapeHtml(reg.id) + '">Eliminar</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+    Array.prototype.forEach.call(el.querySelectorAll('[data-revelar-dt]'), function (btn) {
+      btn.addEventListener('click', async function () {
+        var id = btn.getAttribute('data-revelar-dt');
+        btn.disabled = true;
+        var r2 = await apiPost('/interno/api/personas/' + encodeURIComponent(email) + '/datos-transferencia/' + encodeURIComponent(id), { action: 'revelar' });
+        btn.disabled = false;
+        if (!r2.ok || !r2.body || !r2.body.ok) { alert((r2.body && r2.body.error && r2.body.error.message) || 'No se pudo revelar.'); return; }
+        var d = r2.body.data;
+        var detalleEl = el.querySelector('[data-dt-id="' + id + '"] [data-dt-detalle]');
+        detalleEl.textContent = 'Titular: ' + (d.titular || '—') + ' · Identificación: ' + (d.identificacion || '—') + ' · Cuenta: ' + (d.numeroCuenta || '—') + ' · Alias: ' + (d.alias || '—') + (d.observaciones ? ' · Obs: ' + d.observaciones : '');
+      });
+    });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-eliminar-dt]'), function (btn) {
+      btn.addEventListener('click', async function () {
+        if (!confirm('¿Eliminar este registro de transferencia? Queda desactivado, nunca se borra del historial.')) return;
+        var id = btn.getAttribute('data-eliminar-dt');
+        btn.disabled = true;
+        var r2 = await apiPost('/interno/api/personas/' + encodeURIComponent(email) + '/datos-transferencia/' + encodeURIComponent(id), { action: 'eliminar' });
+        if (!r2.ok || !r2.body || !r2.body.ok) { alert((r2.body && r2.body.error && r2.body.error.message) || 'No se pudo eliminar.'); btn.disabled = false; return; }
+        await cargarDatosTransferencia(email);
+      });
+    });
   }
 
   function mercadosSeleccionados(prefijo) {
@@ -1321,6 +1385,67 @@
       }
       statusEl.textContent = 'Nueva asignación guardada.';
       statusEl.className = 'pv-status-msg ok';
+      await cargarPersonas();
+    });
+
+    // RIO-119 (tercer bloque — RUT/DNI protegido): revela el valor real
+    // UNA vez, solo en memoria del navegador — nunca se guarda en
+    // personasCache ni se recarga después sin volver a pedirlo.
+    document.getElementById('peRevelarDocumentoBtn').addEventListener('click', async function () {
+      var email = document.getElementById('pvPersonaEditarWrap').getAttribute('data-email');
+      var estadoEl = document.getElementById('peDocumentoEstado');
+      var btn = document.getElementById('peRevelarDocumentoBtn');
+      btn.disabled = true;
+      var r = await apiPost('/interno/api/personas/' + encodeURIComponent(email), { action: 'revelar-documento' });
+      btn.disabled = false;
+      if (!r.ok || !r.body || !r.body.ok) {
+        alert((r.body && r.body.error && r.body.error.message) || 'No se pudo revelar el documento.');
+        return;
+      }
+      estadoEl.textContent = r.body.data.documentoIdentidad || 'Sin RUT/DNI cargado';
+    });
+
+    document.getElementById('pvNuevoDatoTransferenciaForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var email = document.getElementById('pvPersonaEditarWrap').getAttribute('data-email');
+      var statusEl = document.getElementById('dtStatus');
+      var r = await apiPost('/interno/api/personas/' + encodeURIComponent(email) + '/datos-transferencia', {
+        pais: document.getElementById('dtPais').value,
+        moneda: document.getElementById('dtMoneda').value,
+        bancoProveedor: document.getElementById('dtBanco').value.trim(),
+        tipoCuenta: document.getElementById('dtTipoCuenta').value.trim() || undefined,
+        tipoDocumento: document.getElementById('dtTipoDocumento').value.trim() || undefined,
+        titular: document.getElementById('dtTitular').value.trim() || undefined,
+        identificacion: document.getElementById('dtIdentificacion').value.trim() || undefined,
+        numeroCuenta: document.getElementById('dtNumeroCuenta').value.trim() || undefined,
+        alias: document.getElementById('dtAlias').value.trim() || undefined,
+        observaciones: document.getElementById('dtObservaciones').value.trim() || undefined,
+      });
+      if (!r.ok || !r.body || !r.body.ok) {
+        statusEl.textContent = (r.body && r.body.error && r.body.error.message) || 'No se pudo agregar el registro.';
+        statusEl.className = 'pv-status-msg err';
+        return;
+      }
+      document.getElementById('pvNuevoDatoTransferenciaForm').reset();
+      statusEl.textContent = '';
+      await cargarDatosTransferencia(email);
+    });
+
+    document.getElementById('pvPersonaCorreoForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var email = document.getElementById('pvPersonaEditarWrap').getAttribute('data-email');
+      var statusEl = document.getElementById('pcStatus');
+      var nuevoEmail = document.getElementById('pcNuevoEmail').value.trim();
+      if (!confirm('¿Confirmás cambiar el correo de esta persona a "' + nuevoEmail + '"? Sus ventas, equipos y comisiones vigentes se actualizan automáticamente.')) return;
+      var r = await apiPost('/interno/api/personas/' + encodeURIComponent(email), {
+        action: 'cambiar-correo', nuevoEmail: nuevoEmail, motivo: document.getElementById('pcMotivo').value.trim() || undefined,
+      });
+      if (!r.ok || !r.body || !r.body.ok) {
+        statusEl.textContent = (r.body && r.body.error && r.body.error.message) || 'No se pudo cambiar el correo.';
+        statusEl.className = 'pv-status-msg err';
+        return;
+      }
+      cerrarPersonaPanel();
       await cargarPersonas();
     });
 

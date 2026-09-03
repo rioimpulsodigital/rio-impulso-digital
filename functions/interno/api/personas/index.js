@@ -19,15 +19,21 @@ import { ok, Errors } from '../../../_shared/response.js';
 import { query, execute } from '../../../_shared/db.js';
 import { isMethodAllowed, hasExpectedContentType } from '../../../_shared/security.js';
 import { logEvento } from '../../../_shared/historial.js';
+import { encryptField, CryptoConfigError } from '../../../_shared/crypto.js';
 
 const VALID_ROLES = ['admin', 'supervisor', 'ejecutivo', 'asistente'];
 const VALID_MERCADOS = ['CL', 'AR'];
 
+// RIO-119 (tercer bloque — RUT/DNI protegido, 02/09/2026): el documento se
+// guarda cifrado (functions/_shared/crypto.js) — este listado NUNCA expone
+// el valor, ni siquiera parcial. Solo dice si hay uno cargado; el valor
+// real se obtiene exclusivamente con la acción 'revelar-documento'
+// (personas/[email]/index.js), exclusiva de administración y auditada.
 function serializePersona(row) {
   return {
     email: row.email,
     nombre: row.nombre,
-    documentoIdentidad: row.documento_identidad || null,
+    tieneDocumento: !!row.documento_identidad,
     telefono: row.telefono || null,
     whatsappLaboral: row.whatsapp_laboral || null,
     accesoEstado: row.acceso_estado,
@@ -102,10 +108,18 @@ async function handleCreate(context) {
     return Errors.validation('Ya existe un usuario con ese email.', requestId);
   }
 
+  let documentoCifrado;
+  try {
+    documentoCifrado = await encryptField(env, documentoIdentidad && documentoIdentidad.trim());
+  } catch (e) {
+    if (e instanceof CryptoConfigError) return Errors.internal(requestId); // secreto de cifrado no configurado — nunca se guarda sin cifrar.
+    throw e;
+  }
+
   await execute(
     env.DB, requestId,
     'INSERT INTO usuarios (email, nombre, documento_identidad, telefono, whatsapp_laboral) VALUES (?, ?, ?, ?, ?)',
-    [emailNorm, nombre.trim(), (documentoIdentidad && documentoIdentidad.trim()) || null, (telefono && telefono.trim()) || null, (whatsappLaboral && whatsappLaboral.trim()) || null]
+    [emailNorm, nombre.trim(), documentoCifrado, (telefono && telefono.trim()) || null, (whatsappLaboral && whatsappLaboral.trim()) || null]
   );
   const usuarioRows = await query(env.DB, requestId, 'SELECT id FROM usuarios WHERE email = ?', [emailNorm]);
   const usuarioId = usuarioRows[0].id;

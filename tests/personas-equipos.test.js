@@ -52,7 +52,16 @@ function fakeDb() {
   }
 
   function runMutation(sql, p) {
-    if (sql.startsWith('INSERT INTO usuarios')) {
+    // OJO: 'usuarios_correos_historicos' arranca con la substring
+    // "usuarios" — este chequeo va PRIMERO para no caer por accidente en
+    // la rama genérica de abajo (startsWith no respeta límites de palabra).
+    if (sql.startsWith('INSERT INTO usuarios_correos_historicos')) {
+      state.usuarios_correos_historicos = state.usuarios_correos_historicos || [];
+      state.usuarios_correos_historicos.push({ id: p[0], usuario_id: p[1], correo_anterior: p[2], correo_nuevo: p[3], changed_by: p[4] });
+    } else if (sql.startsWith('UPDATE usuarios SET email')) {
+      const u = state.usuarios.find((x) => x.id === p[1]);
+      if (u) u.email = p[0];
+    } else if (sql.startsWith('INSERT INTO usuarios')) {
       state.usuarios.push({
         id: nextUsuarioId++, email: p[0], nombre: p[1], documento_identidad: p[2] || null,
         telefono: p[3] || null, whatsapp_laboral: p[4] || null, acceso_estado: 'perfil_creado', created_at: '2026-09-02 00:00:00',
@@ -95,7 +104,7 @@ function fakeDb() {
       if (s) s.valid_until = '2026-09-02 12:00:00';
     } else if (sql.startsWith('INSERT INTO eventos_historial')) {
       state.eventos_historial.push({ id: p[0], venta_id: p[1], entidad: p[2], entidad_id: p[3], estado_anterior: p[4], estado_nuevo: p[5], usuario_email: p[6], motivo_nota: p[7] });
-    } else {
+    } else if (!runCascadeUpdate(state, sql, p)) {
       throw new Error('mutación inesperada en test: ' + sql);
     }
   }
@@ -157,8 +166,39 @@ function fakeDb() {
     throw new Error('consulta inesperada en test: ' + sql);
   }
 
-  return { _state: state, prepare: (sql) => makeStatement(sql) };
+  return {
+    _state: state,
+    prepare: (sql) => makeStatement(sql),
+    // RIO-119 (tercer bloque — identidad estable): 'cambiar-correo' usa
+    // transaction()/db.batch() para cascadear el cambio de correo de forma
+    // atómica — D1 real ejecuta secuencialmente y revierte todo si una
+    // falla (RIO-108); acá alcanza con ejecutar cada sentencia en orden.
+    batch: async (statements) => {
+      for (const stmt of statements) await stmt.run();
+      return statements.map(() => ({ success: true }));
+    },
+  };
 }
+
+// Cascade UPDATE genérico: cubre cualquier `UPDATE <tabla> SET <col> = ?
+// WHERE <col> = ?` de TABLAS_IDENTIDAD_VIGENTE (personas/[email]/index.js)
+// sin tener que hardcodear cada tabla — las tablas de negocio (ventas,
+// comisiones, etc.) no son el foco de este archivo de pruebas, así que se
+// inicializan vacías bajo demanda.
+function runCascadeUpdate(state, sql, p) {
+  const m = sql.match(/^UPDATE (\w+) SET (\w+) = \? WHERE \2 = \?$/);
+  if (!m) return false;
+  const [, tabla, columna] = m;
+  state[tabla] = state[tabla] || [];
+  state[tabla].forEach((row) => { if (row[columna] === p[1]) row[columna] = p[0]; });
+  return true;
+}
+
+// Clave de prueba fija — nunca la real de Preview/Producción (ver
+// tests/crypto.test.js) — necesaria porque personas/index.js y
+// personas/[email]/index.js cifran documentoIdentidad (RIO-119, tercer
+// bloque, RUT/DNI protegido).
+const DATOS_SENSIBLES_KEY_V1_TEST = 'ooairIYpX84V8LsrlfjzFZmTUxS3AbLdo9A+YIEqdAM=';
 
 function fakeContext({ method = 'GET', url = 'https://rioimpulsodigital.com/interno/api/personas', body, roleIdentity: ri, db, params = {} } = {}) {
   const init = { method };
@@ -168,7 +208,7 @@ function fakeContext({ method = 'GET', url = 'https://rioimpulsodigital.com/inte
   }
   return {
     request: new Request(url, init),
-    env: { DB: db },
+    env: { DB: db, DATOS_SENSIBLES_KEY_V1: DATOS_SENSIBLES_KEY_V1_TEST },
     params,
     data: { requestId: 'req-personas-test', identity: { email: ri?.email }, roleIdentity: ri },
   };
@@ -185,7 +225,12 @@ test('POST /personas — admin crea un perfil nuevo con su asignación inicial',
   }));
   assert.equal(response.status, 201);
   assert.equal(db._state.usuarios.length, 1);
-  assert.equal(db._state.usuarios[0].documento_identidad, '12.345.678-9');
+  // RIO-119 (tercer bloque — RUT/DNI protegido): D1 nunca ve el texto
+  // plano — se guarda cifrado (formato 'v<n>:iv:ciphertext').
+  assert.ok(db._state.usuarios[0].documento_identidad);
+  assert.notEqual(db._state.usuarios[0].documento_identidad, '12.345.678-9');
+  assert.equal(db._state.usuarios[0].documento_identidad.includes('12.345.678-9'), false);
+  assert.match(db._state.usuarios[0].documento_identidad, /^v1:/);
   assert.equal(db._state.asignaciones_rol.length, 1);
   assert.equal(db._state.asignaciones_rol[0].role, 'ejecutivo');
   assert.equal(db._state.eventos_historial.filter((e) => e.entidad === 'usuario').length, 1);
@@ -249,6 +294,9 @@ test('POST /personas/:email — editar-perfil actualiza y audita valor anterior/
   assert.ok(evento);
   assert.ok(JSON.parse(evento.estado_anterior).nombre === 'Nombre Viejo');
   assert.ok(JSON.parse(evento.estado_nuevo).nombre === 'Nombre Nuevo');
+  // Los logs/historial NUNCA filtran el RUT/DNI, ni siquiera cuando cambia.
+  assert.equal(JSON.stringify(evento).includes('documentoIdentidad":'), false);
+  assert.equal(evento.estado_anterior.includes('documentoIdentidad'), false);
 });
 
 test('POST /personas/:email — cambiar-asignacion NUNCA sobrescribe: cierra la vigente y crea una nueva versión', async () => {
@@ -275,6 +323,115 @@ test('POST /personas/:email — email inexistente devuelve 404', async () => {
   const admin = roleIdentity();
   const response = await personaEmailHandler(fakeContext({ method: 'POST', db, roleIdentity: admin, params: { email: 'no-existe@example.com' }, body: { action: 'editar-perfil', nombre: 'X' } }));
   assert.equal(response.status, 404);
+});
+
+// ── RUT/DNI protegido (RIO-119, tercer bloque, 02/09/2026) ──────────────
+
+test('revelar-documento — administración puede revelar el RUT/DNI real, y queda auditado sin exponer el valor en el propio evento', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity();
+  await personasHandler(fakeContext({
+    method: 'POST', db, roleIdentity: admin,
+    body: { email: 'con.rut@example.com', nombre: 'Con Rut', role: 'ejecutivo', allowedMarkets: ['CL'], documentoIdentidad: '9.876.543-2' },
+  }));
+
+  const response = await personaEmailHandler(fakeContext({
+    method: 'POST', db, roleIdentity: admin, params: { email: 'con.rut@example.com' }, body: { action: 'revelar-documento' },
+  }));
+  assert.equal(response.status, 200);
+  const body = (await response.json()).data;
+  assert.equal(body.documentoIdentidad, '9.876.543-2');
+
+  const evento = db._state.eventos_historial.find((e) => e.estado_nuevo === 'documento_revelado');
+  assert.ok(evento, 'la revelación queda auditada');
+  assert.equal(evento.usuario_email, admin.email);
+  assert.equal(JSON.stringify(evento).includes('9.876.543-2'), false, 'el propio evento nunca contiene el valor revelado');
+});
+
+test('revelar-documento — un supervisor (no admin) recibe 403, nunca ve el RUT/DNI', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity();
+  await personasHandler(fakeContext({
+    method: 'POST', db, roleIdentity: admin,
+    body: { email: 'con.rut2@example.com', nombre: 'X', role: 'ejecutivo', allowedMarkets: ['CL'], documentoIdentidad: '1.111.111-1' },
+  }));
+  const supervisor = roleIdentity({ email: 'supervisor@example.com', role: 'supervisor', permissions: PERMISSIONS.supervisor });
+  const response = await personaEmailHandler(fakeContext({
+    method: 'POST', db, roleIdentity: supervisor, params: { email: 'con.rut2@example.com' }, body: { action: 'revelar-documento' },
+  }));
+  assert.equal(response.status, 403);
+});
+
+test('GET /personas — nunca expone el RUT/DNI ni siquiera parcialmente, solo si existe uno cargado', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity();
+  await personasHandler(fakeContext({
+    method: 'POST', db, roleIdentity: admin,
+    body: { email: 'listado.rut@example.com', nombre: 'X', role: 'ejecutivo', allowedMarkets: ['CL'], documentoIdentidad: '5.555.555-5' },
+  }));
+  const response = await personasHandler(fakeContext({ roleIdentity: admin, db }));
+  const persona = (await response.json()).data.personas.find((p) => p.email === 'listado.rut@example.com');
+  assert.equal(persona.tieneDocumento, true);
+  assert.equal(persona.documentoIdentidad, undefined, 'el campo crudo nunca se serializa');
+  assert.equal(JSON.stringify(persona).includes('5.555.555-5'), false);
+});
+
+// ── Identidad estable (RIO-119, tercer bloque, 02/09/2026) ──────────────
+
+test('cambiar-correo — cascadea el nuevo correo a ventas/comisiones/equipos, y deja registro del cambio', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity();
+  await personasHandler(fakeContext({ method: 'POST', db, roleIdentity: admin, body: { email: 'viejo@example.com', nombre: 'Persona', role: 'ejecutivo', allowedMarkets: ['CL'] } }));
+
+  // Simula relaciones ya existentes con el correo viejo, en tablas de negocio reales.
+  db._state.ventas = [{ id: 'venta-1', vendedor_email: 'viejo@example.com' }];
+  db._state.comisiones = [{ id: 'com-1', beneficiario_email: 'viejo@example.com' }];
+  db._state.equipo_miembros.push({ id: 'm-1', equipo_id: 'eq-1', usuario_email: 'viejo@example.com', valid_from: '2026-01-01', valid_until: null, created_by: 'admin@example.com' });
+  db._state.eventos_historial.push({ id: 'ev-vieja', venta_id: 'venta-1', entidad: 'componente', entidad_id: 'comp-1', estado_nuevo: 'aprobada', usuario_email: 'viejo@example.com' });
+
+  const response = await personaEmailHandler(fakeContext({
+    method: 'POST', db, roleIdentity: admin, params: { email: 'viejo@example.com' },
+    body: { action: 'cambiar-correo', nuevoEmail: 'nuevo@example.com', motivo: 'Corrección de correo' },
+  }));
+  assert.equal(response.status, 200);
+
+  assert.equal(db._state.usuarios.find((u) => u.nombre === 'Persona').email, 'nuevo@example.com');
+  assert.equal(db._state.ventas[0].vendedor_email, 'nuevo@example.com', 'la venta sigue vinculada a la misma persona');
+  assert.equal(db._state.comisiones[0].beneficiario_email, 'nuevo@example.com', 'la comisión sigue vinculada a la misma persona');
+  assert.equal(db._state.equipo_miembros.find((m) => m.id === 'm-1').usuario_email, 'nuevo@example.com', 'la membresía de equipo sigue vinculada');
+  // El evento histórico YA registrado con el correo viejo NUNCA se reescribe — es un hecho congelado.
+  assert.equal(db._state.eventos_historial.find((e) => e.id === 'ev-vieja').usuario_email, 'viejo@example.com', 'un evento histórico ya registrado nunca se reescribe');
+
+  const registroCambio = db._state.usuarios_correos_historicos.find((c) => c.correo_anterior === 'viejo@example.com');
+  assert.ok(registroCambio, 'el cambio de correo queda registrado, conservando el valor anterior');
+  assert.equal(registroCambio.correo_nuevo, 'nuevo@example.com');
+  assert.equal(registroCambio.changed_by, admin.email);
+});
+
+test('cambiar-correo — un correo ya usado por otra persona es rechazado, no cascadea nada', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity();
+  await personasHandler(fakeContext({ method: 'POST', db, roleIdentity: admin, body: { email: 'persona.a@example.com', nombre: 'A', role: 'ejecutivo', allowedMarkets: ['CL'] } }));
+  await personasHandler(fakeContext({ method: 'POST', db, roleIdentity: admin, body: { email: 'persona.b@example.com', nombre: 'B', role: 'ejecutivo', allowedMarkets: ['CL'] } }));
+
+  const response = await personaEmailHandler(fakeContext({
+    method: 'POST', db, roleIdentity: admin, params: { email: 'persona.a@example.com' },
+    body: { action: 'cambiar-correo', nuevoEmail: 'persona.b@example.com' },
+  }));
+  assert.equal(response.status, 400);
+  assert.equal(db._state.usuarios.find((u) => u.nombre === 'A').email, 'persona.a@example.com', 'nunca cambia si el nuevo correo ya existe');
+});
+
+test('cambiar-correo — un supervisor (no admin) recibe 403', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity();
+  await personasHandler(fakeContext({ method: 'POST', db, roleIdentity: admin, body: { email: 'protegido@example.com', nombre: 'X', role: 'ejecutivo', allowedMarkets: ['CL'] } }));
+  const supervisor = roleIdentity({ email: 'supervisor@example.com', role: 'supervisor', permissions: PERMISSIONS.supervisor });
+  const response = await personaEmailHandler(fakeContext({
+    method: 'POST', db, roleIdentity: supervisor, params: { email: 'protegido@example.com' }, body: { action: 'cambiar-correo', nuevoEmail: 'otro@example.com' },
+  }));
+  assert.equal(response.status, 403);
+  assert.equal(db._state.usuarios.find((u) => u.nombre === 'X').email, 'protegido@example.com');
 });
 
 // ── Equipos ───────────────────────────────────────────────────────────
