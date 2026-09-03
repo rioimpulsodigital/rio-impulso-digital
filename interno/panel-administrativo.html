@@ -318,6 +318,7 @@
       <div class="pv-tabs" role="tablist">
         <button class="pv-tab active" id="pvTabVentasBtn" role="tab" aria-selected="true" aria-controls="pvTabVentas">Ventas y proyectos</button>
         <button class="pv-tab" id="pvTabNotifBtn" role="tab" aria-selected="false" aria-controls="pvTabNotif">Notificaciones<span class="pv-tab-badge" id="pvNotifBadge" style="display:none;"></span></button>
+        <button class="pv-tab" id="pvTabPersonasBtn" role="tab" aria-selected="false" aria-controls="pvTabPersonas">Personas y equipos</button>
       </div>
 
       <!-- ── VENTAS Y PROYECTOS ── -->
@@ -394,10 +395,176 @@
         </div>
         <div id="pvNotifResult"><div class="pv-loading">Cargando notificaciones…</div></div>
       </div>
+
+      <!-- ── PERSONAS Y EQUIPOS ── -->
+      <!-- RIO-119 (segundo bloque, 02/09/2026): administración de perfiles,
+           roles/mercados/capacidad de vender, equipos, miembros y
+           supervisores. Datos de transferencia cifrados/enmascarados y
+           planes de comisión editables quedan para un bloque posterior. -->
+      <div class="pv-panel" id="pvTabPersonas" role="tabpanel">
+        <div class="pv-moneda-block">
+          <div class="pv-moneda-head"><span class="pv-moneda-titulo">Personas</span></div>
+          <div class="pv-btn-row" style="margin-bottom:12px;">
+            <button type="button" class="pv-btn pv-btn--primary" id="pvNuevaPersonaBtn">+ Nueva persona</button>
+          </div>
+          <div id="pvPersonasResult"><div class="pv-loading">Cargando personas…</div></div>
+        </div>
+
+        <div class="pv-moneda-block">
+          <div class="pv-moneda-head"><span class="pv-moneda-titulo">Equipos</span></div>
+          <div class="pv-btn-row" style="margin-bottom:12px;">
+            <button type="button" class="pv-btn pv-btn--primary" id="pvNuevoEquipoBtn">+ Nuevo equipo</button>
+            <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--muted);"><input type="checkbox" id="fEquiposInactivos"> Incluir inactivos</label>
+          </div>
+          <div id="pvEquiposResult"><div class="pv-loading">Cargando equipos…</div></div>
+        </div>
+      </div>
     </div>
 
   </div>
 </div>
+
+<!-- ── PERSONA: crear / editar ── -->
+<div class="pv-detail-overlay" id="pvPersonaOverlay"></div>
+<aside class="pv-detail" id="pvPersonaPanel" aria-hidden="true">
+  <div class="pv-detail-head">
+    <div><h2 style="font-family:var(--ff-head);font-size:1.15rem;margin:0;" id="pvPersonaTitulo">Nueva persona</h2></div>
+    <button class="pv-detail-close" id="pvPersonaCloseBtn" aria-label="Cerrar">✕</button>
+  </div>
+  <div class="pv-detail-body">
+    <!-- Crear (solo visible sin persona existente) -->
+    <form id="pvPersonaCrearForm" class="pv-detail-section">
+      <p class="pv-detail-section-title">Datos de la persona</p>
+      <div class="pv-accion-form" style="border-top:none;padding-top:0;">
+        <label for="ppEmail">Email</label>
+        <input type="email" id="ppEmail" required>
+        <label for="ppNombre">Nombre completo</label>
+        <input type="text" id="ppNombre" required>
+        <label for="ppDocumento">RUT / DNI</label>
+        <input type="text" id="ppDocumento" placeholder="Opcional">
+        <label for="ppTelefono">Teléfono</label>
+        <input type="text" id="ppTelefono" placeholder="Opcional">
+        <label for="ppWhatsapp">WhatsApp laboral</label>
+        <input type="text" id="ppWhatsapp" placeholder="Opcional, formato internacional">
+        <label for="ppRole">Rol</label>
+        <select id="ppRole">
+          <option value="ejecutivo">Ejecutivo</option>
+          <option value="supervisor">Supervisor</option>
+          <option value="asistente">Asistente</option>
+          <option value="admin">Administrador</option>
+        </select>
+        <label>Mercados autorizados</label>
+        <label><input type="checkbox" id="ppMercadoCL" value="CL" checked> CL</label>
+        <label><input type="checkbox" id="ppMercadoAR" value="AR"> AR</label>
+        <label><input type="checkbox" id="ppCanSell"> Puede vender (can_sell)</label>
+        <button type="submit" class="pv-btn pv-btn--primary">Crear persona</button>
+        <span class="pv-status-msg" id="ppCrearStatus"></span>
+      </div>
+    </form>
+
+    <!-- Editar (solo visible con persona existente) -->
+    <div id="pvPersonaEditarWrap" style="display:none;">
+      <div class="pv-detail-section">
+        <p class="pv-detail-section-title">Editar perfil</p>
+        <form id="pvPersonaEditarPerfilForm" class="pv-accion-form" style="border-top:none;padding-top:0;">
+          <label for="peNombre">Nombre completo</label>
+          <input type="text" id="peNombre" required>
+          <label for="peDocumento">RUT / DNI</label>
+          <input type="text" id="peDocumento">
+          <label for="peTelefono">Teléfono</label>
+          <input type="text" id="peTelefono">
+          <label for="peWhatsapp">WhatsApp laboral</label>
+          <input type="text" id="peWhatsapp">
+          <label for="peAcceso">Estado de acceso al Portal</label>
+          <select id="peAcceso">
+            <option value="perfil_creado">Perfil creado</option>
+            <option value="acceso_pendiente">Acceso pendiente de habilitación</option>
+            <option value="acceso_confirmado">Acceso confirmado manualmente</option>
+            <option value="desactivado">Usuario interno desactivado</option>
+          </select>
+          <p style="font-size:.72rem;color:var(--muted);margin:0;">Este estado es solo un registro manual — nunca habilita ni revoca el acceso real a Cloudflare Access.</p>
+          <button type="submit" class="pv-btn">Guardar perfil</button>
+          <span class="pv-status-msg" id="peStatus"></span>
+        </form>
+      </div>
+      <div class="pv-detail-section">
+        <p class="pv-detail-section-title">Rol, mercados y capacidad de vender</p>
+        <form id="pvPersonaAsignacionForm" class="pv-accion-form" style="border-top:none;padding-top:0;">
+          <label for="paRole">Rol</label>
+          <select id="paRole">
+            <option value="ejecutivo">Ejecutivo</option>
+            <option value="supervisor">Supervisor</option>
+            <option value="asistente">Asistente</option>
+            <option value="admin">Administrador</option>
+          </select>
+          <label>Mercados autorizados</label>
+          <label><input type="checkbox" id="paMercadoCL" value="CL"> CL</label>
+          <label><input type="checkbox" id="paMercadoAR" value="AR"> AR</label>
+          <label><input type="checkbox" id="paCanSell"> Puede vender (can_sell)</label>
+          <label><input type="checkbox" id="paUserStatusInactivo"> Usuario inactivo (bloquea el acceso a datos, no borra historial)</label>
+          <label for="paMotivo">Motivo del cambio</label>
+          <textarea id="paMotivo" placeholder="Opcional, queda en el historial"></textarea>
+          <p style="font-size:.72rem;color:var(--muted);margin:0;">Esto crea una nueva versión — nunca sobrescribe la anterior, que queda cerrada en el historial.</p>
+          <button type="submit" class="pv-btn">Guardar nueva asignación</button>
+          <span class="pv-status-msg" id="paStatus"></span>
+        </form>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ── EQUIPO: crear / gestionar ── -->
+<div class="pv-detail-overlay" id="pvEquipoOverlay"></div>
+<aside class="pv-detail" id="pvEquipoPanel" aria-hidden="true">
+  <div class="pv-detail-head">
+    <div><h2 style="font-family:var(--ff-head);font-size:1.15rem;margin:0;" id="pvEquipoTitulo">Nuevo equipo</h2></div>
+    <button class="pv-detail-close" id="pvEquipoCloseBtn" aria-label="Cerrar">✕</button>
+  </div>
+  <div class="pv-detail-body">
+    <form id="pvEquipoCrearForm" class="pv-detail-section">
+      <p class="pv-detail-section-title">Datos del equipo</p>
+      <div class="pv-accion-form" style="border-top:none;padding-top:0;">
+        <label for="peqNombre">Nombre</label>
+        <input type="text" id="peqNombre" required>
+        <label for="peqMercado">Mercado</label>
+        <select id="peqMercado"><option value="CL">CL</option><option value="AR">AR</option></select>
+        <button type="submit" class="pv-btn pv-btn--primary">Crear equipo</button>
+        <span class="pv-status-msg" id="peqCrearStatus"></span>
+      </div>
+    </form>
+
+    <div id="pvEquipoGestionWrap" style="display:none;">
+      <div class="pv-detail-section">
+        <p class="pv-detail-section-title">Estado</p>
+        <div class="pv-btn-row">
+          <button type="button" class="pv-btn" id="pvEquipoDesactivarBtn">Desactivar equipo</button>
+          <button type="button" class="pv-btn" id="pvEquipoActivarBtn">Activar equipo</button>
+        </div>
+      </div>
+      <div class="pv-detail-section">
+        <p class="pv-detail-section-title">Miembros</p>
+        <div id="pvEquipoMiembrosLista"></div>
+        <form id="pvEquipoAgregarMiembroForm" class="pv-accion-form">
+          <label>Agregar miembro (email)</label>
+          <input type="email" id="peqMiembroEmail" required>
+          <button type="submit" class="pv-btn">Agregar</button>
+          <span class="pv-status-msg" id="peqMiembroStatus"></span>
+        </form>
+      </div>
+      <div class="pv-detail-section">
+        <p class="pv-detail-section-title">Supervisores</p>
+        <div id="pvEquipoSupervisoresLista"></div>
+        <form id="pvEquipoAgregarSupervisorForm" class="pv-accion-form">
+          <label>Agregar supervisor (email)</label>
+          <input type="email" id="peqSupervisorEmail" required>
+          <label><input type="checkbox" id="peqSupervisorPrincipal"> Marcar como principal (referente de contacto)</label>
+          <button type="submit" class="pv-btn">Agregar</button>
+          <span class="pv-status-msg" id="peqSupervisorStatus"></span>
+        </form>
+      </div>
+    </div>
+  </div>
+</aside>
 
 <!-- ── NUEVO PROYECTO PERSONALIZADO ── -->
 <!-- RIO-119 (ampliación de alcance, 02/09/2026): registra un proyecto que

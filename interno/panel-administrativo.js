@@ -129,30 +129,39 @@
     wireFilters();
     wireDetailPanel();
     wireNuevoProyecto();
+    wirePersonasEquipos();
     await cargarVentas();
     await cargarNotificacionesResumen();
     await cargarEquiposDisponibles();
   });
 
+  var TABS = ['ventas', 'notif', 'personas'];
+
   function wireTabs() {
-    var btnVentas = document.getElementById('pvTabVentasBtn');
-    var btnNotif = document.getElementById('pvTabNotifBtn');
-    btnVentas.addEventListener('click', function () { activarTab('ventas'); });
-    btnNotif.addEventListener('click', function () {
+    document.getElementById('pvTabVentasBtn').addEventListener('click', function () { activarTab('ventas'); });
+    document.getElementById('pvTabNotifBtn').addEventListener('click', function () {
       activarTab('notif');
       cargarNotificaciones();
     });
+    document.getElementById('pvTabPersonasBtn').addEventListener('click', function () {
+      activarTab('personas');
+      if (!personasYaCargadas) cargarPersonas();
+      if (!equiposAdminYaCargados) cargarEquiposAdminTab();
+    });
     document.getElementById('fNotifPendientes').addEventListener('change', cargarNotificaciones);
+    document.getElementById('fEquiposInactivos').addEventListener('change', cargarEquiposAdminTab);
   }
 
   function activarTab(nombre) {
-    var esVentas = nombre === 'ventas';
-    document.getElementById('pvTabVentasBtn').classList.toggle('active', esVentas);
-    document.getElementById('pvTabVentasBtn').setAttribute('aria-selected', String(esVentas));
-    document.getElementById('pvTabNotifBtn').classList.toggle('active', !esVentas);
-    document.getElementById('pvTabNotifBtn').setAttribute('aria-selected', String(!esVentas));
-    document.getElementById('pvTabVentas').classList.toggle('active', esVentas);
-    document.getElementById('pvTabNotif').classList.toggle('active', !esVentas);
+    TABS.forEach(function (t) {
+      var esta = t === nombre;
+      var btnId = 'pvTab' + t.charAt(0).toUpperCase() + t.slice(1) + 'Btn';
+      var panelId = 'pvTab' + t.charAt(0).toUpperCase() + t.slice(1);
+      var btn = document.getElementById(btnId);
+      var panel = document.getElementById(panelId);
+      if (btn) { btn.classList.toggle('active', esta); btn.setAttribute('aria-selected', String(esta)); }
+      if (panel) panel.classList.toggle('active', esta);
+    });
   }
 
   // ── Ventas y proyectos ──────────────────────────────────────────────
@@ -1085,6 +1094,404 @@
       await cargarVentas();
       activarTab('ventas');
       abrirDetalleVenta(nuevaVentaId);
+    });
+  }
+
+  // ── Personas y equipos (segundo bloque de RIO-119, 02/09/2026) ───────
+  // Administración de perfiles, rol/mercados/capacidad de vender, equipos,
+  // miembros y supervisores — todo lo que antes solo existía sembrado por
+  // migración SQL directa. Datos de transferencia cifrados/enmascarados y
+  // planes de comisión editables quedan para un bloque posterior.
+
+  var personasCache = [];
+  var personasYaCargadas = false;
+  var equiposAdminCache = [];
+  var equiposAdminYaCargados = false;
+  var ROLE_LABEL = { admin: 'Administrador', supervisor: 'Supervisor', ejecutivo: 'Ejecutivo', asistente: 'Asistente' };
+  var ACCESO_ESTADO_LABEL = {
+    perfil_creado: 'Perfil creado', acceso_pendiente: 'Acceso pendiente', acceso_confirmado: 'Acceso confirmado', desactivado: 'Desactivado',
+  };
+  var ACCESO_ESTADO_BADGE = { perfil_creado: 'neutral', acceso_pendiente: 'amber', acceso_confirmado: 'green', desactivado: 'red' };
+
+  async function cargarPersonas() {
+    document.getElementById('pvPersonasResult').innerHTML = '<div class="pv-loading">Cargando personas…</div>';
+    var r = await apiFetch('/interno/api/personas');
+    if (!r.ok || !r.body || !r.body.ok) {
+      document.getElementById('pvPersonasResult').innerHTML = pvErrorHTML('No se pudieron cargar las personas.');
+      return;
+    }
+    personasCache = r.body.data.personas || [];
+    personasYaCargadas = true;
+    renderPersonasTabla();
+  }
+
+  function renderPersonasTabla() {
+    var el = document.getElementById('pvPersonasResult');
+    if (personasCache.length === 0) {
+      el.innerHTML = pvEmptyHTML('👤', 'Todavía no hay personas registradas.');
+      return;
+    }
+    var rows = personasCache.map(function (p) {
+      return (
+        '<tr tabindex="0" data-persona-email="' + escapeHtml(p.email) + '">' +
+          '<td><span class="pv-cliente-nombre">' + escapeHtml(p.nombre) + '</span><br><span class="pv-mono">' + escapeHtml(p.email) + '</span></td>' +
+          '<td>' + (p.role ? escapeHtml(ROLE_LABEL[p.role] || p.role) : '<span class="pv-badge pv-badge--neutral">Sin asignación</span>') + '</td>' +
+          '<td>' + (p.allowedMarkets && p.allowedMarkets.length ? p.allowedMarkets.map(escapeHtml).join(', ') : '—') + '</td>' +
+          '<td>' + (p.canSell ? 'Sí' : 'No') + '</td>' +
+          '<td><span class="pv-badge pv-badge--' + (ACCESO_ESTADO_BADGE[p.accesoEstado] || 'neutral') + '">' + escapeHtml(ACCESO_ESTADO_LABEL[p.accesoEstado] || p.accesoEstado) + '</span></td>' +
+        '</tr>'
+      );
+    }).join('');
+    el.innerHTML =
+      '<div class="pv-table-wrap"><table class="pv-table">' +
+        '<thead><tr><th>Persona</th><th>Rol</th><th>Mercados</th><th>Vende</th><th>Acceso</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table></div>';
+    Array.prototype.forEach.call(el.querySelectorAll('tbody tr'), function (tr) {
+      tr.addEventListener('click', function () { abrirPersonaEditar(tr.getAttribute('data-persona-email')); });
+      tr.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirPersonaEditar(tr.getAttribute('data-persona-email')); } });
+    });
+  }
+
+  async function cargarEquiposAdminTab() {
+    document.getElementById('pvEquiposResult').innerHTML = '<div class="pv-loading">Cargando equipos…</div>';
+    var incluirInactivos = document.getElementById('fEquiposInactivos').checked;
+    var r = await apiFetch('/interno/api/equipos' + (incluirInactivos ? '?incluirInactivos=1' : ''));
+    if (!r.ok || !r.body || !r.body.ok) {
+      document.getElementById('pvEquiposResult').innerHTML = pvErrorHTML('No se pudieron cargar los equipos.');
+      return;
+    }
+    equiposAdminCache = r.body.data.equipos || [];
+    equiposAdminYaCargados = true;
+    renderEquiposTabla();
+  }
+
+  function renderEquiposTabla() {
+    var el = document.getElementById('pvEquiposResult');
+    if (equiposAdminCache.length === 0) {
+      el.innerHTML = pvEmptyHTML('🧑‍🤝‍🧑', 'Todavía no hay equipos registrados.');
+      return;
+    }
+    var rows = equiposAdminCache.map(function (e) {
+      return (
+        '<tr tabindex="0" data-equipo-id="' + escapeHtml(e.id) + '">' +
+          '<td><span class="pv-cliente-nombre">' + escapeHtml(e.nombre) + '</span></td>' +
+          '<td><span class="pv-badge pv-badge--neutral">' + escapeHtml(e.mercado) + '</span></td>' +
+          '<td><span class="pv-badge pv-badge--' + (e.estado === 'activo' ? 'green' : 'red') + '">' + (e.estado === 'activo' ? 'Activo' : 'Inactivo') + '</span></td>' +
+        '</tr>'
+      );
+    }).join('');
+    el.innerHTML =
+      '<div class="pv-table-wrap"><table class="pv-table">' +
+        '<thead><tr><th>Equipo</th><th>Mercado</th><th>Estado</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table></div>';
+    Array.prototype.forEach.call(el.querySelectorAll('tbody tr'), function (tr) {
+      tr.addEventListener('click', function () { abrirEquipoGestion(tr.getAttribute('data-equipo-id')); });
+      tr.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirEquipoGestion(tr.getAttribute('data-equipo-id')); } });
+    });
+  }
+
+  // ── Panel de persona (crear / editar) ────────────────────────────────
+
+  function cerrarPersonaPanel() {
+    document.getElementById('pvPersonaOverlay').classList.remove('open');
+    document.getElementById('pvPersonaPanel').classList.remove('open');
+    document.getElementById('pvPersonaPanel').setAttribute('aria-hidden', 'true');
+  }
+
+  function abrirPersonaCrear() {
+    document.getElementById('pvPersonaTitulo').textContent = 'Nueva persona';
+    document.getElementById('pvPersonaCrearForm').style.display = '';
+    document.getElementById('pvPersonaEditarWrap').style.display = 'none';
+    document.getElementById('pvPersonaCrearForm').reset();
+    document.getElementById('ppMercadoCL').checked = true;
+    document.getElementById('ppMercadoAR').checked = false;
+    document.getElementById('ppCrearStatus').textContent = '';
+    document.getElementById('pvPersonaOverlay').classList.add('open');
+    document.getElementById('pvPersonaPanel').classList.add('open');
+    document.getElementById('pvPersonaPanel').setAttribute('aria-hidden', 'false');
+  }
+
+  function abrirPersonaEditar(email) {
+    var persona = personasCache.find(function (p) { return p.email === email; });
+    if (!persona) return;
+    document.getElementById('pvPersonaTitulo').textContent = persona.nombre;
+    document.getElementById('pvPersonaCrearForm').style.display = 'none';
+    document.getElementById('pvPersonaEditarWrap').style.display = '';
+    document.getElementById('pvPersonaEditarWrap').setAttribute('data-email', email);
+
+    document.getElementById('peNombre').value = persona.nombre || '';
+    document.getElementById('peDocumento').value = persona.documentoIdentidad || '';
+    document.getElementById('peTelefono').value = persona.telefono || '';
+    document.getElementById('peWhatsapp').value = persona.whatsappLaboral || '';
+    document.getElementById('peAcceso').value = persona.accesoEstado || 'perfil_creado';
+    document.getElementById('peStatus').textContent = '';
+
+    document.getElementById('paRole').value = persona.role || 'ejecutivo';
+    document.getElementById('paMercadoCL').checked = (persona.allowedMarkets || []).indexOf('CL') !== -1;
+    document.getElementById('paMercadoAR').checked = (persona.allowedMarkets || []).indexOf('AR') !== -1;
+    document.getElementById('paCanSell').checked = !!persona.canSell;
+    document.getElementById('paUserStatusInactivo').checked = persona.userStatus === 'inactivo';
+    document.getElementById('paMotivo').value = '';
+    document.getElementById('paStatus').textContent = '';
+
+    document.getElementById('pvPersonaOverlay').classList.add('open');
+    document.getElementById('pvPersonaPanel').classList.add('open');
+    document.getElementById('pvPersonaPanel').setAttribute('aria-hidden', 'false');
+  }
+
+  function mercadosSeleccionados(prefijo) {
+    var mercados = [];
+    if (document.getElementById(prefijo + 'MercadoCL').checked) mercados.push('CL');
+    if (document.getElementById(prefijo + 'MercadoAR').checked) mercados.push('AR');
+    return mercados;
+  }
+
+  function wirePersonasEquipos() {
+    document.getElementById('pvNuevaPersonaBtn').addEventListener('click', abrirPersonaCrear);
+    document.getElementById('pvPersonaCloseBtn').addEventListener('click', cerrarPersonaPanel);
+    document.getElementById('pvPersonaOverlay').addEventListener('click', cerrarPersonaPanel);
+
+    document.getElementById('pvPersonaCrearForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var statusEl = document.getElementById('ppCrearStatus');
+      var mercados = mercadosSeleccionados('pp');
+      if (mercados.length === 0) { statusEl.textContent = 'Elegí al menos un mercado.'; statusEl.className = 'pv-status-msg err'; return; }
+      var payload = {
+        email: document.getElementById('ppEmail').value.trim(),
+        nombre: document.getElementById('ppNombre').value.trim(),
+        documentoIdentidad: document.getElementById('ppDocumento').value.trim() || undefined,
+        telefono: document.getElementById('ppTelefono').value.trim() || undefined,
+        whatsappLaboral: document.getElementById('ppWhatsapp').value.trim() || undefined,
+        role: document.getElementById('ppRole').value,
+        allowedMarkets: mercados,
+        canSell: document.getElementById('ppCanSell').checked,
+      };
+      var r = await apiPost('/interno/api/personas', payload);
+      if (!r.ok || !r.body || !r.body.ok) {
+        statusEl.textContent = (r.body && r.body.error && r.body.error.message) || 'No se pudo crear la persona.';
+        statusEl.className = 'pv-status-msg err';
+        return;
+      }
+      cerrarPersonaPanel();
+      await cargarPersonas();
+    });
+
+    document.getElementById('pvPersonaEditarPerfilForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var email = document.getElementById('pvPersonaEditarWrap').getAttribute('data-email');
+      var statusEl = document.getElementById('peStatus');
+      var r = await apiPost('/interno/api/personas/' + encodeURIComponent(email), {
+        action: 'editar-perfil',
+        nombre: document.getElementById('peNombre').value.trim(),
+        documentoIdentidad: document.getElementById('peDocumento').value.trim() || undefined,
+        telefono: document.getElementById('peTelefono').value.trim() || undefined,
+        whatsappLaboral: document.getElementById('peWhatsapp').value.trim() || undefined,
+        accesoEstado: document.getElementById('peAcceso').value,
+      });
+      if (!r.ok || !r.body || !r.body.ok) {
+        statusEl.textContent = (r.body && r.body.error && r.body.error.message) || 'No se pudo guardar.';
+        statusEl.className = 'pv-status-msg err';
+        return;
+      }
+      statusEl.textContent = 'Perfil guardado.';
+      statusEl.className = 'pv-status-msg ok';
+      await cargarPersonas();
+    });
+
+    document.getElementById('pvPersonaAsignacionForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var email = document.getElementById('pvPersonaEditarWrap').getAttribute('data-email');
+      var statusEl = document.getElementById('paStatus');
+      var mercados = mercadosSeleccionados('pa');
+      if (mercados.length === 0) { statusEl.textContent = 'Elegí al menos un mercado.'; statusEl.className = 'pv-status-msg err'; return; }
+      var r = await apiPost('/interno/api/personas/' + encodeURIComponent(email), {
+        action: 'cambiar-asignacion',
+        role: document.getElementById('paRole').value,
+        allowedMarkets: mercados,
+        canSell: document.getElementById('paCanSell').checked,
+        userStatus: document.getElementById('paUserStatusInactivo').checked ? 'inactivo' : 'activo',
+        motivo: document.getElementById('paMotivo').value.trim() || undefined,
+      });
+      if (!r.ok || !r.body || !r.body.ok) {
+        statusEl.textContent = (r.body && r.body.error && r.body.error.message) || 'No se pudo guardar la nueva asignación.';
+        statusEl.className = 'pv-status-msg err';
+        return;
+      }
+      statusEl.textContent = 'Nueva asignación guardada.';
+      statusEl.className = 'pv-status-msg ok';
+      await cargarPersonas();
+    });
+
+    // ── Equipos ──
+    document.getElementById('pvNuevoEquipoBtn').addEventListener('click', abrirEquipoCrear);
+    document.getElementById('pvEquipoCloseBtn').addEventListener('click', cerrarEquipoPanel);
+    document.getElementById('pvEquipoOverlay').addEventListener('click', cerrarEquipoPanel);
+
+    document.getElementById('pvEquipoCrearForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var statusEl = document.getElementById('peqCrearStatus');
+      var r = await apiPost('/interno/api/equipos', {
+        nombre: document.getElementById('peqNombre').value.trim(),
+        mercado: document.getElementById('peqMercado').value,
+      });
+      if (!r.ok || !r.body || !r.body.ok) {
+        statusEl.textContent = (r.body && r.body.error && r.body.error.message) || 'No se pudo crear el equipo.';
+        statusEl.className = 'pv-status-msg err';
+        return;
+      }
+      cerrarEquipoPanel();
+      await cargarEquiposAdminTab();
+    });
+
+    document.getElementById('pvEquipoDesactivarBtn').addEventListener('click', function () { cambiarEstadoEquipo('desactivar'); });
+    document.getElementById('pvEquipoActivarBtn').addEventListener('click', function () { cambiarEstadoEquipo('activar'); });
+
+    document.getElementById('pvEquipoAgregarMiembroForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var equipoId = document.getElementById('pvEquipoGestionWrap').getAttribute('data-equipo-id');
+      var statusEl = document.getElementById('peqMiembroStatus');
+      var email = document.getElementById('peqMiembroEmail').value.trim();
+      var r = await apiPost('/interno/api/equipos/' + encodeURIComponent(equipoId) + '/miembros', { action: 'agregar', usuarioEmail: email });
+      if (!r.ok || !r.body || !r.body.ok) {
+        statusEl.textContent = (r.body && r.body.error && r.body.error.message) || 'No se pudo agregar.';
+        statusEl.className = 'pv-status-msg err';
+        return;
+      }
+      statusEl.textContent = ''; document.getElementById('peqMiembroEmail').value = '';
+      await cargarMiembrosEquipo(equipoId);
+    });
+
+    document.getElementById('pvEquipoAgregarSupervisorForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var equipoId = document.getElementById('pvEquipoGestionWrap').getAttribute('data-equipo-id');
+      var statusEl = document.getElementById('peqSupervisorStatus');
+      var email = document.getElementById('peqSupervisorEmail').value.trim();
+      var esPrincipal = document.getElementById('peqSupervisorPrincipal').checked;
+      var r = await apiPost('/interno/api/equipos/' + encodeURIComponent(equipoId) + '/supervisores', { action: 'agregar', usuarioEmail: email, esPrincipal: esPrincipal });
+      if (!r.ok || !r.body || !r.body.ok) {
+        statusEl.textContent = (r.body && r.body.error && r.body.error.message) || 'No se pudo agregar.';
+        statusEl.className = 'pv-status-msg err';
+        return;
+      }
+      statusEl.textContent = ''; document.getElementById('peqSupervisorEmail').value = ''; document.getElementById('peqSupervisorPrincipal').checked = false;
+      await cargarSupervisoresEquipo(equipoId);
+    });
+  }
+
+  // ── Panel de equipo (crear / gestionar) ──────────────────────────────
+
+  function cerrarEquipoPanel() {
+    document.getElementById('pvEquipoOverlay').classList.remove('open');
+    document.getElementById('pvEquipoPanel').classList.remove('open');
+    document.getElementById('pvEquipoPanel').setAttribute('aria-hidden', 'true');
+  }
+
+  function abrirEquipoCrear() {
+    document.getElementById('pvEquipoTitulo').textContent = 'Nuevo equipo';
+    document.getElementById('pvEquipoCrearForm').style.display = '';
+    document.getElementById('pvEquipoGestionWrap').style.display = 'none';
+    document.getElementById('pvEquipoCrearForm').reset();
+    document.getElementById('peqCrearStatus').textContent = '';
+    document.getElementById('pvEquipoOverlay').classList.add('open');
+    document.getElementById('pvEquipoPanel').classList.add('open');
+    document.getElementById('pvEquipoPanel').setAttribute('aria-hidden', 'false');
+  }
+
+  async function abrirEquipoGestion(equipoId) {
+    var equipo = equiposAdminCache.find(function (e) { return e.id === equipoId; });
+    if (!equipo) return;
+    document.getElementById('pvEquipoTitulo').textContent = equipo.nombre + ' (' + equipo.mercado + ')';
+    document.getElementById('pvEquipoCrearForm').style.display = 'none';
+    document.getElementById('pvEquipoGestionWrap').style.display = '';
+    document.getElementById('pvEquipoGestionWrap').setAttribute('data-equipo-id', equipoId);
+    document.getElementById('pvEquipoDesactivarBtn').style.display = equipo.estado === 'activo' ? '' : 'none';
+    document.getElementById('pvEquipoActivarBtn').style.display = equipo.estado === 'activo' ? 'none' : '';
+
+    document.getElementById('pvEquipoOverlay').classList.add('open');
+    document.getElementById('pvEquipoPanel').classList.add('open');
+    document.getElementById('pvEquipoPanel').setAttribute('aria-hidden', 'false');
+
+    await cargarMiembrosEquipo(equipoId);
+    await cargarSupervisoresEquipo(equipoId);
+  }
+
+  async function cambiarEstadoEquipo(accion) {
+    var equipoId = document.getElementById('pvEquipoGestionWrap').getAttribute('data-equipo-id');
+    var r = await apiPost('/interno/api/equipos/' + encodeURIComponent(equipoId), { action: accion });
+    if (!r.ok || !r.body || !r.body.ok) {
+      alert((r.body && r.body.error && r.body.error.message) || 'No se pudo cambiar el estado del equipo.');
+      return;
+    }
+    document.getElementById('pvEquipoDesactivarBtn').style.display = accion === 'activar' ? '' : 'none';
+    document.getElementById('pvEquipoActivarBtn').style.display = accion === 'activar' ? 'none' : '';
+    await cargarEquiposAdminTab();
+  }
+
+  async function cargarMiembrosEquipo(equipoId) {
+    var el = document.getElementById('pvEquipoMiembrosLista');
+    el.innerHTML = '<div class="pv-loading">Cargando…</div>';
+    var r = await apiFetch('/interno/api/equipos/' + encodeURIComponent(equipoId) + '/miembros');
+    if (!r.ok || !r.body || !r.body.ok) { el.innerHTML = pvErrorHTML('No se pudieron cargar los miembros.'); return; }
+    var miembros = r.body.data.miembros || [];
+    if (miembros.length === 0) { el.innerHTML = '<p class="pv-materiales-vacio">Todavía no hay miembros.</p>'; return; }
+    el.innerHTML = miembros.map(function (m) {
+      return (
+        '<div class="pv-notif-card">' +
+          '<div class="pv-notif-head">' +
+            '<span>' + escapeHtml(nombreParaMostrar(m.usuarioNombre)) + ' <span class="pv-mono">' + escapeHtml(m.usuarioEmail) + '</span></span>' +
+            '<button type="button" class="pv-btn pv-btn--danger" data-quitar-miembro="' + escapeHtml(m.usuarioEmail) + '">Quitar</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+    Array.prototype.forEach.call(el.querySelectorAll('[data-quitar-miembro]'), function (btn) {
+      btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        var r2 = await apiPost('/interno/api/equipos/' + encodeURIComponent(equipoId) + '/miembros', { action: 'quitar', usuarioEmail: btn.getAttribute('data-quitar-miembro') });
+        if (!r2.ok || !r2.body || !r2.body.ok) { alert((r2.body && r2.body.error && r2.body.error.message) || 'No se pudo quitar.'); btn.disabled = false; return; }
+        await cargarMiembrosEquipo(equipoId);
+      });
+    });
+  }
+
+  async function cargarSupervisoresEquipo(equipoId) {
+    var el = document.getElementById('pvEquipoSupervisoresLista');
+    el.innerHTML = '<div class="pv-loading">Cargando…</div>';
+    var r = await apiFetch('/interno/api/equipos/' + encodeURIComponent(equipoId) + '/supervisores');
+    if (!r.ok || !r.body || !r.body.ok) { el.innerHTML = pvErrorHTML('No se pudieron cargar los supervisores.'); return; }
+    var supervisores = r.body.data.supervisores || [];
+    if (supervisores.length === 0) { el.innerHTML = '<p class="pv-materiales-vacio">Todavía no hay supervisores.</p>'; return; }
+    el.innerHTML = supervisores.map(function (s) {
+      return (
+        '<div class="pv-notif-card">' +
+          '<div class="pv-notif-head">' +
+            '<span>' + escapeHtml(nombreParaMostrar(s.usuarioNombre)) + ' <span class="pv-mono">' + escapeHtml(s.usuarioEmail) + '</span>' +
+              (s.esPrincipal ? ' <span class="pv-badge pv-badge--purple">Principal</span>' : '') + '</span>' +
+          '</div>' +
+          '<div class="pv-btn-row">' +
+            (s.esPrincipal ? '' : '<button type="button" class="pv-btn" data-marcar-principal="' + escapeHtml(s.usuarioEmail) + '">Marcar principal</button>') +
+            '<button type="button" class="pv-btn pv-btn--danger" data-quitar-supervisor="' + escapeHtml(s.usuarioEmail) + '">Quitar</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+    Array.prototype.forEach.call(el.querySelectorAll('[data-quitar-supervisor]'), function (btn) {
+      btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        var r2 = await apiPost('/interno/api/equipos/' + encodeURIComponent(equipoId) + '/supervisores', { action: 'quitar', usuarioEmail: btn.getAttribute('data-quitar-supervisor') });
+        if (!r2.ok || !r2.body || !r2.body.ok) { alert((r2.body && r2.body.error && r2.body.error.message) || 'No se pudo quitar.'); btn.disabled = false; return; }
+        await cargarSupervisoresEquipo(equipoId);
+      });
+    });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-marcar-principal]'), function (btn) {
+      btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        var r2 = await apiPost('/interno/api/equipos/' + encodeURIComponent(equipoId) + '/supervisores', { action: 'marcar-principal', usuarioEmail: btn.getAttribute('data-marcar-principal') });
+        if (!r2.ok || !r2.body || !r2.body.ok) { alert((r2.body && r2.body.error && r2.body.error.message) || 'No se pudo marcar como principal.'); btn.disabled = false; return; }
+        await cargarSupervisoresEquipo(equipoId);
+      });
     });
   }
 })();
