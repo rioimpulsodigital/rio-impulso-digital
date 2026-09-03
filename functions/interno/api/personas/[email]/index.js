@@ -162,7 +162,7 @@ export async function onRequest(context) {
   }
 
   if (body?.action === 'cambiar-asignacion') {
-    const { role, allowedMarkets, defaultMarket, canSell, userStatus, motivo } = body;
+    const { role, allowedMarkets, defaultMarket, canSell, canReceiveCommissionAdvance, userStatus, motivo } = body;
     if (!VALID_ROLES.includes(role)) return Errors.validation('Rol inválido.', requestId);
     if (!Array.isArray(allowedMarkets) || allowedMarkets.length === 0 || !allowedMarkets.every((m) => VALID_MERCADOS.includes(m))) {
       return Errors.validation('allowedMarkets debe ser un array no vacío de mercados válidos.', requestId);
@@ -176,7 +176,7 @@ export async function onRequest(context) {
 
     const vigenteRows = await query(
       env.DB, requestId,
-      `SELECT id, role, allowed_markets, can_sell, user_status FROM asignaciones_rol
+      `SELECT id, role, allowed_markets, can_sell, can_receive_commission_advance, user_status FROM asignaciones_rol
        WHERE usuario_id = ? AND (valid_until IS NULL OR valid_until > datetime('now')) AND valid_from <= datetime('now')
        ORDER BY valid_from DESC LIMIT 1`,
       [usuario.id]
@@ -188,14 +188,14 @@ export async function onRequest(context) {
     }
     await execute(
       env.DB, requestId,
-      'INSERT INTO asignaciones_rol (usuario_id, role, allowed_markets, default_market, can_sell, user_status, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [usuario.id, role, JSON.stringify(allowedMarkets), defaultMarket || allowedMarkets[0], canSell ? 1 : 0, userStatus || 'activo', motivo || null, roleIdentity.email]
+      'INSERT INTO asignaciones_rol (usuario_id, role, allowed_markets, default_market, can_sell, can_receive_commission_advance, user_status, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [usuario.id, role, JSON.stringify(allowedMarkets), defaultMarket || allowedMarkets[0], canSell ? 1 : 0, canReceiveCommissionAdvance ? 1 : 0, userStatus || 'activo', motivo || null, roleIdentity.email]
     );
 
     await logEvento(env.DB, requestId, {
       ventaId: null, entidad: 'asignacion_rol', entidadId: email,
-      estadoAnterior: vigente ? JSON.stringify({ role: vigente.role, allowedMarkets: JSON.parse(vigente.allowed_markets), canSell: !!vigente.can_sell, userStatus: vigente.user_status }) : null,
-      estadoNuevo: JSON.stringify({ role, allowedMarkets, canSell: !!canSell, userStatus: userStatus || 'activo' }),
+      estadoAnterior: vigente ? JSON.stringify({ role: vigente.role, allowedMarkets: JSON.parse(vigente.allowed_markets), canSell: !!vigente.can_sell, canReceiveCommissionAdvance: !!vigente.can_receive_commission_advance, userStatus: vigente.user_status }) : null,
+      estadoNuevo: JSON.stringify({ role, allowedMarkets, canSell: !!canSell, canReceiveCommissionAdvance: !!canReceiveCommissionAdvance, userStatus: userStatus || 'activo' }),
       usuarioEmail: roleIdentity.email, motivoNota: motivo || null,
     });
     return ok({ action: 'cambiar-asignacion' }, requestId);

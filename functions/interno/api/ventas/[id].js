@@ -216,6 +216,13 @@ export async function onRequest(context) {
         monto: p.monto,
         moneda: p.moneda,
         estado: p.estado,
+        // RIO-119 (quinto bloque, 04/09/2026): condición 3 de la
+        // liberación de una participación de proyecto personalizado —
+        // null/false en cualquier pago de catálogo que nunca la usó.
+        hitoValidado: !!p.hito_validado,
+        hitoValidadoPor: p.hito_validado_por || null,
+        hitoValidadoAt: p.hito_validado_at || null,
+        hitoNota: p.hito_nota || null,
       })),
     },
     requestId

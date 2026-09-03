@@ -100,7 +100,7 @@ export async function resolveRoleIdentity(db, email, requestId) {
   try {
     assignmentRow = await db
       .prepare(
-        `SELECT role, allowed_markets, default_market, can_sell, user_status, valid_from, valid_until
+        `SELECT role, allowed_markets, default_market, can_sell, can_receive_commission_advance, user_status, valid_from, valid_until
          FROM asignaciones_rol
          WHERE usuario_id = ?
            AND (valid_until IS NULL OR valid_until > datetime('now'))
@@ -142,6 +142,10 @@ export async function resolveRoleIdentity(db, email, requestId) {
     // ejecutivo/asistente sin esta capacidad no puede registrar ventas,
     // aunque su rol lo permitiría en otras funciones.
     canSell: !!assignmentRow.can_sell,
+    // RIO-119 (quinto bloque, 04/09/2026): capacidad configurable para
+    // recibir un adelanto de comisión — nunca por nombre propio (Brenda:
+    // "no lo programes por nombre propio"), independiente del rol.
+    canReceiveCommissionAdvance: !!assignmentRow.can_receive_commission_advance,
     userStatus: assignmentRow.user_status,
     validFrom: assignmentRow.valid_from,
     validUntil: assignmentRow.valid_until,

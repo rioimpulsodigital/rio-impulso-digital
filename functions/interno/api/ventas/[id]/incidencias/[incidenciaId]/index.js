@@ -8,7 +8,7 @@
 import { ok, Errors } from '../../../../../../_shared/response.js';
 import { query } from '../../../../../../_shared/db.js';
 import { resolverIncidencia, ProyectoError } from '../../../../../../_shared/proyectos.js';
-import { reevaluarComisionesDeVenta } from '../../../../../../_shared/comisiones.js';
+import { reevaluarComisionesDeVenta, reevaluarLiberacionesDeVenta } from '../../../../../../_shared/comisiones.js';
 import { isMethodAllowed, hasExpectedContentType } from '../../../../../../_shared/security.js';
 
 export async function onRequest(context) {
@@ -41,6 +41,7 @@ export async function onRequest(context) {
   try {
     const ventaId = await resolverIncidencia(env.DB, requestId, { incidenciaId: params.incidenciaId, actorEmail: roleIdentity.email });
     await reevaluarComisionesDeVenta(env.DB, requestId, ventaId, roleIdentity.email);
+    await reevaluarLiberacionesDeVenta(env.DB, requestId, ventaId, roleIdentity.email);
     return ok({ action: 'resolver' }, requestId);
   } catch (e) {
     if (e instanceof ProyectoError) {

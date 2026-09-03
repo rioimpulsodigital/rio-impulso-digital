@@ -12,7 +12,14 @@ import { onRequest as distribucionHandler } from '../functions/interno/api/venta
 import { onRequest as componenteHandler } from '../functions/interno/api/ventas/[id]/componentes/[componenteId]/index.js';
 import { onRequest as ventasHandler } from '../functions/interno/api/ventas/index.js';
 import { onRequest as comisionesHistoricasHandler } from '../functions/interno/api/ventas/[id]/comisiones-historicas/index.js';
-import { validarActivacionProyecto, evaluateComisionGate, generarComisionesDesdeDistribucion } from '../functions/_shared/comisiones.js';
+import { onRequest as pagoHandler } from '../functions/interno/api/ventas/[id]/pagos/[pagoId]/index.js';
+import { onRequest as adelantosHandler } from '../functions/interno/api/ventas/[id]/comisiones/[comisionId]/adelantos/index.js';
+import { onRequest as incidenciasHandler } from '../functions/interno/api/ventas/[id]/incidencias.js';
+import { onRequest as incidenciaDetalleHandler } from '../functions/interno/api/ventas/[id]/incidencias/[incidenciaId]/index.js';
+import {
+  validarActivacionProyecto, evaluateComisionGate, generarComisionesDesdeDistribucion,
+  reevaluarLiberacionesDeVenta, registrarAdelanto, saldoDisponibleComision, calcularFechaProgramada,
+} from '../functions/_shared/comisiones.js';
 import { PERMISSIONS } from '../functions/_shared/authz.js';
 
 function roleIdentity(overrides = {}) {
@@ -28,6 +35,8 @@ function fakeDb(seed = {}) {
     ventas: [], proyectos: [], componentes: [], clientes: [], pagos_esperados: [],
     eventos_historial: [], notificaciones: [], comisiones: [],
     proyecto_finanzas_empresa: [], comisiones_historicas: [], costos_directos: [],
+    comision_liberaciones: [], comision_adelantos: [], incidencias: [], dias_no_habiles: [],
+    acreditaciones: [], pagos_informados: [], asignaciones_rol: [],
     usuarios: [{ id: 1, email: 'admin@example.com', nombre: 'Admin' }],
     ...seed,
   };
@@ -75,6 +84,7 @@ function fakeDb(seed = {}) {
     if (sql.startsWith('SELECT * FROM proyectos WHERE venta_id')) return state.proyectos.filter((pr) => pr.venta_id === p[0]);
     if (sql.startsWith('SELECT * FROM componentes WHERE proyecto_id')) return state.componentes.filter((c) => c.proyecto_id === p[0]);
     if (sql.startsWith('SELECT * FROM pagos_esperados WHERE venta_id')) return state.pagos_esperados.filter((pg) => pg.venta_id === p[0]);
+    if (sql.startsWith('SELECT id, monto FROM pagos_esperados WHERE venta_id')) return state.pagos_esperados.filter((pg) => pg.venta_id === p[0]).map((pg) => ({ id: pg.id, monto: pg.monto }));
     if (sql.startsWith('SELECT modo_historico FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]).map((v) => ({ modo_historico: v.modo_historico || null }));
     if (sql.startsWith('SELECT id, modo_historico FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]).map((v) => ({ id: v.id, modo_historico: v.modo_historico || null }));
     if (sql.startsWith('SELECT id FROM notificaciones WHERE clave_idempotencia')) return [];
@@ -96,7 +106,53 @@ function fakeDb(seed = {}) {
       return state.proyecto_finanzas_empresa.filter((f) => f.distribucion_id === p[0]).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     }
     if (sql.startsWith('SELECT * FROM comisiones_historicas WHERE venta_id')) return state.comisiones_historicas.filter((c) => c.venta_id === p[0]);
+    if (sql.startsWith('SELECT precio_pactado FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]).map((v) => ({ precio_pactado: v.precio_pactado }));
+    if (sql.startsWith('SELECT * FROM pagos_esperados WHERE id')) return state.pagos_esperados.filter((pg) => pg.id === p[0]);
+    if (sql.startsWith('SELECT id, hito_validado FROM pagos_esperados WHERE id')) {
+      return state.pagos_esperados.filter((pg) => pg.id === p[0] && pg.venta_id === p[1]).map((pg) => ({ id: pg.id, hito_validado: pg.hito_validado || 0 }));
+    }
+    if (sql.includes('FROM comision_liberaciones cl JOIN comisiones c ON c.id = cl.comision_id WHERE c.venta_id') && sql.includes("cl.estado = 'retenida'")) {
+      const comisionIds = state.comisiones.filter((c) => c.venta_id === p[0]).map((c) => c.id);
+      return state.comision_liberaciones.filter((l) => comisionIds.includes(l.comision_id) && l.estado === 'retenida');
+    }
+    if (sql.includes('FROM comision_liberaciones cl JOIN comisiones c ON c.id = cl.comision_id WHERE c.venta_id') && sql.includes("cl.estado IN")) {
+      const comisionIds = state.comisiones.filter((c) => c.venta_id === p[0]).map((c) => c.id);
+      return state.comision_liberaciones.filter((l) => comisionIds.includes(l.comision_id) && (l.estado === 'habilitada' || l.estado === 'programada'));
+    }
+    if (sql.startsWith("SELECT id FROM incidencias WHERE venta_id")) return state.incidencias.filter((i) => i.venta_id === p[0] && i.estado === 'abierta');
+    if (sql.startsWith('SELECT distribucion_id FROM comisiones WHERE id')) return state.comisiones.filter((c) => c.id === p[0]).map((c) => ({ distribucion_id: c.distribucion_id || null }));
+    if (sql.startsWith('SELECT estado FROM venta_distribuciones WHERE id')) return state.venta_distribuciones.filter((d) => d.id === p[0]).map((d) => ({ estado: d.estado }));
+    if (sql.startsWith('SELECT mercado FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]).map((v) => ({ mercado: v.mercado }));
+    if (sql.startsWith('SELECT 1 AS x FROM dias_no_habiles')) return state.dias_no_habiles.filter((d) => d.mercado === p[0] && d.fecha === p[1]);
+    if (sql.startsWith('SELECT a.can_receive_commission_advance FROM usuarios')) {
+      const usuario = state.usuarios.find((u) => u.email === p[0]);
+      if (!usuario) return [];
+      const asignacion = state.asignaciones_rol.find((a) => a.usuario_id === usuario.id && !a.valid_until);
+      return asignacion ? [{ can_receive_commission_advance: asignacion.can_receive_commission_advance || 0 }] : [];
+    }
+    if (sql.startsWith("SELECT monto_liberable FROM comision_liberaciones WHERE comision_id")) {
+      return state.comision_liberaciones.filter((l) => l.comision_id === p[0] && ['habilitada', 'programada', 'pagada'].includes(l.estado)).map((l) => ({ monto_liberable: l.monto_liberable }));
+    }
+    if (sql.startsWith('SELECT monto FROM comision_adelantos WHERE comision_id')) return state.comision_adelantos.filter((a) => a.comision_id === p[0]).map((a) => ({ monto: a.monto }));
+    if (sql.startsWith('SELECT * FROM comision_adelantos WHERE idempotency_key')) return state.comision_adelantos.filter((a) => a.idempotency_key === p[0]);
+    if (sql.startsWith('SELECT * FROM comision_adelantos WHERE id')) return state.comision_adelantos.filter((a) => a.id === p[0]);
+    if (sql.startsWith('SELECT * FROM comision_adelantos WHERE comision_id')) return state.comision_adelantos.filter((a) => a.comision_id === p[0]);
+    if (sql.startsWith(`SELECT a.created_at FROM acreditaciones a JOIN pagos_informados pi`)) {
+      const informados = state.pagos_informados.filter((pi) => pi.pago_esperado_id === p[0]).map((pi) => pi.id);
+      const acred = state.acreditaciones.filter((a) => informados.includes(a.pago_informado_id)).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+      return acred.map((a) => ({ created_at: a.created_at }));
+    }
     if (sql.startsWith('SELECT * FROM comisiones WHERE id')) return state.comisiones.filter((c) => c.id === p[0]);
+    if (sql.includes('FROM comision_liberaciones cl') && sql.includes('JOIN pagos_esperados p ON p.id = cl.pago_id')) {
+      return state.comision_liberaciones.filter((l) => p.includes(l.comision_id)).map((l) => {
+        const pago = state.pagos_esperados.find((pg) => pg.id === l.pago_id);
+        return { ...l, pago_etiqueta: pago?.etiqueta || null, pago_monto: pago?.monto };
+      });
+    }
+    if (sql.startsWith('SELECT id FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]).map((v) => ({ id: v.id }));
+    if (sql.startsWith("SELECT id, estado FROM comisiones WHERE venta_id") && sql.includes("estado IN ('habilitada', 'programada')")) return [];
+    if (sql.startsWith('SELECT * FROM incidencias WHERE id')) return state.incidencias.filter((i) => i.id === p[0]);
+    if (sql.startsWith('SELECT id FROM comisiones WHERE venta_id')) return [];
     throw new Error('SELECT inesperado en test: ' + sql);
   }
 
@@ -121,7 +177,7 @@ function fakeDb(seed = {}) {
     } else if (sql.startsWith('INSERT INTO componentes')) {
       state.componentes.push({ id: p[0], proyecto_id: p[1], tipo: p[2], precio_atribuido: p[4], estado_actual: p[5], nombre: p[6] });
     } else if (sql.startsWith('INSERT INTO pagos_esperados')) {
-      state.pagos_esperados.push({ id: p[0], venta_id: p[1], monto: p[3] });
+      state.pagos_esperados.push({ id: p[0], venta_id: p[1], monto: p[3], moneda: p[4], estado: 'pendiente', hito_validado: 0 });
     } else if (sql.startsWith('INSERT INTO venta_distribuciones')) {
       // dos formas: definir-pools (7 cols) o corregir (9 cols, incluye version y motivo_correccion)
       const cols = sql.match(/\(([^)]+)\)/)[1].split(',').map((c) => c.trim());
@@ -182,6 +238,46 @@ function fakeDb(seed = {}) {
       if (d) { d.costos_cerrados = 1; d.costos_cerrados_por = p[0]; d.costos_cerrados_at = '2026-09-03'; }
     } else if (sql.startsWith('INSERT INTO costos_directos')) {
       state.costos_directos.push({ id: p[0], componente_id: p[1], tipo: p[2], monto: p[3], moneda: p[4] });
+    } else if (sql.startsWith('UPDATE comisiones SET es_estimacion')) {
+      state.comisiones.filter((c) => c.distribucion_id === p[0]).forEach((c) => { c.es_estimacion = 0; });
+    } else if (sql.startsWith('INSERT INTO comision_liberaciones')) {
+      state.comision_liberaciones.push({
+        id: p[0], comision_id: p[1], pago_id: p[2], monto_liberable: p[3], moneda: p[4],
+        fecha_acreditacion: null, fecha_cumplimiento_resguardo: null, estado: 'retenida', motivo_retencion: null,
+        fecha_habilitacion: null, fecha_programada_original: null, fecha_programada_efectiva: null, created_at: '2026-09-03',
+      });
+    } else if (sql.startsWith('UPDATE comision_liberaciones SET fecha_acreditacion')) {
+      const l = state.comision_liberaciones.find((x) => x.id === p[1]);
+      if (l) l.fecha_acreditacion = p[0];
+    } else if (sql.startsWith('UPDATE comision_liberaciones SET fecha_cumplimiento_resguardo')) {
+      const l = state.comision_liberaciones.find((x) => x.id === p[1]);
+      if (l) l.fecha_cumplimiento_resguardo = p[0];
+    } else if (sql.startsWith("UPDATE comision_liberaciones SET estado = 'retenida'")) {
+      const l = state.comision_liberaciones.find((x) => x.id === p[1]);
+      if (l) { l.estado = 'retenida'; l.motivo_retencion = p[0]; }
+    } else if (sql.startsWith("UPDATE comision_liberaciones SET estado = 'habilitada'")) {
+      const l = state.comision_liberaciones.find((x) => x.id === p[1]);
+      if (l) { l.estado = 'habilitada'; l.fecha_habilitacion = p[0]; l.motivo_retencion = null; }
+    } else if (sql.startsWith("UPDATE comision_liberaciones SET estado = 'programada'")) {
+      const l = state.comision_liberaciones.find((x) => x.id === p[2]);
+      if (l) { l.estado = 'programada'; l.fecha_programada_original = p[0]; l.fecha_programada_efectiva = p[1]; }
+    } else if (sql.startsWith('UPDATE pagos_esperados SET hito_validado')) {
+      const pg = state.pagos_esperados.find((x) => x.id === p[2]);
+      if (pg) { pg.hito_validado = 1; pg.hito_validado_por = p[0]; pg.hito_nota = p[1]; }
+    } else if (sql.startsWith("UPDATE pagos_esperados SET estado = 'acreditado'")) {
+      const pg = state.pagos_esperados.find((x) => x.id === p[0]);
+      if (pg) pg.estado = 'acreditado';
+    } else if (sql.startsWith('INSERT INTO comision_adelantos')) {
+      state.comision_adelantos.push({
+        id: p[0], comision_id: p[1], beneficiario_email: p[2], monto: p[3], moneda: p[4], medio_pago: p[5],
+        comprobante_referencia: p[6], motivo: p[7], autorizado_por: p[8], autoautorizado: p[9],
+        saldo_anterior: p[10], saldo_posterior: p[11], idempotency_key: p[12], estado: 'registrado', created_at: '2026-09-03',
+      });
+    } else if (sql.startsWith('INSERT INTO incidencias')) {
+      state.incidencias.push({ id: p[0], venta_id: p[1], tipo: p[2], motivo: p[3], registrado_por: p[4], estado: 'abierta' });
+    } else if (sql.startsWith("UPDATE incidencias SET estado = 'resuelta'")) {
+      const inc = state.incidencias.find((x) => x.id === p[0]);
+      if (inc) inc.estado = 'resuelta';
     } else {
       throw new Error('mutación inesperada en test: ' + sql);
     }
@@ -815,4 +911,394 @@ test('manipulación: un porcentaje fuera de rango en agregar-participacion se re
     roleIdentity: admin(), db, params: { id: 'venta-1' },
   }));
   assert.equal(response.status, 400);
+});
+
+// ── Quinto bloque (04/09/2026): liberación por cuota y adelantos ──
+// Regla confirmada por Brenda: cada cuota tiene su propio plazo de
+// resguardo — una participación se habilita solo cuando su cuota está
+// acreditada + 10 días corridos cumplidos + hito validado + sin incidencia
+// activa + distribución confirmada. El plazo arranca SOLO con la
+// acreditación administrativa (nunca informado/comprobante/promesa).
+
+function seedProyectoConCuotas(overrides = {}) {
+  return {
+    ...seedProyectoActivable(),
+    pagos_esperados: [
+      { id: 'pago-1', venta_id: 'venta-1', monto: 400000, moneda: 'CLP', estado: 'pendiente', hito_validado: 0 },
+      { id: 'pago-2', venta_id: 'venta-1', monto: 600000, moneda: 'CLP', estado: 'pendiente', hito_validado: 0 },
+    ],
+    ...overrides,
+  };
+}
+
+function acreditarCuotaHaceNDias(db, pagoId, dias) {
+  const pago = db._state.pagos_esperados.find((p) => p.id === pagoId);
+  pago.estado = 'acreditado';
+  const fecha = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+  const piId = 'pi-' + pagoId;
+  db._state.pagos_informados.push({ id: piId, pago_esperado_id: pagoId });
+  db._state.acreditaciones.push({ id: 'acr-' + pagoId, pago_informado_id: piId, created_at: fecha });
+}
+
+function liberacionDe(db, pagoId, beneficiarioEmail) {
+  const comision = db._state.comisiones.find((c) => c.beneficiario_email === beneficiarioEmail);
+  return db._state.comision_liberaciones.find((l) => l.comision_id === comision.id && l.pago_id === pagoId);
+}
+
+test('liberación: cuota acreditada sin 10 días cumplidos queda retenida', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  acreditarCuotaHaceNDias(db, 'pago-1', 3); // hace 3 días, no 10.
+  await reevaluarLiberacionesDeVenta(db, 'req-test', 'venta-1', 'admin@example.com');
+  const lib = liberacionDe(db, 'pago-1', 'comercial@example.com');
+  assert.equal(lib.estado, 'retenida');
+  assert.ok(JSON.parse(lib.motivo_retencion).includes('plazo_resguardo_10_dias'));
+});
+
+test('liberación: 10 días cumplidos sin hito validado queda retenida', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  acreditarCuotaHaceNDias(db, 'pago-1', 11); // 10 días corridos ya cumplidos.
+  await reevaluarLiberacionesDeVenta(db, 'req-test', 'venta-1', 'admin@example.com');
+  const lib = liberacionDe(db, 'pago-1', 'comercial@example.com');
+  assert.equal(lib.estado, 'retenida');
+  assert.ok(JSON.parse(lib.motivo_retencion).includes('hito_validado'));
+  assert.ok(!JSON.parse(lib.motivo_retencion).includes('plazo_resguardo_10_dias'));
+});
+
+test('liberación: hito validado sin pago acreditado queda retenida', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  db._state.pagos_esperados.find((p) => p.id === 'pago-1').hito_validado = 1;
+  await reevaluarLiberacionesDeVenta(db, 'req-test', 'venta-1', 'admin@example.com');
+  const lib = liberacionDe(db, 'pago-1', 'comercial@example.com');
+  assert.equal(lib.estado, 'retenida');
+  assert.ok(JSON.parse(lib.motivo_retencion).includes('cuota_acreditada'));
+});
+
+test('liberación: pago informado pero no acreditado queda retenida', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  db._state.pagos_esperados.find((p) => p.id === 'pago-1').estado = 'informado'; // nunca "acreditado".
+  await reevaluarLiberacionesDeVenta(db, 'req-test', 'venta-1', 'admin@example.com');
+  const lib = liberacionDe(db, 'pago-1', 'comercial@example.com');
+  assert.equal(lib.estado, 'retenida');
+  assert.ok(JSON.parse(lib.motivo_retencion).includes('cuota_acreditada'));
+});
+
+test('liberación: todas las condiciones cumplidas a la vez habilita y programa', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  acreditarCuotaHaceNDias(db, 'pago-1', 11);
+  db._state.pagos_esperados.find((p) => p.id === 'pago-1').hito_validado = 1;
+  await reevaluarLiberacionesDeVenta(db, 'req-test', 'venta-1', 'admin@example.com');
+  const lib = liberacionDe(db, 'pago-1', 'comercial@example.com');
+  assert.equal(lib.estado, 'programada');
+  assert.ok(lib.fecha_habilitacion);
+  assert.ok(lib.fecha_programada_efectiva);
+  const eventoHabilitada = db._state.eventos_historial.find((e) => e.entidad === 'comision_liberacion' && e.entidad_id === lib.id);
+  assert.ok(eventoHabilitada); // queda auditado.
+});
+
+test('liberación: la primera cuota habilita solo su proporción, la segunda sigue retenida', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  acreditarCuotaHaceNDias(db, 'pago-1', 11);
+  db._state.pagos_esperados.find((p) => p.id === 'pago-1').hito_validado = 1;
+  await reevaluarLiberacionesDeVenta(db, 'req-test', 'venta-1', 'admin@example.com');
+
+  const lib1 = liberacionDe(db, 'pago-1', 'comercial@example.com');
+  const lib2 = liberacionDe(db, 'pago-2', 'comercial@example.com');
+  assert.equal(lib1.estado, 'programada');
+  assert.equal(lib2.estado, 'retenida');
+  // proporción: pago-1 es 40% del precio total (400000/1000000) del 25% comercial sobre 1.000.000 de utilidad.
+  assert.equal(lib1.monto_liberable, Math.round(250000 * 0.4));
+  assert.equal(lib2.monto_liberable, Math.round(250000 * 0.6));
+});
+
+test('liberación: cuotas posteriores liberan únicamente sus propias proporciones cuando también cumplen las 5 condiciones', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  acreditarCuotaHaceNDias(db, 'pago-1', 11);
+  db._state.pagos_esperados.find((p) => p.id === 'pago-1').hito_validado = 1;
+  await reevaluarLiberacionesDeVenta(db, 'req-test', 'venta-1', 'admin@example.com');
+
+  acreditarCuotaHaceNDias(db, 'pago-2', 11);
+  db._state.pagos_esperados.find((p) => p.id === 'pago-2').hito_validado = 1;
+  await reevaluarLiberacionesDeVenta(db, 'req-test', 'venta-1', 'admin@example.com');
+
+  const lib1 = liberacionDe(db, 'pago-1', 'comercial@example.com');
+  const lib2 = liberacionDe(db, 'pago-2', 'comercial@example.com');
+  assert.equal(lib1.estado, 'programada');
+  assert.equal(lib2.estado, 'programada');
+});
+
+test('liberación: una incidencia activa retiene una liberación ya programada', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  acreditarCuotaHaceNDias(db, 'pago-1', 11);
+  db._state.pagos_esperados.find((p) => p.id === 'pago-1').hito_validado = 1;
+  await reevaluarLiberacionesDeVenta(db, 'req-test', 'venta-1', 'admin@example.com');
+  assert.equal(liberacionDe(db, 'pago-1', 'comercial@example.com').estado, 'programada');
+
+  const respuesta = await incidenciasHandler(fakeContext({ body: { tipo: 'disputa', motivo: 'Cliente reclama un entregable' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  assert.equal(respuesta.status, 201);
+  assert.equal(liberacionDe(db, 'pago-1', 'comercial@example.com').estado, 'retenida');
+});
+
+test('liberación: resolver la incidencia permite reevaluar y vuelve a programarse', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  acreditarCuotaHaceNDias(db, 'pago-1', 11);
+  db._state.pagos_esperados.find((p) => p.id === 'pago-1').hito_validado = 1;
+  await reevaluarLiberacionesDeVenta(db, 'req-test', 'venta-1', 'admin@example.com');
+
+  const crear = await incidenciasHandler(fakeContext({ body: { tipo: 'disputa', motivo: 'x' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  const { id: incidenciaId } = (await crear.json()).data;
+  assert.equal(liberacionDe(db, 'pago-1', 'comercial@example.com').estado, 'retenida');
+
+  const resolver = await incidenciaDetalleHandler(fakeContext({ body: { action: 'resolver' }, roleIdentity: admin(), db, params: { id: 'venta-1', incidenciaId } }));
+  assert.equal(resolver.status, 200);
+  assert.equal(liberacionDe(db, 'pago-1', 'comercial@example.com').estado, 'programada');
+});
+
+test('liberación: el cálculo de fecha programada reutiliza calcularFechaProgramada (calendario 10/25 del mercado)', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  acreditarCuotaHaceNDias(db, 'pago-1', 11);
+  db._state.pagos_esperados.find((p) => p.id === 'pago-1').hito_validado = 1;
+  await reevaluarLiberacionesDeVenta(db, 'req-test', 'venta-1', 'admin@example.com');
+  const lib = liberacionDe(db, 'pago-1', 'comercial@example.com');
+  const esperada = await calcularFechaProgramada(db, 'req-test', lib.fecha_habilitacion, 'CL');
+  assert.equal(lib.fecha_programada_efectiva, esperada);
+});
+
+test('validar-hito: admin valida el hito de una cuota, se audita y dispara la reevaluación', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  acreditarCuotaHaceNDias(db, 'pago-1', 11);
+  const response = await pagoHandler(fakeContext({ body: { action: 'validar-hito', nota: 'Diseño aprobado por el cliente' }, roleIdentity: admin(), db, params: { id: 'venta-1', pagoId: 'pago-1' } }));
+  assert.equal(response.status, 200);
+  assert.equal(db._state.pagos_esperados.find((p) => p.id === 'pago-1').hito_validado, 1);
+  assert.equal(liberacionDe(db, 'pago-1', 'comercial@example.com').estado, 'programada');
+});
+
+test('validar-hito: un ejecutivo no puede validar (exclusivo de administración)', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  // Mismo correo que vendedor_email de la venta (pasa la verificación de
+  // propiedad) pero con permisos de ejecutivo — así el 403 viene realmente
+  // de "sin verifyPayments", no de "no puede ni ver esta venta" (404).
+  const dueñoSinPermiso = roleIdentity({ email: 'admin@example.com' });
+  const response = await pagoHandler(fakeContext({ body: { action: 'validar-hito' }, roleIdentity: dueñoSinPermiso, db, params: { id: 'venta-1', pagoId: 'pago-1' } }));
+  assert.equal(response.status, 403);
+});
+
+test('validar-hito: validar dos veces el mismo hito se rechaza', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await pagoHandler(fakeContext({ body: { action: 'validar-hito' }, roleIdentity: admin(), db, params: { id: 'venta-1', pagoId: 'pago-1' } }));
+  const response = await pagoHandler(fakeContext({ body: { action: 'validar-hito' }, roleIdentity: admin(), db, params: { id: 'venta-1', pagoId: 'pago-1' } }));
+  assert.equal(response.status, 400);
+});
+
+// ── Adelantos de comisiones ──
+
+function habilitarComisionCompleta(db) {
+  // Ambas cuotas acreditadas + hito validado — la comisión queda con
+  // ambas liberaciones en 'programada', saldo disponible = monto total.
+  acreditarCuotaHaceNDias(db, 'pago-1', 11);
+  acreditarCuotaHaceNDias(db, 'pago-2', 11);
+  db._state.pagos_esperados.forEach((p) => { p.hito_validado = 1; });
+  return reevaluarLiberacionesDeVenta(db, 'req-test', 'venta-1', 'admin@example.com');
+}
+
+function habilitarCapacidadAdelanto(db, email) {
+  const usuario = db._state.usuarios.find((u) => u.email === email) || { id: db._state.usuarios.length + 1, email, nombre: email };
+  if (!db._state.usuarios.includes(usuario)) db._state.usuarios.push(usuario);
+  db._state.asignaciones_rol.push({ usuario_id: usuario.id, can_receive_commission_advance: 1, valid_until: null });
+}
+
+async function setupComisionConSaldo(overrides = {}) {
+  const db = fakeDb(seedProyectoConCuotas(overrides));
+  // Costos cerrados ANTES de activar — un adelanto nunca procede sobre una
+  // comisión todavía estimada (ver test dedicado más abajo), así que este
+  // helper representa el caso "ya definitivo" para probar el resto de las
+  // reglas de adelanto sin que la estimación las tape a todas.
+  await distribucionHandler(fakeContext({ body: { action: 'definir-pools', plantillaId: 'pl-desarrollo' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  await distribucionHandler(fakeContext({ body: { action: 'cerrar-costos' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  for (const p of PARTICIPACIONES_COMPLETAS) {
+    await distribucionHandler(fakeContext({ body: { action: 'agregar-participacion', ...p }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  }
+  await distribucionHandler(fakeContext({ body: { action: 'activar' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  await habilitarComisionCompleta(db);
+  habilitarCapacidadAdelanto(db, 'comercial@example.com');
+  const comision = db._state.comisiones.find((c) => c.beneficiario_email === 'comercial@example.com');
+  return { db, comisionId: comision.id };
+}
+
+test('adelanto: parcial reduce el saldo del próximo pago, sin ocultar la comisión original', async () => {
+  const { db, comisionId } = await setupComisionConSaldo();
+  const saldoInicial = await saldoDisponibleComision(db, 'req-test', comisionId);
+  const response = await adelantosHandler(fakeContext({
+    body: { monto: 50000, moneda: 'CLP', motivo: 'Adelanto solicitado', idempotencyKey: 'adel-1' },
+    roleIdentity: admin(), db, params: { id: 'venta-1', comisionId },
+  }));
+  assert.equal(response.status, 201);
+  const saldoFinal = await saldoDisponibleComision(db, 'req-test', comisionId);
+  assert.equal(saldoFinal, saldoInicial - 50000);
+  assert.equal(db._state.comisiones.find((c) => c.id === comisionId).monto_comision, 250000); // monto original nunca cambia.
+});
+
+test('adelanto: total deja saldo cero sin borrar la comisión', async () => {
+  const { db, comisionId } = await setupComisionConSaldo();
+  const saldoInicial = await saldoDisponibleComision(db, 'req-test', comisionId);
+  const response = await adelantosHandler(fakeContext({
+    body: { monto: saldoInicial, moneda: 'CLP', motivo: 'Adelanto total', idempotencyKey: 'adel-total' },
+    roleIdentity: admin(), db, params: { id: 'venta-1', comisionId },
+  }));
+  assert.equal(response.status, 201);
+  assert.equal(await saldoDisponibleComision(db, 'req-test', comisionId), 0);
+  assert.ok(db._state.comisiones.find((c) => c.id === comisionId)); // sigue existiendo.
+});
+
+test('adelanto: superior al saldo disponible es rechazado', async () => {
+  const { db, comisionId } = await setupComisionConSaldo();
+  const saldoInicial = await saldoDisponibleComision(db, 'req-test', comisionId);
+  const response = await adelantosHandler(fakeContext({
+    body: { monto: saldoInicial + 1, moneda: 'CLP', motivo: 'x', idempotencyKey: 'adel-exceso' },
+    roleIdentity: admin(), db, params: { id: 'venta-1', comisionId },
+  }));
+  assert.equal(response.status, 409);
+  assert.equal(db._state.comision_adelantos.length, 0);
+});
+
+test('adelanto: sobre una comisión todavía estimada (costos sin cerrar) es rechazado', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS); // costos_cerrados nunca se declaró — es_estimacion=1.
+  await habilitarComisionCompleta(db);
+  habilitarCapacidadAdelanto(db, 'comercial@example.com');
+  const comision = db._state.comisiones.find((c) => c.beneficiario_email === 'comercial@example.com');
+  const response = await adelantosHandler(fakeContext({
+    body: { monto: 1000, moneda: 'CLP', motivo: 'x', idempotencyKey: 'adel-est' },
+    roleIdentity: admin(), db, params: { id: 'venta-1', comisionId: comision.id },
+  }));
+  assert.equal(response.status, 409);
+});
+
+test('adelanto: sobre una comisión sin ninguna cuota acreditada (saldo cero, retenida) es rechazado', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  habilitarCapacidadAdelanto(db, 'comercial@example.com');
+  const comision = db._state.comisiones.find((c) => c.beneficiario_email === 'comercial@example.com');
+  const response = await adelantosHandler(fakeContext({
+    body: { monto: 1000, moneda: 'CLP', motivo: 'x', idempotencyKey: 'adel-retenida' },
+    roleIdentity: admin(), db, params: { id: 'venta-1', comisionId: comision.id },
+  }));
+  assert.equal(response.status, 409);
+});
+
+test('adelanto: nunca consume fondos de empresa', async () => {
+  const { db, comisionId } = await setupComisionConSaldo();
+  const finanzasAntes = JSON.stringify(db._state.proyecto_finanzas_empresa[0]);
+  await adelantosHandler(fakeContext({
+    body: { monto: 10000, moneda: 'CLP', motivo: 'x', idempotencyKey: 'adel-empresa' },
+    roleIdentity: admin(), db, params: { id: 'venta-1', comisionId },
+  }));
+  assert.equal(JSON.stringify(db._state.proyecto_finanzas_empresa[0]), finanzasAntes);
+});
+
+test('adelanto: monedas distintas nunca se mezclan', async () => {
+  const { db, comisionId } = await setupComisionConSaldo();
+  const response = await adelantosHandler(fakeContext({
+    body: { monto: 1000, moneda: 'ARS', motivo: 'x', idempotencyKey: 'adel-moneda' },
+    roleIdentity: admin(), db, params: { id: 'venta-1', comisionId },
+  }));
+  assert.equal(response.status, 409);
+});
+
+test('adelanto: una doble solicitud con la misma idempotencyKey nunca duplica el adelanto', async () => {
+  const { db, comisionId } = await setupComisionConSaldo();
+  const payload = { monto: 20000, moneda: 'CLP', motivo: 'x', idempotencyKey: 'adel-doble' };
+  const r1 = await adelantosHandler(fakeContext({ body: payload, roleIdentity: admin(), db, params: { id: 'venta-1', comisionId } }));
+  const r2 = await adelantosHandler(fakeContext({ body: payload, roleIdentity: admin(), db, params: { id: 'venta-1', comisionId } }));
+  assert.equal(r1.status, 201);
+  assert.equal(r2.status, 201);
+  assert.equal(db._state.comision_adelantos.length, 1); // nunca duplica.
+});
+
+test('adelanto: falta idempotencyKey se rechaza', async () => {
+  const { db, comisionId } = await setupComisionConSaldo();
+  const response = await adelantosHandler(fakeContext({
+    body: { monto: 1000, moneda: 'CLP', motivo: 'x' },
+    roleIdentity: admin(), db, params: { id: 'venta-1', comisionId },
+  }));
+  assert.equal(response.status, 400);
+});
+
+test('adelanto: usuario sin capacidad can_receive_commission_advance es rechazado', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  await habilitarComisionCompleta(db);
+  // Nunca se habilitó la capacidad para comercial@example.com.
+  const comision = db._state.comisiones.find((c) => c.beneficiario_email === 'comercial@example.com');
+  const response = await adelantosHandler(fakeContext({
+    body: { monto: 1000, moneda: 'CLP', motivo: 'x', idempotencyKey: 'adel-sin-capacidad' },
+    roleIdentity: admin(), db, params: { id: 'venta-1', comisionId: comision.id },
+  }));
+  assert.equal(response.status, 409);
+});
+
+test('adelanto: la administradora puede autoautorizarse un adelanto, pero queda identificado expresamente', async () => {
+  const { db, comisionId } = await setupComisionConSaldo();
+  // El beneficiario de la comisión es "comercial@example.com" — simulamos que esa misma persona es quien administra.
+  const autoadmin = admin({ email: 'comercial@example.com' });
+  const response = await adelantosHandler(fakeContext({
+    body: { monto: 10000, moneda: 'CLP', motivo: 'x', idempotencyKey: 'adel-auto' },
+    roleIdentity: autoadmin, db, params: { id: 'venta-1', comisionId },
+  }));
+  assert.equal(response.status, 201);
+  assert.equal(db._state.comision_adelantos[0].autoautorizado, 1);
+  const evento = db._state.eventos_historial.find((e) => e.entidad === 'comision_adelanto');
+  assert.ok(evento);
+});
+
+test('adelanto: un ejecutivo/supervisor/asistente no puede registrar ni ver adelantos', async () => {
+  const { db, comisionId } = await setupComisionConSaldo();
+  const supervisor = roleIdentity({ role: 'supervisor', permissions: PERMISSIONS.supervisor });
+  for (const rol of [roleIdentity(), supervisor]) {
+    const r1 = await adelantosHandler(fakeContext({ method: 'GET', roleIdentity: rol, db, params: { id: 'venta-1', comisionId } }));
+    assert.equal(r1.status, 403);
+    const r2 = await adelantosHandler(fakeContext({
+      body: { monto: 1000, moneda: 'CLP', motivo: 'x', idempotencyKey: 'adel-' + rol.role },
+      roleIdentity: rol, db, params: { id: 'venta-1', comisionId },
+    }));
+    assert.equal(r2.status, 403);
+  }
+});
+
+test('manipulación: un comisionId inexistente o de otra venta en adelantos devuelve 404', async () => {
+  const { db } = await setupComisionConSaldo();
+  const response = await adelantosHandler(fakeContext({
+    body: { monto: 1000, moneda: 'CLP', motivo: 'x', idempotencyKey: 'adel-manip' },
+    roleIdentity: admin(), db, params: { id: 'venta-1', comisionId: 'no-existe' },
+  }));
+  assert.equal(response.status, 404);
+});
+
+test('manipulación: monto negativo o cero en un adelanto se rechaza', async () => {
+  const { db, comisionId } = await setupComisionConSaldo();
+  const r1 = await adelantosHandler(fakeContext({ body: { monto: -100, moneda: 'CLP', motivo: 'x', idempotencyKey: 'k1' }, roleIdentity: admin(), db, params: { id: 'venta-1', comisionId } }));
+  const r2 = await adelantosHandler(fakeContext({ body: { monto: 0, moneda: 'CLP', motivo: 'x', idempotencyKey: 'k2' }, roleIdentity: admin(), db, params: { id: 'venta-1', comisionId } }));
+  assert.equal(r1.status, 400);
+  assert.equal(r2.status, 400);
+});
+
+test('GET adelantos: muestra monto original, adelantos acumulados y saldo pendiente, nunca oculta la comisión', async () => {
+  const { db, comisionId } = await setupComisionConSaldo();
+  await adelantosHandler(fakeContext({ body: { monto: 30000, moneda: 'CLP', motivo: 'x', idempotencyKey: 'adel-get' }, roleIdentity: admin(), db, params: { id: 'venta-1', comisionId } }));
+  const response = await adelantosHandler(fakeContext({ method: 'GET', roleIdentity: admin(), db, params: { id: 'venta-1', comisionId } }));
+  const body = (await response.json()).data;
+  assert.equal(body.comision.montoOriginal, 250000);
+  assert.equal(body.comision.adelantosAcumulados, 30000);
+  assert.equal(body.comision.saldoPendiente, 250000 - 30000);
+  assert.equal(body.adelantos.length, 1);
 });

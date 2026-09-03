@@ -41,6 +41,7 @@ function serializePersona(row) {
     allowedMarkets: row.allowed_markets ? JSON.parse(row.allowed_markets) : [],
     defaultMarket: row.default_market || null,
     canSell: !!row.can_sell,
+    canReceiveCommissionAdvance: !!row.can_receive_commission_advance,
     userStatus: row.user_status || null,
     validFrom: row.valid_from || null,
     createdAt: row.created_at,
@@ -63,7 +64,7 @@ async function handleList(context) {
   const rows = await query(
     env.DB, requestId,
     `SELECT u.email, u.nombre, u.documento_identidad, u.telefono, u.whatsapp_laboral, u.acceso_estado, u.created_at,
-       a.role, a.allowed_markets, a.default_market, a.can_sell, a.user_status, a.valid_from
+       a.role, a.allowed_markets, a.default_market, a.can_sell, a.can_receive_commission_advance, a.user_status, a.valid_from
      FROM usuarios u
      LEFT JOIN asignaciones_rol a ON a.usuario_id = u.id
        AND (a.valid_until IS NULL OR a.valid_until > datetime('now')) AND a.valid_from <= datetime('now')

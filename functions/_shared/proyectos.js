@@ -16,7 +16,7 @@
 
 import { query, execute } from './db.js';
 import { logEvento } from './historial.js';
-import { procesarPagoAcreditadoParaComisiones, generarComisionesRealizacionSiCorresponde, retenerComisionesPorDisputa } from './comisiones.js';
+import { procesarPagoAcreditadoParaComisiones, generarComisionesRealizacionSiCorresponde, retenerComisionesPorDisputa, reevaluarLiberacionesDeVenta, retenerLiberacionesPorDisputa } from './comisiones.js';
 
 export class ProyectoError extends Error {
   constructor(code, message) {
@@ -400,6 +400,10 @@ export async function acreditarPago(db, requestId, { ventaId, pagoId, montoAcred
   // del pago si algo de esto fallara, es una consecuencia contable, no una
   // condición del pago en sí.
   await procesarPagoAcreditadoParaComisiones(db, requestId, { ventaId, pagoTipo: pago.tipo, actorEmail });
+  // RIO-119 (quinto bloque, 04/09/2026): en un proyecto personalizado, esta
+  // cuota puede ser la que le faltaba a una o más liberaciones — nunca
+  // bloquea ni revierte la acreditación si algo de esto fallara.
+  await reevaluarLiberacionesDeVenta(db, requestId, ventaId, actorEmail);
 
   let gate = null;
   if (pago.tipo === 'saldo') {
@@ -468,6 +472,9 @@ export async function registrarIncidencia(db, requestId, { ventaId, tipo, motivo
   // de esta venta que ya estuviera habilitada o programada — "venta firme
   // y sin disputa" deja de cumplirse antes del pago.
   await retenerComisionesPorDisputa(db, requestId, { ventaId, actorEmail, motivo: `Incidencia registrada: ${tipo} — ${motivo}` });
+  // RIO-119 (quinto bloque, 04/09/2026): mismo criterio para las
+  // liberaciones por cuota de un proyecto personalizado.
+  await retenerLiberacionesPorDisputa(db, requestId, { ventaId, actorEmail, motivo: `Incidencia registrada: ${tipo} — ${motivo}` });
 
   return id;
 }

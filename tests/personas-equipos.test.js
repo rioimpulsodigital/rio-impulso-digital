@@ -72,7 +72,7 @@ function fakeDb() {
     } else if (sql.startsWith('INSERT INTO asignaciones_rol') && sql.includes('note')) {
       state.asignaciones_rol.push({
         id: nextAsignacionId++, usuario_id: p[0], role: p[1], allowed_markets: p[2], default_market: p[3],
-        can_sell: p[4], user_status: p[5], valid_until: null, note: p[6] || null, created_by: p[7],
+        can_sell: p[4], can_receive_commission_advance: p[5], user_status: p[6], valid_until: null, note: p[7] || null, created_by: p[8],
       });
     } else if (sql.startsWith('INSERT INTO asignaciones_rol')) {
       state.asignaciones_rol.push({
@@ -124,7 +124,7 @@ function fakeDb() {
         return { ...u, role: a?.role || null, allowed_markets: a?.allowed_markets || null, default_market: a?.default_market || null, can_sell: a?.can_sell || 0, user_status: a?.user_status || null, valid_from: a?.valid_from || null };
       });
     }
-    if (sql.startsWith('SELECT id, role, allowed_markets, can_sell, user_status FROM asignaciones_rol')) {
+    if (sql.startsWith('SELECT id, role, allowed_markets, can_sell')) {
       return vigente(state.asignaciones_rol.filter((a) => a.usuario_id === p[0]));
     }
     if (sql.startsWith('SELECT id, nombre, estado FROM equipos WHERE id')) {

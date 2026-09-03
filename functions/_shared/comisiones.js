@@ -674,6 +674,17 @@ export async function generarComisionesDesdeDistribucion(db, requestId, { ventaI
 
   const participaciones = await query(db, requestId, 'SELECT * FROM venta_participaciones WHERE distribucion_id = ?', [distribucionId]);
 
+  // RIO-119 (quinto bloque, 04/09/2026): cada comisión se libera CUOTA POR
+  // CUOTA, nunca todo o nada — una fila en `comision_liberaciones` por cada
+  // (comisión, cuota), con su propio plazo de resguardo de 10 días desde la
+  // ACREDITACIÓN administrativa (nunca desde informado/comprobante/
+  // promesa). `precio_pactado` es la base de la proporción — la misma cuota
+  // representa la misma proporción del proyecto sin importar a qué
+  // comisión pertenece.
+  const ventaCompletaRows = await query(db, requestId, 'SELECT precio_pactado FROM ventas WHERE id = ?', [ventaId]);
+  const precioPactado = ventaCompletaRows[0]?.precio_pactado || 0;
+  const cuotas = await query(db, requestId, 'SELECT id, monto FROM pagos_esperados WHERE venta_id = ?', [ventaId]);
+
   const ids = [];
   for (const p of participaciones) {
     if (!p.beneficiario_email) continue; // "Pendiente de asignación" — nunca genera comisión.
@@ -702,9 +713,222 @@ export async function generarComisionesDesdeDistribucion(db, requestId, { ventaI
       ventaId, entidad: 'comision', entidadId: id, estadoNuevo: 'calculada_provisional', usuarioEmail: actorEmail || 'sistema',
       motivoNota: `Generada al activar la distribución del proyecto (${p.concepto}, ${p.porcentaje}%)${esEstimacion ? ' — estimación, costos todavía no cerrados' : ''}.`,
     });
+
+    for (const cuota of cuotas) {
+      const montoLiberable = precioPactado > 0 ? Math.round((montoComision * cuota.monto) / precioPactado) : 0;
+      await execute(
+        db, requestId,
+        'INSERT INTO comision_liberaciones (id, comision_id, pago_id, monto_liberable, moneda) VALUES (?, ?, ?, ?, ?)',
+        [crypto.randomUUID(), id, cuota.id, montoLiberable, moneda]
+      );
+    }
     ids.push(id);
   }
+
+  // Si alguna cuota ya estaba acreditada/con hito validado ANTES de
+  // activar (proyecto que arranca a mitad de camino — ver sección Nua
+  // Bushi), esto resuelve de una vez lo que ya corresponde, sin esperar un
+  // evento nuevo de pago.
+  if (ids.length > 0) await reevaluarLiberacionesDeVenta(db, requestId, ventaId, actorEmail);
+
   return ids;
+}
+
+async function fechaAcreditacionDeCuota(db, requestId, pagoId) {
+  const rows = await query(
+    db, requestId,
+    `SELECT a.created_at FROM acreditaciones a JOIN pagos_informados pi ON pi.id = a.pago_informado_id
+     WHERE pi.pago_esperado_id = ? ORDER BY a.created_at DESC LIMIT 1`,
+    [pagoId]
+  );
+  return rows[0]?.created_at || null;
+}
+
+// 10 días CORRIDOS completos desde la acreditación — nunca desde
+// informado/comprobante/promesa (Brenda, quinto bloque: "comienza
+// exclusivamente con la acreditación administrativa de la cuota").
+function resguardoDiezDiasCorridos(fechaAcreditacionSql) {
+  const inicio = new Date(fechaAcreditacionSql.replace(' ', 'T') + 'Z');
+  const limite = new Date(inicio.getTime() + 10 * 24 * 60 * 60 * 1000);
+  return { cumplido: Date.now() >= limite.getTime(), limite };
+}
+
+// Evalúa las 5 condiciones simultáneas de UNA liberación (cuota
+// acreditada, 10 días corridos cumplidos, hito validado, sin incidencia
+// económica activa, distribución confirmada) — RIO-119 (quinto bloque,
+// 04/09/2026). Mismo patrón que evaluateComisionGate: siempre informa qué
+// falta exactamente, habilita y programa en el mismo paso cuando las 5 se
+// cumplen a la vez.
+async function evaluarLiberacion(db, requestId, liberacion, ventaId, actorEmail) {
+  const faltantes = [];
+
+  const pagoRows = await query(db, requestId, 'SELECT * FROM pagos_esperados WHERE id = ?', [liberacion.pago_id]);
+  const pago = pagoRows[0];
+  if (!pago || pago.estado !== 'acreditado') faltantes.push('cuota_acreditada');
+
+  let fechaAcreditacion = liberacion.fecha_acreditacion;
+  if (pago?.estado === 'acreditado' && !fechaAcreditacion) {
+    fechaAcreditacion = await fechaAcreditacionDeCuota(db, requestId, liberacion.pago_id);
+    if (fechaAcreditacion) {
+      await execute(db, requestId, 'UPDATE comision_liberaciones SET fecha_acreditacion = ? WHERE id = ?', [fechaAcreditacion, liberacion.id]);
+    }
+  }
+  if (fechaAcreditacion) {
+    const { cumplido, limite } = resguardoDiezDiasCorridos(fechaAcreditacion);
+    if (!cumplido) {
+      faltantes.push('plazo_resguardo_10_dias');
+    } else if (!liberacion.fecha_cumplimiento_resguardo) {
+      await execute(db, requestId, 'UPDATE comision_liberaciones SET fecha_cumplimiento_resguardo = ? WHERE id = ?', [limite.toISOString().replace('T', ' ').slice(0, 19), liberacion.id]);
+    }
+  } else {
+    faltantes.push('plazo_resguardo_10_dias');
+  }
+
+  if (!pago || !pago.hito_validado) faltantes.push('hito_validado');
+
+  const disputas = await query(db, requestId, "SELECT id FROM incidencias WHERE venta_id = ? AND estado = 'abierta'", [ventaId]);
+  if (disputas.length > 0) faltantes.push('sin_incidencia_activa');
+
+  const comisionRows = await query(db, requestId, 'SELECT distribucion_id FROM comisiones WHERE id = ?', [liberacion.comision_id]);
+  const distribucionId = comisionRows[0]?.distribucion_id;
+  const distribucionRows = distribucionId ? await query(db, requestId, 'SELECT estado FROM venta_distribuciones WHERE id = ?', [distribucionId]) : [];
+  if (!distribucionRows[0] || distribucionRows[0].estado !== 'confirmada') faltantes.push('distribucion_confirmada');
+
+  if (faltantes.length > 0) {
+    await execute(db, requestId, "UPDATE comision_liberaciones SET estado = 'retenida', motivo_retencion = ? WHERE id = ?", [JSON.stringify(faltantes), liberacion.id]);
+    return;
+  }
+
+  const fechaHabilitacion = nowSql();
+  await execute(db, requestId, "UPDATE comision_liberaciones SET estado = 'habilitada', fecha_habilitacion = ?, motivo_retencion = NULL WHERE id = ?", [fechaHabilitacion, liberacion.id]);
+  await logEvento(db, requestId, {
+    ventaId, entidad: 'comision_liberacion', entidadId: liberacion.id, estadoAnterior: 'retenida', estadoNuevo: 'habilitada',
+    usuarioEmail: actorEmail || 'sistema',
+    motivoNota: 'Las 5 condiciones (cuota acreditada, 10 días corridos, hito validado, sin incidencia activa, distribución confirmada) se cumplieron a la vez.',
+  });
+
+  const ventaRows = await query(db, requestId, 'SELECT mercado FROM ventas WHERE id = ?', [ventaId]);
+  const mercado = ventaRows[0]?.mercado;
+  const fechaProgramada = await calcularFechaProgramada(db, requestId, fechaHabilitacion, mercado);
+  await execute(
+    db, requestId,
+    "UPDATE comision_liberaciones SET estado = 'programada', fecha_programada_original = ?, fecha_programada_efectiva = ? WHERE id = ?",
+    [fechaProgramada, fechaProgramada, liberacion.id]
+  );
+  await logEvento(db, requestId, {
+    ventaId, entidad: 'comision_liberacion', entidadId: liberacion.id, estadoAnterior: 'habilitada', estadoNuevo: 'programada',
+    usuarioEmail: actorEmail || 'sistema', motivoNota: `Fecha programada calculada automáticamente: ${fechaProgramada}. Si el día 10/25 es inhábil, ya adelantada al hábil anterior por calcularFechaProgramada.`,
+  });
+}
+
+// Reevalúa todas las liberaciones RETENIDAS de una venta — se llama
+// después de cualquier evento que pueda cambiar una de las 5 condiciones
+// (una cuota se acredita, un hito se valida, una incidencia se resuelve, o
+// al activar la distribución si alguna cuota ya estaba adelantada).
+export async function reevaluarLiberacionesDeVenta(db, requestId, ventaId, actorEmail) {
+  const liberaciones = await query(
+    db, requestId,
+    `SELECT cl.* FROM comision_liberaciones cl JOIN comisiones c ON c.id = cl.comision_id WHERE c.venta_id = ? AND cl.estado = 'retenida'`,
+    [ventaId]
+  );
+  for (const lib of liberaciones) {
+    await evaluarLiberacion(db, requestId, lib, ventaId, actorEmail);
+  }
+}
+
+// Retiene (nunca elimina) las liberaciones ya habilitadas/programadas de
+// un proyecto personalizado cuando se abre una incidencia — mismo
+// criterio que retenerComisionesPorDisputa para catálogo. Una liberación
+// ya PAGADA no se toca — es terminal.
+export async function retenerLiberacionesPorDisputa(db, requestId, { ventaId, actorEmail, motivo }) {
+  const liberaciones = await query(
+    db, requestId,
+    `SELECT cl.id, cl.estado FROM comision_liberaciones cl JOIN comisiones c ON c.id = cl.comision_id WHERE c.venta_id = ? AND cl.estado IN ('habilitada', 'programada')`,
+    [ventaId]
+  );
+  for (const lib of liberaciones) {
+    await execute(db, requestId, "UPDATE comision_liberaciones SET estado = 'retenida', motivo_retencion = ? WHERE id = ?", [JSON.stringify(['sin_incidencia_activa']), lib.id]);
+    await logEvento(db, requestId, {
+      ventaId, entidad: 'comision_liberacion', entidadId: lib.id, estadoAnterior: lib.estado, estadoNuevo: 'retenida',
+      usuarioEmail: actorEmail, motivoNota: motivo,
+    });
+  }
+}
+
+// Adelantos de comisiones — RIO-119 (quinto bloque, 04/09/2026). Genérico,
+// nunca por nombre propio: la capacidad la habilita
+// `asignaciones_rol.can_receive_commission_advance`, verificada en el
+// endpoint. Un adelanto SOLO puede consumir fondos ya liberados de ESTA
+// comisión (habilitada/programada/pagada) — nunca empresa, nunca otra
+// comisión, nunca un monto todavía estimado, nunca una cuota sin acreditar
+// (todo eso queda excluido por construcción: solo se suman liberaciones
+// que ya pasaron las 5 condiciones).
+export class AdelantoError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = 'AdelantoError';
+    this.code = code;
+  }
+}
+
+export async function saldoDisponibleComision(db, requestId, comisionId) {
+  const liberaciones = await query(db, requestId, "SELECT monto_liberable FROM comision_liberaciones WHERE comision_id = ? AND estado IN ('habilitada', 'programada', 'pagada')", [comisionId]);
+  const totalLiberado = liberaciones.reduce((s, l) => s + l.monto_liberable, 0);
+  const adelantos = await query(db, requestId, 'SELECT monto FROM comision_adelantos WHERE comision_id = ?', [comisionId]);
+  const totalAdelantado = adelantos.reduce((s, a) => s + a.monto, 0);
+  return Math.max(totalLiberado - totalAdelantado, 0);
+}
+
+export async function registrarAdelanto(db, requestId, { comisionId, monto, moneda, medioPago, comprobanteReferencia, motivo, actorEmail, idempotencyKey }) {
+  const existentes = await query(db, requestId, 'SELECT * FROM comision_adelantos WHERE idempotency_key = ?', [idempotencyKey]);
+  if (existentes[0]) return existentes[0]; // reintento/doble clic — nunca duplica, devuelve lo mismo.
+
+  const comisionRows = await query(db, requestId, 'SELECT * FROM comisiones WHERE id = ?', [comisionId]);
+  const comision = comisionRows[0];
+  if (!comision) throw new AdelantoError('comision_no_encontrada', 'Comisión no encontrada.');
+  if (comision.es_estimacion) {
+    throw new AdelantoError('estimacion', 'No se puede adelantar sobre un monto todavía estimado — los costos del proyecto no están cerrados.');
+  }
+
+  // Capacidad configurable — nunca por nombre propio (Brenda: "no lo
+  // programes por nombre propio"). Se resuelve la asignación VIGENTE del
+  // beneficiario, igual que cualquier otra capacidad de asignaciones_rol.
+  const capacidadRows = await query(
+    db, requestId,
+    `SELECT a.can_receive_commission_advance FROM usuarios u JOIN asignaciones_rol a ON a.usuario_id = u.id
+     WHERE u.email = ? AND (a.valid_until IS NULL OR a.valid_until > datetime('now')) AND a.valid_from <= datetime('now')
+     ORDER BY a.valid_from DESC LIMIT 1`,
+    [comision.beneficiario_email]
+  );
+  if (!capacidadRows[0]?.can_receive_commission_advance) {
+    throw new AdelantoError('sin_capacidad', 'Esta persona no tiene habilitada la capacidad de recibir adelantos de comisión.');
+  }
+  if (moneda !== comision.moneda) {
+    throw new AdelantoError('moneda_no_coincide', `Esta comisión es en ${comision.moneda} — no se puede adelantar en ${moneda}.`);
+  }
+
+  const saldo = await saldoDisponibleComision(db, requestId, comisionId);
+  if (monto > saldo) {
+    throw new AdelantoError('saldo_insuficiente', `El adelanto solicitado (${monto}) supera el saldo disponible (${saldo}).`);
+  }
+
+  const id = crypto.randomUUID();
+  const autoautorizado = actorEmail === comision.beneficiario_email;
+  const saldoPosterior = saldo - monto;
+  await execute(
+    db, requestId,
+    `INSERT INTO comision_adelantos (id, comision_id, beneficiario_email, monto, moneda, medio_pago, comprobante_referencia, motivo, autorizado_por, autoautorizado, saldo_anterior, saldo_posterior, idempotency_key)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, comisionId, comision.beneficiario_email, monto, moneda, medioPago || null, comprobanteReferencia || null, motivo, actorEmail, autoautorizado ? 1 : 0, saldo, saldoPosterior, idempotencyKey]
+  );
+  await logEvento(db, requestId, {
+    ventaId: comision.venta_id, entidad: 'comision_adelanto', entidadId: id, estadoAnterior: null, estadoNuevo: 'registrado',
+    usuarioEmail: actorEmail,
+    motivoNota: `${autoautorizado ? '[AUTOAUTORIZADO — administración se adelantó a sí misma] ' : ''}${motivo} — saldo ${saldo} → ${saldoPosterior}.`,
+  });
+
+  const rows = await query(db, requestId, 'SELECT * FROM comision_adelantos WHERE id = ?', [id]);
+  return rows[0];
 }
 
 // Registra (append-only, nunca se sobrescribe) la participación de EMPRESA

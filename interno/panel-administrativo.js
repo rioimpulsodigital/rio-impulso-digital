@@ -630,19 +630,67 @@
     );
   }
 
+  var LIBERACION_MOTIVO_LABEL = {
+    cuota_acreditada: 'cuota sin acreditar', plazo_resguardo_10_dias: '10 días corridos sin cumplir',
+    hito_validado: 'hito sin validar', sin_incidencia_activa: 'hay una incidencia activa', distribucion_confirmada: 'distribución sin confirmar',
+  };
+  var LIBERACION_ESTADO_BADGE = { retenida: 'amber', habilitada: 'blue', programada: 'green', pagada: 'green' };
+  var LIBERACION_ESTADO_LABEL = { retenida: 'Retenida', habilitada: 'Habilitada', programada: 'Programada', pagada: 'Pagada' };
+
   function comisionesGeneradasHTML(comisiones) {
     if (!comisiones || comisiones.length === 0) return '';
     var filas = comisiones.map(function (c) {
+      var liberacionesHTML = (c.liberaciones || []).map(function (l) {
+        var motivos = (l.motivoRetencion || []).map(function (m) { return LIBERACION_MOTIVO_LABEL[m] || m; }).join(', ');
+        return (
+          '<div style="font-size:.74rem;color:var(--muted);padding:3px 0;">' +
+            escapeHtml(l.pagoEtiqueta || l.pagoId) + ': ' + fmtMoneda(l.montoLiberable, l.moneda) +
+            ' <span class="pv-badge pv-badge--' + (LIBERACION_ESTADO_BADGE[l.estado] || 'neutral') + '">' + (LIBERACION_ESTADO_LABEL[l.estado] || l.estado) + '</span>' +
+            (motivos ? ' — falta: ' + escapeHtml(motivos) : '') +
+          '</div>'
+        );
+      }).join('');
       return (
         '<div class="pv-notif-card">' +
           '<div class="pv-notif-head">' +
             '<span>' + escapeHtml(TIPO_PLAN_LABEL_DIST[c.tipo] || c.tipo) + ' — ' + escapeHtml(c.beneficiarioEmail) + ' — <strong>' + fmtMoneda(c.montoComision, c.moneda) + '</strong> (' + c.porcentajeSnapshot + '%)</span>' +
             '<span class="pv-badge pv-badge--' + (c.esEstimacion ? 'amber' : 'green') + '">' + (c.esEstimacion ? 'Estimación' : 'Definitivo') + '</span>' +
           '</div>' +
+          liberacionesHTML +
+          '<div class="pv-btn-row" style="margin-top:6px;"><button type="button" class="pv-btn" data-toggle-adelantos="' + escapeHtml(c.id) + '">Adelantos</button></div>' +
+          '<div id="pvAdelantosSlot-' + escapeHtml(c.id) + '" hidden></div>' +
         '</div>'
       );
     }).join('');
     return '<div class="pv-detail-section"><p class="pv-detail-section-title">Comisiones generadas</p>' + filas + '</div>';
+  }
+
+  function adelantosHTML(comisionInfo, adelantos) {
+    var filas = adelantos.map(function (a) {
+      return (
+        '<div style="font-size:.76rem;color:var(--muted);padding:3px 0;border-top:1px solid var(--pv-border, #eee);">' +
+          fmtMoneda(a.monto, a.moneda) + (a.autoautorizado ? ' <span class="pv-badge pv-badge--amber">Autoautorizado</span>' : '') +
+          ' — ' + escapeHtml(a.motivo) + ' — autorizó ' + escapeHtml(a.autorizadoPor) + ' · ' + fmtFecha(a.createdAt) +
+          '<br>saldo ' + fmtMoneda(a.saldoAnterior, a.moneda) + ' → ' + fmtMoneda(a.saldoPosterior, a.moneda) +
+        '</div>'
+      );
+    }).join('') || '<p class="pv-materiales-vacio">Todavía no hay adelantos registrados.</p>';
+    return (
+      '<dl class="pv-kv" style="margin-top:6px;">' +
+        '<dt>Monto original</dt><dd>' + fmtMoneda(comisionInfo.montoOriginal, comisionInfo.moneda) + '</dd>' +
+        '<dt>Adelantos acumulados</dt><dd>' + fmtMoneda(comisionInfo.adelantosAcumulados, comisionInfo.moneda) + '</dd>' +
+        '<dt>Saldo pendiente</dt><dd>' + fmtMoneda(comisionInfo.saldoPendiente, comisionInfo.moneda) + '</dd>' +
+      '</dl>' +
+      filas +
+      '<form class="pv-accion-form" data-registrar-adelanto="' + escapeHtml(comisionInfo.id) + '" style="border-top:none;">' +
+        '<label>Monto</label><input type="number" name="monto" min="1" required>' +
+        '<label>Medio de pago (opcional)</label><input type="text" name="medioPago">' +
+        '<label>Referencia de comprobante (opcional)</label><input type="text" name="comprobanteReferencia">' +
+        '<label>Motivo</label><input type="text" name="motivo" required>' +
+        '<button type="submit" class="pv-btn pv-btn--primary">Registrar adelanto</button>' +
+        '<span class="pv-status-msg" data-status></span>' +
+      '</form>'
+    );
   }
 
   function distribucionHTML(distribucion, participaciones, resumen, comisiones, finanzasEmpresa) {
@@ -908,6 +956,42 @@
         mostrarStatus(plazoForm, 'Guardado — no habilita pago automático.', false);
       });
     }
+
+    // Adelantos de comisiones (RIO-119, quinto bloque, 04/09/2026).
+    Array.prototype.forEach.call(slot.querySelectorAll('[data-toggle-adelantos]'), function (btn) {
+      btn.addEventListener('click', async function () {
+        var comisionId = btn.getAttribute('data-toggle-adelantos');
+        var panel = document.getElementById('pvAdelantosSlot-' + comisionId);
+        if (!panel.hidden) { panel.hidden = true; return; }
+        panel.innerHTML = '<div class="pv-loading">Cargando…</div>';
+        panel.hidden = false;
+        await cargarAdelantosDeComision(ventaId, comisionId);
+      });
+    });
+  }
+
+  async function cargarAdelantosDeComision(ventaId, comisionId) {
+    var panel = document.getElementById('pvAdelantosSlot-' + comisionId);
+    if (!panel) return;
+    var r = await apiFetch('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/comisiones/' + encodeURIComponent(comisionId) + '/adelantos');
+    if (!r.ok || !r.body || !r.body.ok) { panel.innerHTML = pvErrorHTML('No se pudieron cargar los adelantos.'); return; }
+    var data = r.body.data;
+    panel.innerHTML = adelantosHTML(data.comision, data.adelantos);
+    var form = panel.querySelector('[data-registrar-adelanto]');
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var fd = new FormData(form);
+      var r2 = await apiPost('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/comisiones/' + encodeURIComponent(comisionId) + '/adelantos', {
+        monto: parseInt(fd.get('monto'), 10),
+        moneda: data.comision.moneda,
+        medioPago: fd.get('medioPago') ? fd.get('medioPago').trim() : undefined,
+        comprobanteReferencia: fd.get('comprobanteReferencia') ? fd.get('comprobanteReferencia').trim() : undefined,
+        motivo: fd.get('motivo').trim(),
+        idempotencyKey: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('adel-' + Date.now() + '-' + Math.random()),
+      });
+      if (!r2.ok || !r2.body || !r2.body.ok) { mostrarStatus(form, (r2.body && r2.body.error && r2.body.error.message) || 'No se pudo registrar el adelanto.', true); return; }
+      await cargarAdelantosDeComision(ventaId, comisionId);
+    });
   }
 
   function renderDetalleVentaHTML(detalle) {
@@ -937,7 +1021,7 @@
       );
     }).join('');
 
-    var pagosHTML = detalle.pagosEsperados.map(function (p) { return renderPagoAdminHTML(detalle.venta.id, p, detalle.venta.moneda); }).join('');
+    var pagosHTML = detalle.pagosEsperados.map(function (p) { return renderPagoAdminHTML(detalle.venta.id, p, detalle.venta.moneda, detalle.venta.producto === 'proyecto_personalizado'); }).join('');
 
     var historialPromise = renderHistorialHTML(detalle.venta.id);
     var antecedentesHTML = renderAntecedentesHTML(detalle);
@@ -1001,8 +1085,19 @@
     );
   }
 
-  function renderPagoAdminHTML(ventaId, pago, moneda) {
+  function renderPagoAdminHTML(ventaId, pago, moneda, esProyectoPersonalizado) {
     var badgeClass = pago.estado === 'acreditado' ? 'green' : (pago.estado === 'informado' ? 'blue' : 'neutral');
+    var hitoHTML = '';
+    if (esProyectoPersonalizado) {
+      hitoHTML = pago.hitoValidado
+        ? '<p class="pv-status-msg ok">Hito validado por ' + escapeHtml(pago.hitoValidadoPor || '—') + ' · ' + fmtFecha(pago.hitoValidadoAt) + (pago.hitoNota ? ' — ' + escapeHtml(pago.hitoNota) : '') + '</p>'
+        : '<form class="pv-accion-form" data-validar-hito="' + escapeHtml(pago.id) + '" style="border-top:none;padding-top:0;">' +
+            '<label>Validar hito/avance de esta cuota (condición para liberar la comisión)</label>' +
+            '<input type="text" name="nota" placeholder="Nota (opcional)">' +
+            '<button type="submit" class="pv-btn">Validar hito</button>' +
+            '<span class="pv-status-msg" data-status></span>' +
+          '</form>';
+    }
     var accionesHTML = '';
     if (pago.estado === 'pendiente') {
       accionesHTML = '<p class="pv-componente-meta">Pendiente de que el vendedor lo informe.</p>';
@@ -1032,6 +1127,7 @@
           '<span class="pv-pago-titulo">' + escapeHtml(pago.etiqueta || pago.tipo) + ' — ' + fmtMoneda(pago.monto, moneda) + '</span>' +
           '<span class="pv-badge pv-badge--' + badgeClass + '">' + escapeHtml(PAGO_ESTADO_LABEL[pago.estado] || pago.estado) + '</span>' +
         '</div>' +
+        hitoHTML +
         accionesHTML +
       '</div>'
     );
@@ -1210,6 +1306,26 @@
         costoMedioPagoForm.querySelector('[name="tipo"]').value = tipo;
       });
     }
+
+    // Validar hito/avance de una cuota (RIO-119, quinto bloque, 04/09/2026)
+    // — condición 3 para que una participación de proyecto personalizado
+    // pueda liberarse.
+    Array.prototype.forEach.call(body.querySelectorAll('[data-validar-hito]'), function (form) {
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var pagoId = form.getAttribute('data-validar-hito');
+        var nota = form.querySelector('[name="nota"]').value.trim();
+        var btn = form.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        var r = await apiPost('/interno/api/ventas/' + encodeURIComponent(detalle.venta.id) + '/pagos/' + encodeURIComponent(pagoId), { action: 'validar-hito', nota: nota || undefined });
+        if (!r.ok || !r.body || !r.body.ok) {
+          mostrarStatus(form, (r.body && r.body.error && r.body.error.message) || 'No se pudo validar el hito.', true);
+          btn.disabled = false;
+          return;
+        }
+        await recargarDetalle(detalle.venta.id);
+      });
+    });
 
     // Acreditar pago.
     Array.prototype.forEach.call(body.querySelectorAll('[data-acreditar-pago]'), function (form) {
@@ -1752,6 +1868,7 @@
     document.getElementById('paMercadoCL').checked = (persona.allowedMarkets || []).indexOf('CL') !== -1;
     document.getElementById('paMercadoAR').checked = (persona.allowedMarkets || []).indexOf('AR') !== -1;
     document.getElementById('paCanSell').checked = !!persona.canSell;
+    document.getElementById('paCanReceiveAdvance').checked = !!persona.canReceiveCommissionAdvance;
     document.getElementById('paUserStatusInactivo').checked = persona.userStatus === 'inactivo';
     document.getElementById('paMotivo').value = '';
     document.getElementById('paStatus').textContent = '';
@@ -1887,6 +2004,7 @@
         role: document.getElementById('paRole').value,
         allowedMarkets: mercados,
         canSell: document.getElementById('paCanSell').checked,
+        canReceiveCommissionAdvance: document.getElementById('paCanReceiveAdvance').checked,
         userStatus: document.getElementById('paUserStatusInactivo').checked ? 'inactivo' : 'activo',
         motivo: document.getElementById('paMotivo').value.trim() || undefined,
       });

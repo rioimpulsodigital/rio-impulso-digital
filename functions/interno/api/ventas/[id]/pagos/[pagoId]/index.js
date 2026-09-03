@@ -10,12 +10,14 @@
 // propio responsable — nunca se puede acreditar sin haber informado antes.
 
 import { ok, Errors } from '../../../../../../_shared/response.js';
-import { query } from '../../../../../../_shared/db.js';
+import { query, execute } from '../../../../../../_shared/db.js';
 import { assertCanAccessOwner, AuthzError } from '../../../../../../_shared/authz.js';
 import { isMethodAllowed, hasExpectedContentType } from '../../../../../../_shared/security.js';
 import { informarPago, acreditarPago, rechazarPago, ProyectoError } from '../../../../../../_shared/proyectos.js';
 import { crearNotificacionSiCorresponde } from '../../../../../../_shared/notificaciones.js';
 import { rechazarComprobante, ComprobanteError } from '../../../../../../_shared/comprobantes.js';
+import { logEvento } from '../../../../../../_shared/historial.js';
+import { reevaluarLiberacionesDeVenta } from '../../../../../../_shared/comisiones.js';
 
 function errorStatusFor(code) {
   if (code === 'pago_no_encontrado') return 404;
@@ -146,5 +148,30 @@ export async function onRequest(context) {
     }
   }
 
-  return Errors.validation('action inválida. Valores permitidos: informar, acreditar, rechazar.', requestId);
+  if (body?.action === 'validar-hito') {
+    // RIO-119 (quinto bloque, 04/09/2026): condición 3 de la liberación de
+    // una participación en un proyecto personalizado — "el hito o
+    // porcentaje de avance relacionado con esa cuota fue validado
+    // oficialmente por Administración". Mismo permiso que acreditar
+    // (verifyPayments): una validación económica, exclusiva de admin.
+    if (!roleIdentity.permissions.verifyPayments) return Errors.forbidden(requestId);
+    const pagoRows = await query(env.DB, requestId, 'SELECT id, hito_validado FROM pagos_esperados WHERE id = ? AND venta_id = ?', [params.pagoId, venta.id]);
+    const pago = pagoRows[0];
+    if (!pago) return Errors.notFound(requestId);
+    if (pago.hito_validado) return Errors.validation('El hito de esta cuota ya estaba validado.', requestId);
+
+    await execute(
+      env.DB, requestId,
+      "UPDATE pagos_esperados SET hito_validado = 1, hito_validado_por = ?, hito_validado_at = datetime('now'), hito_nota = ? WHERE id = ?",
+      [roleIdentity.email, body.nota || null, params.pagoId]
+    );
+    await logEvento(env.DB, requestId, {
+      ventaId: venta.id, entidad: 'pago', entidadId: params.pagoId, estadoAnterior: 'hito_pendiente', estadoNuevo: 'hito_validado',
+      usuarioEmail: roleIdentity.email, motivoNota: body.nota || null,
+    });
+    await reevaluarLiberacionesDeVenta(env.DB, requestId, venta.id, roleIdentity.email);
+    return ok({ action: 'validar-hito' }, requestId);
+  }
+
+  return Errors.validation('action inválida. Valores permitidos: informar, acreditar, rechazar, validar-hito.', requestId);
 }

@@ -95,6 +95,14 @@ export async function onRequest(context) {
 
     const comisionRows = await query(env.DB, requestId, 'SELECT * FROM comisiones WHERE distribucion_id = ? ORDER BY created_at ASC', [distribucion.id]);
     const finanzasRows = await query(env.DB, requestId, 'SELECT * FROM proyecto_finanzas_empresa WHERE distribucion_id = ? ORDER BY created_at DESC', [distribucion.id]);
+    const liberacionRows = comisionRows.length
+      ? await query(
+          env.DB, requestId,
+          `SELECT cl.*, p.etiqueta AS pago_etiqueta, p.monto AS pago_monto FROM comision_liberaciones cl
+           JOIN pagos_esperados p ON p.id = cl.pago_id WHERE cl.comision_id IN (${comisionRows.map(() => '?').join(',')})`,
+          comisionRows.map((c) => c.id)
+        )
+      : [];
 
     return ok({
       distribucion: serializeDistribucion(distribucion),
@@ -104,6 +112,16 @@ export async function onRequest(context) {
         id: c.id, tipo: c.tipo, beneficiarioEmail: c.beneficiario_email, porcentajeSnapshot: c.porcentaje_snapshot,
         baseSnapshot: c.base_snapshot, montoBase: c.monto_base, moneda: c.moneda, montoComision: c.monto_comision,
         estado: c.estado, esEstimacion: !!c.es_estimacion, componenteId: c.componente_id || null,
+        // RIO-119 (quinto bloque, 04/09/2026): liberación por cuota — cada
+        // participación se habilita cuota por cuota, nunca todo o nada.
+        liberaciones: liberacionRows.filter((l) => l.comision_id === c.id).map((l) => ({
+          id: l.id, pagoId: l.pago_id, pagoEtiqueta: l.pago_etiqueta || null, pagoMonto: l.pago_monto,
+          montoLiberable: l.monto_liberable, moneda: l.moneda, estado: l.estado,
+          motivoRetencion: l.motivo_retencion ? JSON.parse(l.motivo_retencion) : [],
+          fechaAcreditacion: l.fecha_acreditacion || null, fechaCumplimientoResguardo: l.fecha_cumplimiento_resguardo || null,
+          fechaHabilitacion: l.fecha_habilitacion || null, fechaProgramadaEfectiva: l.fecha_programada_efectiva || null,
+          fechaPagoReal: l.fecha_pago_real || null,
+        })),
       })),
       finanzasEmpresa: finanzasRows[0] ? {
         id: finanzasRows[0].id, montoBruto: finanzasRows[0].monto_bruto, costosDirectos: finanzasRows[0].costos_directos,
@@ -358,6 +376,13 @@ export async function onRequest(context) {
     if (!vigente) return Errors.validation('Definí primero los pools de la distribución.', requestId);
     if (vigente.costos_cerrados) return Errors.validation('Los costos de este proyecto ya están cerrados.', requestId);
     await execute(env.DB, requestId, "UPDATE venta_distribuciones SET costos_cerrados = 1, costos_cerrados_por = ?, costos_cerrados_at = datetime('now') WHERE id = ?", [roleIdentity.email, vigente.id]);
+    // Si las comisiones ya se habían generado (distribución ya
+    // confirmada) con los costos todavía abiertos, quedaron marcadas
+    // es_estimacion=1 para siempre si nadie las actualiza — acá pasan a
+    // definitivas apenas se declaran los costos cerrados. El PORCENTAJE
+    // nunca cambia (snapshot inmutable), solo deja de estar marcado como
+    // estimación.
+    await execute(env.DB, requestId, 'UPDATE comisiones SET es_estimacion = 0 WHERE distribucion_id = ?', [vigente.id]);
     await logEvento(env.DB, requestId, {
       ventaId: venta.id, entidad: 'venta_distribucion', entidadId: vigente.id, estadoAnterior: 'costos_abiertos', estadoNuevo: 'costos_cerrados',
       usuarioEmail: roleIdentity.email, motivoNota: body.motivo || 'Administración declaró los costos directos completos.',

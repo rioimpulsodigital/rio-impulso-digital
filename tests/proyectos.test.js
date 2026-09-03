@@ -139,6 +139,12 @@ function fakeDb() {
       const asignacion = (state.asignaciones_rol || []).find((a) => a.usuario_id === usuario.id && !a.valid_until);
       return asignacion ? [{ user_status: asignacion.user_status }] : [];
     }
+    // RIO-119 (quinto bloque, 04/09/2026): acreditarPago()/registrarIncidencia()
+    // ahora también reevalúan/retienen liberaciones por cuota — este suite
+    // nunca siembra comisiones ni liberaciones de proyecto personalizado
+    // (fuera de su alcance), así que ambas consultas siempre vuelven vacías.
+    if (sql.includes('FROM comision_liberaciones cl JOIN comisiones c ON c.id = cl.comision_id')) return [];
+    if (sql.startsWith('SELECT id, estado FROM comisiones WHERE venta_id')) return [];
     throw new Error('consulta inesperada en test: ' + sql);
   }
 
