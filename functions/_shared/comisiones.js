@@ -383,6 +383,21 @@ export async function evaluateComisionGate(db, requestId, comisionId, actorEmail
     return { habilitada: true, faltantes: [] }; // 'habilitada'/'programada'/'pagada' — nada que reevaluar acá.
   }
 
+  // RIO-119 (cuarto bloque, 03/09/2026): una comisión de proyecto
+  // personalizado (distribucion_id no nulo) NUNCA avanza automáticamente
+  // por este gate — Brenda: "hasta que confirme la política de liberación
+  // y el plazo de resguardo, ninguna comisión ficticia de prueba debe
+  // avanzar automáticamente a pagable". El cálculo fijo de abajo
+  // (PLAZO_RESGUARDO_DIAS, "pago total acreditado") es específico del
+  // catálogo (Ficha/Landing/Pack) — no se reutiliza a ciegas acá aunque
+  // `venta_distribuciones` ya tenga columnas de configuración propia
+  // (`plazo_resguardo_*`, `politica_liberacion`): esas quedan preparadas
+  // para cuando la regla esté confirmada, pero todavía no se usan para
+  // habilitar nada automáticamente.
+  if (comision.distribucion_id) {
+    return { habilitada: false, faltantes: ['politica_liberacion_pendiente_confirmacion'] };
+  }
+
   const faltantes = [];
 
   if (!comision.fecha_inicio_plazo) {
@@ -624,6 +639,121 @@ export function validarActivacionProyecto(pools, participaciones) {
 
   const empresaPorcentaje = Math.max(100 - (pools.comercial || 0) - (pools.supervision || 0) - (pools.desarrollo || 0), 0);
   return { puedeActivarse: errores.length === 0, errores, resumen, empresaPorcentaje };
+}
+
+// Convierte la distribución CONFIRMADA de un proyecto personalizado en
+// comisiones reales — RIO-119 (cuarto bloque, 03/09/2026). Una fila
+// independiente por cada participación con beneficiario resuelto (nunca
+// una combinada: si la misma persona vende y desarrolla, son dos filas).
+// Nunca genera una fila para "empresa" (nunca se modela como fila, ver
+// registrarFinanzasEmpresa) ni para una participación "Pendiente de
+// asignación" (beneficiario_email null).
+//
+// Idempotente por diseño: antes de generar nada, busca si YA existen
+// comisiones con este distribucion_id — si las hay, no crea nada más y
+// devuelve los ids existentes (repetir la solicitud de activación nunca
+// duplica). `es_estimacion` refleja si la distribución todavía no declaró
+// sus costos cerrados (venta_distribuciones.costos_cerrados) — mientras no
+// lo estén, todo monto calculado es una estimación, nunca definitivo.
+export async function generarComisionesDesdeDistribucion(db, requestId, { ventaId, distribucionId, actorEmail }) {
+  const existentes = await query(db, requestId, 'SELECT id FROM comisiones WHERE distribucion_id = ?', [distribucionId]);
+  if (existentes.length > 0) return existentes.map((c) => c.id);
+
+  const ventaRows = await query(db, requestId, 'SELECT moneda FROM ventas WHERE id = ?', [ventaId]);
+  const moneda = ventaRows[0]?.moneda;
+  const distribucionRows = await query(db, requestId, 'SELECT costos_cerrados FROM venta_distribuciones WHERE id = ?', [distribucionId]);
+  const esEstimacion = distribucionRows[0]?.costos_cerrados ? 0 : 1;
+
+  const componentes = await query(
+    db, requestId,
+    `SELECT c.* FROM componentes c JOIN proyectos p ON p.id = c.proyecto_id WHERE p.venta_id = ?`,
+    [ventaId]
+  );
+  let utilidadNetaProyecto = 0;
+  for (const c of componentes) utilidadNetaProyecto += await utilidadNetaComponente(db, requestId, c);
+
+  const participaciones = await query(db, requestId, 'SELECT * FROM venta_participaciones WHERE distribucion_id = ?', [distribucionId]);
+
+  const ids = [];
+  for (const p of participaciones) {
+    if (!p.beneficiario_email) continue; // "Pendiente de asignación" — nunca genera comisión.
+
+    let montoBase, baseSnapshot;
+    if (p.fase_id) {
+      const componente = componentes.find((c) => c.id === p.fase_id);
+      montoBase = componente ? await utilidadNetaComponente(db, requestId, componente) : 0;
+      baseSnapshot = 'utilidad_neta_componente';
+    } else {
+      montoBase = utilidadNetaProyecto;
+      baseSnapshot = 'utilidad_neta_venta';
+    }
+    const montoComision = Math.round((montoBase * p.porcentaje) / 100);
+
+    const id = crypto.randomUUID();
+    await execute(
+      db, requestId,
+      `INSERT INTO comisiones (
+         id, tipo, venta_id, componente_id, beneficiario_email, porcentaje_snapshot, base_snapshot,
+         monto_base, moneda, monto_comision, distribucion_id, participacion_id, es_estimacion
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, p.concepto, ventaId, p.fase_id || null, p.beneficiario_email, p.porcentaje, baseSnapshot, montoBase, moneda, montoComision, distribucionId, p.id, esEstimacion]
+    );
+    await logEvento(db, requestId, {
+      ventaId, entidad: 'comision', entidadId: id, estadoNuevo: 'calculada_provisional', usuarioEmail: actorEmail || 'sistema',
+      motivoNota: `Generada al activar la distribución del proyecto (${p.concepto}, ${p.porcentaje}%)${esEstimacion ? ' — estimación, costos todavía no cerrados' : ''}.`,
+    });
+    ids.push(id);
+  }
+  return ids;
+}
+
+// Registra (append-only, nunca se sobrescribe) la participación de EMPRESA
+// de un proyecto personalizado — RIO-119 (cuarto bloque, 03/09/2026).
+// Deliberadamente NUNCA una fila en `comisiones`: RiO no se modela como
+// una persona ficticia con comisión pagable. Cada llamada agrega una fila
+// nueva (al activar, y luego de cada corrección de costos) — el
+// historial completo de estimación → definitivo queda visible, cada una
+// con su `motivo` cuando corresponde a una corrección.
+export async function registrarFinanzasEmpresa(db, requestId, { ventaId, distribucionId, empresaPorcentaje, actorEmail, motivo }) {
+  const ventaRows = await query(db, requestId, 'SELECT precio_pactado, moneda FROM ventas WHERE id = ?', [ventaId]);
+  const venta = ventaRows[0];
+  const distribucionRows = await query(db, requestId, 'SELECT costos_cerrados FROM venta_distribuciones WHERE id = ?', [distribucionId]);
+  const esEstimacion = distribucionRows[0]?.costos_cerrados ? 0 : 1;
+
+  const componentes = await query(
+    db, requestId,
+    `SELECT c.* FROM componentes c JOIN proyectos p ON p.id = c.proyecto_id WHERE p.venta_id = ?`,
+    [ventaId]
+  );
+  let costosDirectos = 0;
+  for (const c of componentes) {
+    const costos = await query(db, requestId, 'SELECT monto FROM costos_directos WHERE componente_id = ?', [c.id]);
+    costosDirectos += costos.reduce((s, x) => s + x.monto, 0);
+  }
+  const utilidadNeta = venta.precio_pactado - costosDirectos;
+  const montoEmpresa = Math.round((utilidadNeta * empresaPorcentaje) / 100);
+
+  const pagosAcreditados = await query(db, requestId, "SELECT monto FROM pagos_esperados WHERE venta_id = ? AND estado = 'acreditado'", [ventaId]);
+  const totalAcreditado = pagosAcreditados.reduce((s, p) => s + p.monto, 0);
+  const totalPactado = venta.precio_pactado || 1;
+  // Fondos de empresa efectivamente obtenidos a la fecha — proporcional a
+  // lo acreditado del proyecto completo (informativo, no mueve estado).
+  const fondosObtenidos = Math.round((montoEmpresa * totalAcreditado) / totalPactado);
+
+  const id = crypto.randomUUID();
+  await execute(
+    db, requestId,
+    `INSERT INTO proyecto_finanzas_empresa (
+       id, venta_id, distribucion_id, monto_bruto, costos_directos, utilidad_neta,
+       porcentaje_empresa, monto_empresa, fondos_obtenidos, moneda, es_estimacion, motivo, created_by
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, ventaId, distribucionId, venta.precio_pactado, costosDirectos, utilidadNeta, empresaPorcentaje, montoEmpresa, fondosObtenidos, venta.moneda, esEstimacion, motivo || null, actorEmail]
+  );
+  await logEvento(db, requestId, {
+    ventaId, entidad: 'proyecto_finanzas_empresa', entidadId: id, estadoAnterior: null, estadoNuevo: esEstimacion ? 'estimacion' : 'definitivo',
+    usuarioEmail: actorEmail, motivoNota: motivo || 'Cálculo inicial al activar la distribución.',
+  });
+  return id;
 }
 
 // Alta de un costo directo de un componente (ej. dominio propio de una

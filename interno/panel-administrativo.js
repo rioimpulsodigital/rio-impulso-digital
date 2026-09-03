@@ -377,9 +377,66 @@
     document.getElementById('pvDetailNegocio').textContent = detalle.cliente.negocio;
     document.getElementById('pvDetailBody').innerHTML = await renderDetalleVentaHTML(detalle);
     wireDetalleVentaEventos(detalle);
-    if (detalle.venta.producto === 'proyecto_personalizado') {
+    if (detalle.venta.producto === 'proyecto_personalizado' && !detalle.venta.modoHistorico) {
       await cargarDistribucionDelDetalle(detalle.venta.id);
     }
+    if (detalle.venta.modoHistorico) {
+      await cargarComisionesHistoricasDelDetalle(detalle.venta.id, detalle.venta.moneda);
+    }
+  }
+
+  // RIO-119 (cuarto bloque, 03/09/2026): registro de referencia de lo ya
+  // pagado ANTES de que el proyecto se incorporara a este sistema — tabla
+  // separada de `comisiones`, nunca entra al calendario 10/25 ni genera
+  // deuda actual (ver migración 0029 para la auditoría de alternativas).
+  async function cargarComisionesHistoricasDelDetalle(ventaId, moneda) {
+    var slot = document.getElementById('pvComisionesHistoricasSlot');
+    if (!slot) return;
+    var r = await apiFetch('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/comisiones-historicas');
+    if (!r.ok || !r.body || !r.body.ok) { slot.innerHTML = pvErrorHTML('No se pudieron cargar las comisiones históricas.'); return; }
+    var lista = r.body.data.comisionesHistoricas || [];
+    var filasHTML = lista.map(function (c) {
+      return (
+        '<div class="pv-notif-card">' +
+          '<div class="pv-notif-head">' +
+            '<span>' + escapeHtml(TIPO_PLAN_LABEL_DIST[c.concepto] || c.concepto) + ' — ' + escapeHtml(c.beneficiarioEmail) + ' — <strong>' + fmtMoneda(c.importePagado, c.moneda) + '</strong></span>' +
+            '<span class="pv-badge pv-badge--neutral">Histórica</span>' +
+          '</div>' +
+          '<div style="font-size:.78rem;color:var(--muted);">' + escapeHtml(c.fechaExacta || c.fechaAproximada || '—') + ' · Fuente: ' + escapeHtml(c.fuente) + (c.evidencia ? ' · ' + escapeHtml(c.evidencia) : '') + '</div>' +
+        '</div>'
+      );
+    }).join('') || '<p class="pv-materiales-vacio">Todavía no hay comisiones históricas registradas.</p>';
+
+    slot.innerHTML = filasHTML +
+      '<form class="pv-accion-form" data-agregar-comision-historica>' +
+        '<label>Beneficiario (correo)</label><input type="email" name="beneficiarioEmail" required>' +
+        '<label>Concepto</label><select name="concepto"><option value="comercial">Comercial</option><option value="supervision">Supervisión</option><option value="desarrollo">Desarrollo</option><option value="realizacion">Realización</option><option value="produccion">Producción</option></select>' +
+        '<label>Importe pagado</label><input type="number" name="importePagado" min="0" step="1" required>' +
+        '<label>Fecha exacta (si se conoce)</label><input type="date" name="fechaExacta">' +
+        '<label>Fecha aproximada (si no hay fecha exacta)</label><input type="text" name="fechaAproximada" placeholder="ej. 2025-06">' +
+        '<label>Evidencia (opcional)</label><input type="text" name="evidencia" placeholder="ej. captura de transferencia, planilla">' +
+        '<label>Fuente (obligatorio)</label><input type="text" name="fuente" placeholder="de dónde se obtuvo este dato" required>' +
+        '<button type="submit" class="pv-btn pv-btn--primary">Registrar comisión histórica</button>' +
+        '<span class="pv-status-msg" data-status></span>' +
+      '</form>';
+
+    var form = slot.querySelector('[data-agregar-comision-historica]');
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var fd = new FormData(form);
+      var r2 = await apiPost('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/comisiones-historicas', {
+        beneficiarioEmail: fd.get('beneficiarioEmail').trim(),
+        concepto: fd.get('concepto'),
+        importePagado: parseInt(fd.get('importePagado'), 10),
+        moneda: moneda || 'CLP',
+        fechaExacta: fd.get('fechaExacta') || undefined,
+        fechaAproximada: fd.get('fechaAproximada') ? fd.get('fechaAproximada').trim() : undefined,
+        evidencia: fd.get('evidencia') ? fd.get('evidencia').trim() : undefined,
+        fuente: fd.get('fuente').trim(),
+      });
+      if (!r2.ok || !r2.body || !r2.body.ok) { mostrarStatus(form, (r2.body && r2.body.error && r2.body.error.message) || 'No se pudo registrar.', true); return; }
+      await cargarComisionesHistoricasDelDetalle(ventaId);
+    });
   }
 
   function calcularFaltantesLanding(detalle) {
@@ -555,7 +612,40 @@
 
   var TIPO_PLAN_LABEL_DIST = { comercial: 'Comercial', supervision: 'Supervisión', desarrollo: 'Desarrollo' };
 
-  function distribucionHTML(distribucion, participaciones, resumen) {
+  function finanzasEmpresaHTML(f) {
+    if (!f) return '';
+    return (
+      '<div class="pv-notif-card" style="margin-bottom:12px;">' +
+        '<strong>Finanzas de empresa' + (f.esEstimacion ? ' — <span class="pv-badge pv-badge--amber">Estimación</span>' : ' — <span class="pv-badge pv-badge--green">Definitivo</span>') + '</strong>' +
+        '<dl class="pv-kv">' +
+          '<dt>Monto bruto</dt><dd>' + fmtMoneda(f.montoBruto, f.moneda) + '</dd>' +
+          '<dt>Costos directos</dt><dd>' + fmtMoneda(f.costosDirectos, f.moneda) + '</dd>' +
+          '<dt>Utilidad neta</dt><dd>' + fmtMoneda(f.utilidadNeta, f.moneda) + '</dd>' +
+          '<dt>% empresa</dt><dd>' + f.porcentajeEmpresa + '%</dd>' +
+          '<dt>Monto empresa</dt><dd>' + fmtMoneda(f.montoEmpresa, f.moneda) + '</dd>' +
+          '<dt>Fondos obtenidos</dt><dd>' + fmtMoneda(f.fondosObtenidos, f.moneda) + '</dd>' +
+          '<dt>Fondos todavía estimados</dt><dd>' + fmtMoneda(f.fondosEstimadosPendientes, f.moneda) + '</dd>' +
+        '</dl>' +
+      '</div>'
+    );
+  }
+
+  function comisionesGeneradasHTML(comisiones) {
+    if (!comisiones || comisiones.length === 0) return '';
+    var filas = comisiones.map(function (c) {
+      return (
+        '<div class="pv-notif-card">' +
+          '<div class="pv-notif-head">' +
+            '<span>' + escapeHtml(TIPO_PLAN_LABEL_DIST[c.tipo] || c.tipo) + ' — ' + escapeHtml(c.beneficiarioEmail) + ' — <strong>' + fmtMoneda(c.montoComision, c.moneda) + '</strong> (' + c.porcentajeSnapshot + '%)</span>' +
+            '<span class="pv-badge pv-badge--' + (c.esEstimacion ? 'amber' : 'green') + '">' + (c.esEstimacion ? 'Estimación' : 'Definitivo') + '</span>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+    return '<div class="pv-detail-section"><p class="pv-detail-section-title">Comisiones generadas</p>' + filas + '</div>';
+  }
+
+  function distribucionHTML(distribucion, participaciones, resumen, comisiones, finanzasEmpresa) {
     if (!distribucion) {
       return (
         '<form class="pv-accion-form" data-definir-pools style="border-top:none;padding-top:0;">' +
@@ -593,6 +683,40 @@
       '</dl>'
     ) : '';
 
+    // Configuración avanzada (política de liberación, plazo de resguardo,
+    // cerrar costos) — disponible en CUALQUIER estado de la distribución,
+    // no solo en borrador: es metadata sobre CÓMO se va a liberar el pago
+    // más adelante, independiente de si ya se activó. Nunca habilita pago
+    // automático por sí sola (ver el gate en evaluateComisionGate).
+    var configAvanzadaHTML =
+      '<div class="pv-detail-section"><p class="pv-detail-section-title">Configuración avanzada (no habilita pago automático)</p>' +
+        '<p style="font-size:.72rem;color:var(--muted);margin:0 0 8px;">Estructura preparada para cuando Brenda confirme la política de liberación y el plazo de resguardo — nada de esto habilita el pago de una comisión todavía.</p>' +
+        (distribucion.costosCerrados
+          ? '<p class="pv-status-msg ok">Costos cerrados por ' + escapeHtml(distribucion.costosCerradosPor || '—') + ' el ' + fmtFecha(distribucion.costosCerradosAt) + '.</p>'
+          : '<div class="pv-btn-row"><button type="button" class="pv-btn" data-cerrar-costos>Declarar costos directos completos (cerrar costos)</button></div>') +
+        '<form class="pv-accion-form" data-configurar-liberacion style="border-top:none;">' +
+          '<label>Política de liberación</label>' +
+          '<select name="politicaLiberacion">' +
+            '<option value="">Sin definir</option>' +
+            '<option value="pago_total"' + (distribucion.politicaLiberacion === 'pago_total' ? ' selected' : '') + '>Pago total del proyecto</option>' +
+            '<option value="proporcional_por_pago"' + (distribucion.politicaLiberacion === 'proporcional_por_pago' ? ' selected' : '') + '>Proporcional por cada pago acreditado</option>' +
+            '<option value="por_hito"' + (distribucion.politicaLiberacion === 'por_hito' ? ' selected' : '') + '>Por hito aprobado y pago asociado</option>' +
+          '</select>' +
+          '<label><input type="checkbox" name="requiereHitoValidado"' + (distribucion.requiereHitoValidado ? ' checked' : '') + '> Requiere que el hito relacionado esté validado por Administración</label>' +
+          '<button type="submit" class="pv-btn">Guardar política</button>' +
+          '<span class="pv-status-msg" data-status></span>' +
+        '</form>' +
+        '<form class="pv-accion-form" data-configurar-plazo-resguardo>' +
+          '<label><input type="checkbox" name="activo"' + (distribucion.plazoResguardo && distribucion.plazoResguardo.activo ? ' checked' : '') + '> Existe plazo de resguardo para este proyecto</label>' +
+          '<label>Días</label><input type="number" name="dias" min="0" value="' + ((distribucion.plazoResguardo && distribucion.plazoResguardo.dias) || '') + '">' +
+          '<label>Tipo de días</label><select name="tipoDias"><option value="corridos">Corridos</option><option value="habiles">Hábiles</option></select>' +
+          '<label>Evento que lo inicia</label><select name="eventoInicio"><option value="activacion">Activación</option><option value="primer_pago">Primer pago</option><option value="pago_total">Pago total</option><option value="hito_aprobado">Hito aprobado</option></select>' +
+          '<label>Alcance</label><select name="alcance"><option value="proyecto_completo">Proyecto completo</option><option value="por_pago_o_hito">Por pago o hito</option></select>' +
+          '<button type="submit" class="pv-btn">Guardar plazo de resguardo</button>' +
+          '<span class="pv-status-msg" data-status></span>' +
+        '</form>' +
+      '</div>';
+
     var accionesHTML = '';
     if (distribucion.estado === 'borrador') {
       accionesHTML =
@@ -605,11 +729,15 @@
           '<button type="submit" class="pv-btn">Agregar participación</button>' +
           '<span class="pv-status-msg" data-status></span>' +
         '</form>' +
+        configAvanzadaHTML +
         '<div class="pv-btn-row"><button type="button" class="pv-btn pv-btn--primary" data-activar-distribucion>Activar (exige 100% asignado)</button></div>' +
         '<p class="pv-status-msg" data-activar-status></p>';
     } else if (distribucion.estado === 'confirmada') {
       accionesHTML =
         '<p style="font-size:.78rem;color:var(--muted);">Confirmada el ' + fmtFecha(distribucion.confirmedAt) + ' por ' + escapeHtml(distribucion.confirmedBy || '—') + '. Snapshot inmutable — un cambio posterior exige una corrección administrativa auditada.</p>' +
+        (comisiones && comisiones.length ? '<p style="font-size:.78rem;color:var(--muted);">' + comisiones.length + ' comisión(es) generada(s) — provisionales, no pueden pagarse hasta que se confirme la política de liberación.</p>' : '') +
+        configAvanzadaHTML +
+        '<div class="pv-btn-row"><button type="button" class="pv-btn" data-recalcular-finanzas>Recalcular finanzas de empresa</button></div>' +
         '<form class="pv-accion-form" data-corregir-distribucion style="border-top:none;">' +
           '<label>Motivo de la corrección (obligatorio)</label><textarea name="motivo" required></textarea>' +
           '<button type="submit" class="pv-btn pv-btn--danger">Corregir (crea una nueva versión auditada)</button>' +
@@ -617,7 +745,9 @@
         '</form>';
     }
 
-    return '<div class="pv-notif-card" style="margin-bottom:12px;"><strong>Estado: ' + escapeHtml(distribucion.estado) + ' (v' + distribucion.version + ')</strong>' + resumenHTML + '</div>' + filasHTML + accionesHTML;
+    return finanzasEmpresaHTML(finanzasEmpresa) +
+      '<div class="pv-notif-card" style="margin-bottom:12px;"><strong>Estado: ' + escapeHtml(distribucion.estado) + ' (v' + distribucion.version + ')</strong>' + resumenHTML + '</div>' +
+      filasHTML + comisionesGeneradasHTML(comisiones) + accionesHTML;
   }
 
   async function cargarDistribucionDelDetalle(ventaId) {
@@ -626,7 +756,12 @@
     var r = await apiFetch('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/distribucion');
     if (!r.ok || !r.body || !r.body.ok) { slot.innerHTML = pvErrorHTML('No se pudo cargar la distribución económica.'); return; }
     var data = r.body.data;
-    slot.innerHTML = distribucionHTML(data.distribucion, data.participaciones, data.resumen);
+    try {
+      slot.innerHTML = distribucionHTML(data.distribucion, data.participaciones, data.resumen, data.comisiones, data.finanzasEmpresa);
+    } catch (e) {
+      slot.innerHTML = pvErrorHTML('No se pudo mostrar la distribución económica.');
+      return;
+    }
 
     if (!data.distribucion) {
       var rp = await apiFetch('/interno/api/plantillas-distribucion');
@@ -718,6 +853,61 @@
         await cargarDistribucionDelDetalle(ventaId);
       });
     }
+
+    var cerrarCostosBtn = slot.querySelector('[data-cerrar-costos]');
+    if (cerrarCostosBtn) {
+      cerrarCostosBtn.addEventListener('click', async function () {
+        if (!confirm('¿Confirmás que ya se cargaron todos los costos directos de este proyecto? Los importes calculados pasan de estimación a definitivos.')) return;
+        cerrarCostosBtn.disabled = true;
+        var r = await apiPost('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/distribucion', { action: 'cerrar-costos' });
+        if (!r.ok || !r.body || !r.body.ok) { alert((r.body && r.body.error && r.body.error.message) || 'No se pudo cerrar los costos.'); cerrarCostosBtn.disabled = false; return; }
+        await cargarDistribucionDelDetalle(ventaId);
+      });
+    }
+
+    var recalcularBtn = slot.querySelector('[data-recalcular-finanzas]');
+    if (recalcularBtn) {
+      recalcularBtn.addEventListener('click', async function () {
+        var motivo = prompt('Motivo del recálculo (obligatorio si ya hay un cálculo previo):');
+        if (motivo === null) return;
+        recalcularBtn.disabled = true;
+        var r = await apiPost('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/distribucion', { action: 'recalcular-finanzas-empresa', motivo: motivo.trim() || undefined });
+        if (!r.ok || !r.body || !r.body.ok) { alert((r.body && r.body.error && r.body.error.message) || 'No se pudo recalcular.'); recalcularBtn.disabled = false; return; }
+        await cargarDistribucionDelDetalle(ventaId);
+      });
+    }
+
+    var liberacionForm = slot.querySelector('[data-configurar-liberacion]');
+    if (liberacionForm) {
+      liberacionForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var r = await apiPost('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/distribucion', {
+          action: 'configurar-liberacion',
+          politicaLiberacion: liberacionForm.querySelector('[name="politicaLiberacion"]').value || undefined,
+          requiereHitoValidado: liberacionForm.querySelector('[name="requiereHitoValidado"]').checked,
+        });
+        if (!r.ok || !r.body || !r.body.ok) { mostrarStatus(liberacionForm, (r.body && r.body.error && r.body.error.message) || 'No se pudo guardar.', true); return; }
+        mostrarStatus(liberacionForm, 'Guardado — no habilita pago automático.', false);
+      });
+    }
+
+    var plazoForm = slot.querySelector('[data-configurar-plazo-resguardo]');
+    if (plazoForm) {
+      plazoForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var activo = plazoForm.querySelector('[name="activo"]').checked;
+        var dias = plazoForm.querySelector('[name="dias"]').value;
+        var r = await apiPost('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/distribucion', {
+          action: 'configurar-plazo-resguardo', activo: activo,
+          dias: dias !== '' ? parseInt(dias, 10) : undefined,
+          tipoDias: plazoForm.querySelector('[name="tipoDias"]').value,
+          eventoInicio: plazoForm.querySelector('[name="eventoInicio"]').value,
+          alcance: plazoForm.querySelector('[name="alcance"]').value,
+        });
+        if (!r.ok || !r.body || !r.body.ok) { mostrarStatus(plazoForm, (r.body && r.body.error && r.body.error.message) || 'No se pudo guardar.', true); return; }
+        mostrarStatus(plazoForm, 'Guardado — no habilita pago automático.', false);
+      });
+    }
   }
 
   function renderDetalleVentaHTML(detalle) {
@@ -774,8 +964,11 @@
           '</dl>' +
           costoMedioPagoFormHTML(detalle.venta.id) +
         '</div>' +
-        (detalle.venta.producto === 'proyecto_personalizado'
+        (detalle.venta.producto === 'proyecto_personalizado' && !detalle.venta.modoHistorico
           ? '<div class="pv-detail-section"><p class="pv-detail-section-title">Distribución económica</p><div id="pvDistribucionSlot"><div class="pv-loading">Cargando…</div></div></div>'
+          : '') +
+        (detalle.venta.modoHistorico
+          ? '<div class="pv-detail-section"><p class="pv-detail-section-title">Comisiones históricas (pagadas antes de la incorporación)</p><div id="pvComisionesHistoricasSlot"><div class="pv-loading">Cargando…</div></div></div>'
           : '') +
         '<div class="pv-detail-section"><p class="pv-detail-section-title">Cliente</p>' +
           '<dl class="pv-kv">' +

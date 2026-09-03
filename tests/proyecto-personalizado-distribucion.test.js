@@ -11,7 +11,8 @@ import { onRequest as plantillaDetalleHandler } from '../functions/interno/api/p
 import { onRequest as distribucionHandler } from '../functions/interno/api/ventas/[id]/distribucion/index.js';
 import { onRequest as componenteHandler } from '../functions/interno/api/ventas/[id]/componentes/[componenteId]/index.js';
 import { onRequest as ventasHandler } from '../functions/interno/api/ventas/index.js';
-import { validarActivacionProyecto } from '../functions/_shared/comisiones.js';
+import { onRequest as comisionesHistoricasHandler } from '../functions/interno/api/ventas/[id]/comisiones-historicas/index.js';
+import { validarActivacionProyecto, evaluateComisionGate, generarComisionesDesdeDistribucion } from '../functions/_shared/comisiones.js';
 import { PERMISSIONS } from '../functions/_shared/authz.js';
 
 function roleIdentity(overrides = {}) {
@@ -26,6 +27,7 @@ function fakeDb(seed = {}) {
     plantillas_distribucion: [], venta_distribuciones: [], venta_participaciones: [],
     ventas: [], proyectos: [], componentes: [], clientes: [], pagos_esperados: [],
     eventos_historial: [], notificaciones: [], comisiones: [],
+    proyecto_finanzas_empresa: [], comisiones_historicas: [], costos_directos: [],
     usuarios: [{ id: 1, email: 'admin@example.com', nombre: 'Admin' }],
     ...seed,
   };
@@ -74,7 +76,27 @@ function fakeDb(seed = {}) {
     if (sql.startsWith('SELECT * FROM componentes WHERE proyecto_id')) return state.componentes.filter((c) => c.proyecto_id === p[0]);
     if (sql.startsWith('SELECT * FROM pagos_esperados WHERE venta_id')) return state.pagos_esperados.filter((pg) => pg.venta_id === p[0]);
     if (sql.startsWith('SELECT modo_historico FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]).map((v) => ({ modo_historico: v.modo_historico || null }));
+    if (sql.startsWith('SELECT id, modo_historico FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]).map((v) => ({ id: v.id, modo_historico: v.modo_historico || null }));
     if (sql.startsWith('SELECT id FROM notificaciones WHERE clave_idempotencia')) return [];
+    if (sql.startsWith('SELECT id FROM comisiones WHERE distribucion_id')) return state.comisiones.filter((c) => c.distribucion_id === p[0]).map((c) => ({ id: c.id }));
+    if (sql.startsWith('SELECT * FROM comisiones WHERE distribucion_id')) return state.comisiones.filter((c) => c.distribucion_id === p[0]);
+    if (sql.startsWith('SELECT moneda FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]).map((v) => ({ moneda: v.moneda }));
+    if (sql.startsWith('SELECT precio_pactado, moneda FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]).map((v) => ({ precio_pactado: v.precio_pactado, moneda: v.moneda }));
+    if (sql.startsWith('SELECT costos_cerrados FROM venta_distribuciones WHERE id')) return state.venta_distribuciones.filter((d) => d.id === p[0]).map((d) => ({ costos_cerrados: d.costos_cerrados || 0 }));
+    if (sql.includes('FROM componentes c JOIN proyectos p ON p.id = c.proyecto_id WHERE p.venta_id')) {
+      const proyectoIds = state.proyectos.filter((pr) => pr.venta_id === p[0]).map((pr) => pr.id);
+      return state.componentes.filter((c) => proyectoIds.includes(c.proyecto_id));
+    }
+    if (sql.startsWith('SELECT monto FROM costos_directos WHERE componente_id')) return state.costos_directos.filter((c) => c.componente_id === p[0]).map((c) => ({ monto: c.monto }));
+    if (sql.startsWith("SELECT monto FROM pagos_esperados WHERE venta_id") && sql.includes("estado = 'acreditado'")) {
+      return state.pagos_esperados.filter((pg) => pg.venta_id === p[0] && pg.estado === 'acreditado').map((pg) => ({ monto: pg.monto }));
+    }
+    if (sql.startsWith('SELECT id FROM proyecto_finanzas_empresa WHERE distribucion_id')) return state.proyecto_finanzas_empresa.filter((f) => f.distribucion_id === p[0]).map((f) => ({ id: f.id }));
+    if (sql.startsWith('SELECT * FROM proyecto_finanzas_empresa WHERE distribucion_id')) {
+      return state.proyecto_finanzas_empresa.filter((f) => f.distribucion_id === p[0]).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+    }
+    if (sql.startsWith('SELECT * FROM comisiones_historicas WHERE venta_id')) return state.comisiones_historicas.filter((c) => c.venta_id === p[0]);
+    if (sql.startsWith('SELECT * FROM comisiones WHERE id')) return state.comisiones.filter((c) => c.id === p[0]);
     throw new Error('SELECT inesperado en test: ' + sql);
   }
 
@@ -107,8 +129,8 @@ function fakeDb(seed = {}) {
       cols.forEach((c, i) => { row[c] = p[i]; });
       state.venta_distribuciones.push(row);
     } else if (sql.startsWith("UPDATE venta_distribuciones SET plantilla_id")) {
-      const d = state.venta_distribuciones.find((x) => x.id === p[3]);
-      if (d) { d.plantilla_id = p[0]; d.porcentaje_comercial = p[1]; d.porcentaje_supervision = p[2]; }
+      const d = state.venta_distribuciones.find((x) => x.id === p[4]);
+      if (d) { d.plantilla_id = p[0]; d.porcentaje_comercial = p[1]; d.porcentaje_supervision = p[2]; d.porcentaje_desarrollo = p[3]; }
     } else if (sql.startsWith("UPDATE venta_distribuciones SET estado = 'confirmada'")) {
       const d = state.venta_distribuciones.find((x) => x.id === p[1]);
       if (d) { d.estado = 'confirmada'; d.confirmed_by = p[0]; d.confirmed_at = '2026-09-03'; }
@@ -131,6 +153,35 @@ function fakeDb(seed = {}) {
       state.eventos_historial.push({ id: p[0], venta_id: p[1], entidad: p[2], entidad_id: p[3] });
     } else if (sql.startsWith('INSERT INTO notificaciones')) {
       state.notificaciones.push({ id: p[0] });
+    } else if (sql.startsWith('INSERT INTO comisiones (')) {
+      state.comisiones.push({
+        id: p[0], tipo: p[1], venta_id: p[2], componente_id: p[3], beneficiario_email: p[4], porcentaje_snapshot: p[5],
+        base_snapshot: p[6], monto_base: p[7], moneda: p[8], monto_comision: p[9], distribucion_id: p[10], participacion_id: p[11],
+        es_estimacion: p[12], estado: 'calculada_provisional', created_at: '2026-09-03',
+      });
+    } else if (sql.startsWith('INSERT INTO proyecto_finanzas_empresa')) {
+      state.proyecto_finanzas_empresa.push({
+        id: p[0], venta_id: p[1], distribucion_id: p[2], monto_bruto: p[3], costos_directos: p[4], utilidad_neta: p[5],
+        porcentaje_empresa: p[6], monto_empresa: p[7], fondos_obtenidos: p[8], moneda: p[9], es_estimacion: p[10], motivo: p[11], created_by: p[12],
+        created_at: '2026-09-03T' + String(state.proyecto_finanzas_empresa.length).padStart(2, '0') + ':00:00',
+      });
+    } else if (sql.startsWith('INSERT INTO comisiones_historicas')) {
+      state.comisiones_historicas.push({
+        id: p[0], venta_id: p[1], beneficiario_email: p[2], concepto: p[3], importe_pagado: p[4], moneda: p[5],
+        fecha_exacta: p[6], fecha_aproximada: p[7], evidencia: p[8], fuente: p[9], declarado_por: p[10],
+        estado: 'historica_pagada_antes_incorporacion', created_at: '2026-09-03',
+      });
+    } else if (sql.startsWith('UPDATE venta_distribuciones SET politica_liberacion')) {
+      const d = state.venta_distribuciones.find((x) => x.id === p[2]);
+      if (d) { d.politica_liberacion = p[0]; d.requiere_hito_validado = p[1]; }
+    } else if (sql.startsWith('UPDATE venta_distribuciones SET plazo_resguardo_activo')) {
+      const d = state.venta_distribuciones.find((x) => x.id === p[5]);
+      if (d) { d.plazo_resguardo_activo = p[0]; d.plazo_resguardo_dias = p[1]; d.plazo_resguardo_tipo_dias = p[2]; d.plazo_resguardo_evento_inicio = p[3]; d.plazo_resguardo_alcance = p[4]; }
+    } else if (sql.startsWith("UPDATE venta_distribuciones SET costos_cerrados")) {
+      const d = state.venta_distribuciones.find((x) => x.id === p[1]);
+      if (d) { d.costos_cerrados = 1; d.costos_cerrados_por = p[0]; d.costos_cerrados_at = '2026-09-03'; }
+    } else if (sql.startsWith('INSERT INTO costos_directos')) {
+      state.costos_directos.push({ id: p[0], componente_id: p[1], tipo: p[2], monto: p[3], moneda: p[4] });
     } else {
       throw new Error('mutación inesperada en test: ' + sql);
     }
@@ -449,5 +500,319 @@ test('proyecto histórico: un vendedor común no puede registrarlo (decisión ad
 test('proyecto histórico: modoHistorico inválido se rechaza', async () => {
   const db = fakeDb();
   const response = await ventasHandler(fakeContext({ method: 'POST', body: { ...PROYECTO_HISTORICO_BASE, modoHistorico: 'inventado' }, roleIdentity: admin(), db }));
+  assert.equal(response.status, 400);
+});
+
+// ── Cuarto bloque (03/09/2026): activación genera comisiones y finanzas de empresa reales ──
+
+function seedProyectoActivable(overrides = {}) {
+  return {
+    ventas: [{ id: 'venta-1', producto: 'proyecto_personalizado', vendedor_email: 'admin@example.com', mercado: 'CL', moneda: 'CLP', precio_pactado: 1000000, distribucion_snapshot: null, modo_historico: null }],
+    proyectos: [{ id: 'proyecto-1', venta_id: 'venta-1' }],
+    componentes: [{ id: 'comp-frontend', proyecto_id: 'proyecto-1', tipo: 'personalizado', precio_atribuido: 1000000 }],
+    plantillas_distribucion: [{ id: 'pl-desarrollo', porcentaje_comercial: 25, porcentaje_supervision: 10, porcentaje_desarrollo: 45, porcentaje_empresa: 20, estado: 'activo' }],
+    ...overrides,
+  };
+}
+
+async function activarDistribucionCompleta(db, participaciones, ventaId = 'venta-1') {
+  await distribucionHandler(fakeContext({ body: { action: 'definir-pools', plantillaId: 'pl-desarrollo' }, roleIdentity: admin(), db, params: { id: ventaId } }));
+  for (const p of participaciones) {
+    await distribucionHandler(fakeContext({ body: { action: 'agregar-participacion', ...p }, roleIdentity: admin(), db, params: { id: ventaId } }));
+  }
+  return distribucionHandler(fakeContext({ body: { action: 'activar' }, roleIdentity: admin(), db, params: { id: ventaId } }));
+}
+
+const PARTICIPACIONES_COMPLETAS = [
+  { concepto: 'comercial', beneficiarioEmail: 'comercial@example.com', porcentaje: 25 },
+  { concepto: 'supervision', beneficiarioEmail: 'supervisor@example.com', porcentaje: 10 },
+  { concepto: 'desarrollo', beneficiarioEmail: 'dev@example.com', porcentaje: 45 },
+];
+
+test('activación: genera una comisión independiente por cada participación personal resuelta', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  const response = await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  assert.equal(response.status, 200);
+  const body = (await response.json()).data;
+  assert.equal(body.comisionesGeneradas, 3);
+  assert.equal(db._state.comisiones.length, 3);
+  const comercial = db._state.comisiones.find((c) => c.tipo === 'comercial');
+  assert.equal(comercial.beneficiario_email, 'comercial@example.com');
+  assert.equal(comercial.monto_base, 1000000); // utilidad neta del proyecto (sin costos).
+  assert.equal(comercial.monto_comision, 250000); // 25% de 1.000.000.
+  assert.equal(comercial.moneda, 'CLP');
+  assert.equal(comercial.distribucion_id, db._state.venta_distribuciones[0].id);
+  assert.equal(comercial.participacion_id, db._state.venta_participaciones.find((p) => p.concepto === 'comercial').id);
+});
+
+test('activación: una persona con dos conceptos (vende y desarrolla) recibe dos filas separadas, nunca combinadas', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  const participaciones = [
+    { concepto: 'comercial', beneficiarioEmail: 'multi@example.com', porcentaje: 25 },
+    { concepto: 'supervision', beneficiarioEmail: 'supervisor@example.com', porcentaje: 10 },
+    { concepto: 'desarrollo', beneficiarioEmail: 'multi@example.com', porcentaje: 45 },
+  ];
+  await activarDistribucionCompleta(db, participaciones);
+  const filasDeMulti = db._state.comisiones.filter((c) => c.beneficiario_email === 'multi@example.com');
+  assert.equal(filasDeMulti.length, 2);
+  assert.deepEqual(filasDeMulti.map((c) => c.tipo).sort(), ['comercial', 'desarrollo']);
+});
+
+test('activación: empresa nunca genera una comisión personal — se registra aparte, en proyecto_finanzas_empresa', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  assert.ok(!db._state.comisiones.some((c) => c.beneficiario_email === null || /empresa/i.test(c.beneficiario_email || '')));
+  assert.equal(db._state.proyecto_finanzas_empresa.length, 1);
+  const finanzas = db._state.proyecto_finanzas_empresa[0];
+  assert.equal(finanzas.porcentaje_empresa, 20);
+  assert.equal(finanzas.monto_bruto, 1000000);
+  assert.equal(finanzas.utilidad_neta, 1000000);
+  assert.equal(finanzas.monto_empresa, 200000); // 20% de la utilidad neta.
+});
+
+test('generarComisionesDesdeDistribucion: una participación "Pendiente de asignación" (sin beneficiario) nunca genera comisión', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await distribucionHandler(fakeContext({ body: { action: 'definir-pools', plantillaId: 'pl-desarrollo' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  const distribucionId = db._state.venta_distribuciones[0].id;
+  db._state.venta_participaciones.push(
+    { id: 'part-resuelta', distribucion_id: distribucionId, concepto: 'comercial', fase_id: null, beneficiario_email: 'a@example.com', porcentaje: 25 },
+    { id: 'part-pendiente', distribucion_id: distribucionId, concepto: 'desarrollo', fase_id: null, beneficiario_email: null, porcentaje: 45 }
+  );
+  const ids = await generarComisionesDesdeDistribucion(db, 'req-test', { ventaId: 'venta-1', distribucionId, actorEmail: 'admin@example.com' });
+  assert.equal(ids.length, 1);
+  assert.equal(db._state.comisiones.length, 1);
+  assert.equal(db._state.comisiones[0].beneficiario_email, 'a@example.com');
+});
+
+test('generarComisionesDesdeDistribucion: reintentar la generación nunca duplica comisiones (idempotente)', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await distribucionHandler(fakeContext({ body: { action: 'definir-pools', plantillaId: 'pl-desarrollo' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  const distribucionId = db._state.venta_distribuciones[0].id;
+  db._state.venta_participaciones.push({ id: 'part-1', distribucion_id: distribucionId, concepto: 'comercial', fase_id: null, beneficiario_email: 'a@example.com', porcentaje: 25 });
+
+  const primeraVez = await generarComisionesDesdeDistribucion(db, 'req-test', { ventaId: 'venta-1', distribucionId, actorEmail: 'admin@example.com' });
+  const segundaVez = await generarComisionesDesdeDistribucion(db, 'req-test', { ventaId: 'venta-1', distribucionId, actorEmail: 'admin@example.com' });
+  assert.equal(primeraVez.length, 1);
+  assert.deepEqual(segundaVez, primeraVez); // devuelve los mismos ids, no crea nada nuevo.
+  assert.equal(db._state.comisiones.length, 1);
+});
+
+test('activación: reintentar la activación (ya confirmada) es rechazada, nunca duplica comisiones', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  assert.equal(db._state.comisiones.length, 3);
+  const reintento = await distribucionHandler(fakeContext({ body: { action: 'activar' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  assert.equal(reintento.status, 400);
+  assert.equal(db._state.comisiones.length, 3); // sin cambios.
+});
+
+test('una plantilla modificada después de activar no altera los pools ya copiados a la distribución', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  db._state.plantillas_distribucion[0].porcentaje_desarrollo = 60; // Administración edita la plantilla después.
+  const response = await distribucionHandler(fakeContext({ method: 'GET', roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  const body = (await response.json()).data;
+  assert.equal(body.distribucion.pools.desarrollo, 45); // nunca se recalcula desde la plantilla actual.
+});
+
+test('una distribución corregida conserva ambas versiones — las comisiones de la versión original nunca se tocan', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  const montoOriginal = db._state.comisiones.find((c) => c.tipo === 'comercial').monto_comision;
+
+  const correccion = await distribucionHandler(fakeContext({ body: { action: 'corregir', motivo: 'Se reemplaza al desarrollador' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  assert.equal(correccion.status, 201);
+
+  // La comisión generada con la versión 1 sigue exactamente igual.
+  const comisionOriginal = db._state.comisiones.find((c) => c.tipo === 'comercial');
+  assert.equal(comisionOriginal.monto_comision, montoOriginal);
+  assert.equal(db._state.venta_distribuciones.filter((d) => d.estado === 'reemplazada').length, 1);
+  assert.equal(db._state.venta_distribuciones.filter((d) => d.estado === 'borrador').length, 1);
+});
+
+test('costos pendientes (costos_cerrados=0): comisiones y finanzas de empresa quedan marcadas como estimación', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  assert.ok(db._state.comisiones.every((c) => c.es_estimacion === 1));
+  assert.equal(db._state.proyecto_finanzas_empresa[0].es_estimacion, 1);
+});
+
+test('costos cerrados: comisiones y finanzas de empresa se generan como definitivas', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await distribucionHandler(fakeContext({ body: { action: 'definir-pools', plantillaId: 'pl-desarrollo' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  const distribucionId = db._state.venta_distribuciones[0].id;
+  const cerrar = await distribucionHandler(fakeContext({ body: { action: 'cerrar-costos' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  assert.equal(cerrar.status, 200);
+  for (const p of PARTICIPACIONES_COMPLETAS) {
+    await distribucionHandler(fakeContext({ body: { action: 'agregar-participacion', ...p }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  }
+  const activar = await distribucionHandler(fakeContext({ body: { action: 'activar' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  assert.equal(activar.status, 200);
+  assert.ok(db._state.comisiones.every((c) => c.es_estimacion === 0));
+  assert.equal(db._state.proyecto_finanzas_empresa[0].es_estimacion, 0);
+  assert.equal(db._state.venta_distribuciones.find((d) => d.id === distribucionId).costos_cerrados, 1);
+});
+
+test('cerrar-costos dos veces se rechaza — no es una acción repetible en silencio', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await distribucionHandler(fakeContext({ body: { action: 'definir-pools', plantillaId: 'pl-desarrollo' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  await distribucionHandler(fakeContext({ body: { action: 'cerrar-costos' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  const segunda = await distribucionHandler(fakeContext({ body: { action: 'cerrar-costos' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  assert.equal(segunda.status, 400);
+});
+
+test('comisiones provisionales de un proyecto personalizado nunca pueden avanzar a pagable — bloqueadas hasta que Brenda confirme la política', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  const comision = db._state.comisiones[0];
+  const resultado = await evaluateComisionGate(db, 'req-test', comision.id, 'admin@example.com');
+  assert.equal(resultado.habilitada, false);
+  assert.deepEqual(resultado.faltantes, ['politica_liberacion_pendiente_confirmacion']);
+  assert.equal(db._state.comisiones.find((c) => c.id === comision.id).estado, 'calculada_provisional'); // nunca avanzó.
+});
+
+test('configurar-liberacion y configurar-plazo-resguardo guardan la estructura configurable sin habilitar pago automático', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await distribucionHandler(fakeContext({ body: { action: 'definir-pools', plantillaId: 'pl-desarrollo' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  const rLib = await distribucionHandler(fakeContext({
+    body: { action: 'configurar-liberacion', politicaLiberacion: 'proporcional_por_pago', requiereHitoValidado: true },
+    roleIdentity: admin(), db, params: { id: 'venta-1' },
+  }));
+  assert.equal(rLib.status, 200);
+  const rPlazo = await distribucionHandler(fakeContext({
+    body: { action: 'configurar-plazo-resguardo', activo: true, dias: 15, tipoDias: 'corridos', eventoInicio: 'pago_total', alcance: 'proyecto_completo' },
+    roleIdentity: admin(), db, params: { id: 'venta-1' },
+  }));
+  assert.equal(rPlazo.status, 200);
+  const d = db._state.venta_distribuciones[0];
+  assert.equal(d.politica_liberacion, 'proporcional_por_pago');
+  assert.equal(d.requiere_hito_validado, 1);
+  assert.equal(d.plazo_resguardo_dias, 15);
+
+  // Activar y confirmar que, pese a la configuración, el gate sigue bloqueado (no habilita pago automático).
+  for (const p of PARTICIPACIONES_COMPLETAS) {
+    await distribucionHandler(fakeContext({ body: { action: 'agregar-participacion', ...p }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  }
+  await distribucionHandler(fakeContext({ body: { action: 'activar' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  const resultado = await evaluateComisionGate(db, 'req-test', db._state.comisiones[0].id, 'admin@example.com');
+  assert.equal(resultado.habilitada, false);
+});
+
+test('configurar-plazo-resguardo activo=true exige dias/tipoDias/eventoInicio/alcance', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await distribucionHandler(fakeContext({ body: { action: 'definir-pools', plantillaId: 'pl-desarrollo' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  const response = await distribucionHandler(fakeContext({ body: { action: 'configurar-plazo-resguardo', activo: true }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  assert.equal(response.status, 400);
+});
+
+test('la suma económica de una distribución activada sigue siendo exactamente 100% (pools + empresa)', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  const sumaComisiones = db._state.comisiones.reduce((s, c) => s + c.porcentaje_snapshot, 0);
+  const empresaPct = db._state.proyecto_finanzas_empresa[0].porcentaje_empresa;
+  assert.equal(sumaComisiones + empresaPct, 100);
+});
+
+// ── Comisiones históricas (proyectos importados, RIO-119 cuarto bloque) ──
+
+function seedVentaHistorica(overrides = {}) {
+  return { ventas: [{ id: 'venta-hist', producto: 'proyecto_personalizado', modo_historico: 'reconstruccion' }], ...overrides };
+}
+
+test('comisiones-historicas: admin puede registrar una participación histórica pagada antes de la incorporación', async () => {
+  const db = fakeDb(seedVentaHistorica());
+  const response = await comisionesHistoricasHandler(fakeContext({
+    body: { beneficiarioEmail: 'antiguo@example.com', concepto: 'desarrollo', importePagado: 500000, moneda: 'CLP', fechaAproximada: '2025-06', evidencia: 'Transferencia manual, sin comprobante digital', fuente: 'Declarado por Brenda de memoria' },
+    roleIdentity: admin(), db, params: { id: 'venta-hist' },
+  }));
+  assert.equal(response.status, 201);
+  assert.equal(db._state.comisiones_historicas.length, 1);
+  assert.equal(db._state.comisiones_historicas[0].estado, 'historica_pagada_antes_incorporacion');
+  // Nunca toca la tabla real de comisiones — estructuralmente invisible para el calendario 10/25.
+  assert.equal(db._state.comisiones.length, 0);
+});
+
+test('comisiones-historicas: exige fechaExacta o fechaAproximada (al menos una)', async () => {
+  const db = fakeDb(seedVentaHistorica());
+  const response = await comisionesHistoricasHandler(fakeContext({
+    body: { beneficiarioEmail: 'antiguo@example.com', concepto: 'desarrollo', importePagado: 500000, moneda: 'CLP', fuente: 'x' },
+    roleIdentity: admin(), db, params: { id: 'venta-hist' },
+  }));
+  assert.equal(response.status, 400);
+});
+
+test('comisiones-historicas: rechaza moneda o concepto inválido', async () => {
+  const db = fakeDb(seedVentaHistorica());
+  const r1 = await comisionesHistoricasHandler(fakeContext({
+    body: { beneficiarioEmail: 'a@example.com', concepto: 'desarrollo', importePagado: 1000, moneda: 'USD', fechaExacta: '2025-01-01', fuente: 'x' },
+    roleIdentity: admin(), db, params: { id: 'venta-hist' },
+  }));
+  assert.equal(r1.status, 400);
+  const r2 = await comisionesHistoricasHandler(fakeContext({
+    body: { beneficiarioEmail: 'a@example.com', concepto: 'inventado', importePagado: 1000, moneda: 'CLP', fechaExacta: '2025-01-01', fuente: 'x' },
+    roleIdentity: admin(), db, params: { id: 'venta-hist' },
+  }));
+  assert.equal(r2.status, 400);
+});
+
+test('comisiones-historicas: solo aplica a ventas marcadas como importación histórica', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  const response = await comisionesHistoricasHandler(fakeContext({
+    body: { beneficiarioEmail: 'a@example.com', concepto: 'desarrollo', importePagado: 1000, moneda: 'CLP', fechaExacta: '2025-01-01', fuente: 'x' },
+    roleIdentity: admin(), db, params: { id: 'venta-1' },
+  }));
+  assert.equal(response.status, 400);
+});
+
+test('comisiones-historicas: GET lista lo registrado', async () => {
+  const db = fakeDb(seedVentaHistorica());
+  await comisionesHistoricasHandler(fakeContext({
+    body: { beneficiarioEmail: 'a@example.com', concepto: 'comercial', importePagado: 100000, moneda: 'CLP', fechaExacta: '2025-01-01', fuente: 'x' },
+    roleIdentity: admin(), db, params: { id: 'venta-hist' },
+  }));
+  const response = await comisionesHistoricasHandler(fakeContext({ method: 'GET', roleIdentity: admin(), db, params: { id: 'venta-hist' } }));
+  const body = (await response.json()).data;
+  assert.equal(body.comisionesHistoricas.length, 1);
+});
+
+// ── 403 para roles no administrativos (cuarto bloque) ──
+
+test('distribucion: configurar-liberacion/configurar-plazo-resguardo/cerrar-costos son exclusivos de administración', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await distribucionHandler(fakeContext({ body: { action: 'definir-pools', plantillaId: 'pl-desarrollo' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  for (const action of ['configurar-liberacion', 'configurar-plazo-resguardo', 'cerrar-costos', 'recalcular-finanzas-empresa']) {
+    const response = await distribucionHandler(fakeContext({ body: { action }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1' } }));
+    assert.equal(response.status, 403, `action=${action}`);
+  }
+});
+
+test('comisiones-historicas: un supervisor/vendedor/asistente no puede registrar ni ver comisiones históricas', async () => {
+  const db = fakeDb(seedVentaHistorica());
+  const supervisor = roleIdentity({ role: 'supervisor', permissions: PERMISSIONS.supervisor });
+  const asistente = roleIdentity({ role: 'asistente', permissions: PERMISSIONS.asistente });
+  for (const rol of [roleIdentity(), supervisor, asistente]) {
+    const r1 = await comisionesHistoricasHandler(fakeContext({ method: 'GET', roleIdentity: rol, db, params: { id: 'venta-hist' } }));
+    assert.equal(r1.status, 403);
+    const r2 = await comisionesHistoricasHandler(fakeContext({
+      body: { beneficiarioEmail: 'a@example.com', concepto: 'comercial', importePagado: 1000, moneda: 'CLP', fechaExacta: '2025-01-01', fuente: 'x' },
+      roleIdentity: rol, db, params: { id: 'venta-hist' },
+    }));
+    assert.equal(r2.status, 403);
+  }
+});
+
+test('manipulación: un id de venta inexistente en comisiones-historicas devuelve 404, nunca filtra datos de otra venta', async () => {
+  const db = fakeDb(seedVentaHistorica());
+  const response = await comisionesHistoricasHandler(fakeContext({ method: 'GET', roleIdentity: admin(), db, params: { id: 'no-existe' } }));
+  assert.equal(response.status, 404);
+});
+
+test('manipulación: un porcentaje fuera de rango en agregar-participacion se rechaza server-side, aunque el cliente lo permita', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await distribucionHandler(fakeContext({ body: { action: 'definir-pools', plantillaId: 'pl-desarrollo' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  const response = await distribucionHandler(fakeContext({
+    body: { action: 'agregar-participacion', concepto: 'comercial', beneficiarioEmail: 'a@example.com', porcentaje: 101 },
+    roleIdentity: admin(), db, params: { id: 'venta-1' },
+  }));
   assert.equal(response.status, 400);
 });
