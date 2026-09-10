@@ -855,6 +855,53 @@ export async function retenerLiberacionesPorDisputa(db, requestId, { ventaId, ac
   }
 }
 
+// Retiene TODAS las liberaciones no terminales (nunca toca 'pagada') de las
+// comisiones de una distribución que acaba de quedar 'reemplazada' por una
+// corrección — RIO-119 (sexto bloque, 04/09/2026). No es estrictamente
+// necesario para el gate (evaluarLiberacion ya bloquea cualquier
+// liberación cuya distribución no esté 'confirmada', reemplazada incluida
+// — ver más abajo), pero deja el estado persistido reflejando la realidad
+// de inmediato, en vez de depender de la próxima reevaluación para que se
+// note. Nunca se vuelven a evaluar con éxito: mientras su distribución
+// siga 'reemplazada', el gate las retiene una y otra vez — no hace falta
+// un estado terminal nuevo (evita ALTERar el CHECK de
+// comision_liberaciones.estado).
+export async function retenerLiberacionesPorCorreccion(db, requestId, { distribucionId, actorEmail, motivo }) {
+  const liberaciones = await query(
+    db, requestId,
+    `SELECT cl.id, cl.estado FROM comision_liberaciones cl JOIN comisiones c ON c.id = cl.comision_id
+     WHERE c.distribucion_id = ? AND cl.estado IN ('retenida', 'habilitada', 'programada')`,
+    [distribucionId]
+  );
+  for (const lib of liberaciones) {
+    await execute(db, requestId, "UPDATE comision_liberaciones SET estado = 'retenida', motivo_retencion = ? WHERE id = ?", [JSON.stringify(['distribucion_reemplazada']), lib.id]);
+    await logEvento(db, requestId, {
+      ventaId: null, entidad: 'comision_liberacion', entidadId: lib.id, estadoAnterior: lib.estado, estadoNuevo: 'retenida',
+      usuarioEmail: actorEmail, motivoNota: motivo,
+    });
+  }
+}
+
+// Verdadero si alguna comisión de esta distribución ya cobró algo real —
+// una liberación 'pagada' o cualquier adelanto registrado — RIO-119
+// (sexto bloque, 04/09/2026). Usado para BLOQUEAR una corrección
+// automática ("no la anules silenciosamente... exigí un procedimiento
+// administrativo explícito de ajuste").
+export async function distribucionTienePagosOAdelantos(db, requestId, distribucionId) {
+  const pagadas = await query(
+    db, requestId,
+    `SELECT cl.id FROM comision_liberaciones cl JOIN comisiones c ON c.id = cl.comision_id WHERE c.distribucion_id = ? AND cl.estado = 'pagada' LIMIT 1`,
+    [distribucionId]
+  );
+  if (pagadas.length > 0) return true;
+  const adelantos = await query(
+    db, requestId,
+    `SELECT a.id FROM comision_adelantos a JOIN comisiones c ON c.id = a.comision_id WHERE c.distribucion_id = ? LIMIT 1`,
+    [distribucionId]
+  );
+  return adelantos.length > 0;
+}
+
 // Adelantos de comisiones — RIO-119 (quinto bloque, 04/09/2026). Genérico,
 // nunca por nombre propio: la capacidad la habilita
 // `asignaciones_rol.can_receive_commission_advance`, verificada en el
@@ -862,7 +909,9 @@ export async function retenerLiberacionesPorDisputa(db, requestId, { ventaId, ac
 // comisión (habilitada/programada/pagada) — nunca empresa, nunca otra
 // comisión, nunca un monto todavía estimado, nunca una cuota sin acreditar
 // (todo eso queda excluido por construcción: solo se suman liberaciones
-// que ya pasaron las 5 condiciones).
+// que ya pasaron las 5 condiciones). RIO-119 (sexto bloque): tampoco puede
+// consumir el saldo de una comisión cuya distribución quedó 'reemplazada'
+// por una corrección — el saldo de esas comisiones es siempre 0.
 export class AdelantoError extends Error {
   constructor(code, message) {
     super(message);
@@ -872,6 +921,12 @@ export class AdelantoError extends Error {
 }
 
 export async function saldoDisponibleComision(db, requestId, comisionId) {
+  const comisionRows = await query(db, requestId, 'SELECT distribucion_id FROM comisiones WHERE id = ?', [comisionId]);
+  const distribucionId = comisionRows[0]?.distribucion_id;
+  if (distribucionId) {
+    const distRows = await query(db, requestId, 'SELECT estado FROM venta_distribuciones WHERE id = ?', [distribucionId]);
+    if (distRows[0]?.estado !== 'confirmada') return 0; // reemplazada (o, defensivamente, cualquier estado que no sea la vigente) — nunca hay saldo.
+  }
   const liberaciones = await query(db, requestId, "SELECT monto_liberable FROM comision_liberaciones WHERE comision_id = ? AND estado IN ('habilitada', 'programada', 'pagada')", [comisionId]);
   const totalLiberado = liberaciones.reduce((s, l) => s + l.monto_liberable, 0);
   const adelantos = await query(db, requestId, 'SELECT monto FROM comision_adelantos WHERE comision_id = ?', [comisionId]);
@@ -888,6 +943,12 @@ export async function registrarAdelanto(db, requestId, { comisionId, monto, mone
   if (!comision) throw new AdelantoError('comision_no_encontrada', 'Comisión no encontrada.');
   if (comision.es_estimacion) {
     throw new AdelantoError('estimacion', 'No se puede adelantar sobre un monto todavía estimado — los costos del proyecto no están cerrados.');
+  }
+  if (comision.distribucion_id) {
+    const distRows = await query(db, requestId, 'SELECT estado FROM venta_distribuciones WHERE id = ?', [comision.distribucion_id]);
+    if (distRows[0]?.estado !== 'confirmada') {
+      throw new AdelantoError('distribucion_reemplazada', 'Esta comisión pertenece a una versión de la distribución que ya fue reemplazada por una corrección — nunca puede recibir un adelanto.');
+    }
   }
 
   // Capacidad configurable — nunca por nombre propio (Brenda: "no lo

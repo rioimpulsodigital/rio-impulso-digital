@@ -24,7 +24,10 @@ import { ok, Errors } from '../../../../../_shared/response.js';
 import { query, execute, transaction } from '../../../../../_shared/db.js';
 import { isMethodAllowed, hasExpectedContentType } from '../../../../../_shared/security.js';
 import { logEvento } from '../../../../../_shared/historial.js';
-import { validarActivacionProyecto, generarComisionesDesdeDistribucion, registrarFinanzasEmpresa } from '../../../../../_shared/comisiones.js';
+import {
+  validarActivacionProyecto, generarComisionesDesdeDistribucion, registrarFinanzasEmpresa,
+  reevaluarLiberacionesDeVenta, retenerLiberacionesPorCorreccion, distribucionTienePagosOAdelantos,
+} from '../../../../../_shared/comisiones.js';
 
 function serializeParticipacion(row) {
   return {
@@ -61,6 +64,42 @@ function serializeDistribucion(row) {
   };
 }
 
+// Serializa una distribución (vigente o reemplazada) junto con sus
+// comisiones y la liberación por cuota de cada una — RIO-119 (sexto
+// bloque, 04/09/2026). Reutilizado tanto para la vigente (arriba en la
+// respuesta) como para cada versión reemplazada (dentro de
+// `versionesAnteriores`) — misma forma, distinto lugar.
+async function serializeDistribucionConComisiones(db, requestId, distribucionRow) {
+  const comisionRows = await query(db, requestId, 'SELECT * FROM comisiones WHERE distribucion_id = ? ORDER BY created_at ASC', [distribucionRow.id]);
+  const liberacionRows = comisionRows.length
+    ? await query(
+        db, requestId,
+        `SELECT cl.*, p.etiqueta AS pago_etiqueta, p.monto AS pago_monto FROM comision_liberaciones cl
+         JOIN pagos_esperados p ON p.id = cl.pago_id WHERE cl.comision_id IN (${comisionRows.map(() => '?').join(',')})`,
+        comisionRows.map((c) => c.id)
+      )
+    : [];
+  const comisiones = comisionRows.map((c) => ({
+    id: c.id, tipo: c.tipo, beneficiarioEmail: c.beneficiario_email, porcentajeSnapshot: c.porcentaje_snapshot,
+    baseSnapshot: c.base_snapshot, montoBase: c.monto_base, moneda: c.moneda, montoComision: c.monto_comision,
+    estado: c.estado, esEstimacion: !!c.es_estimacion, componenteId: c.componente_id || null,
+    liberaciones: liberacionRows.filter((l) => l.comision_id === c.id).map((l) => ({
+      id: l.id, pagoId: l.pago_id, pagoEtiqueta: l.pago_etiqueta || null, pagoMonto: l.pago_monto,
+      montoLiberable: l.monto_liberable, moneda: l.moneda, estado: l.estado,
+      motivoRetencion: l.motivo_retencion ? JSON.parse(l.motivo_retencion) : [],
+      fechaAcreditacion: l.fecha_acreditacion || null, fechaCumplimientoResguardo: l.fecha_cumplimiento_resguardo || null,
+      fechaHabilitacion: l.fecha_habilitacion || null, fechaProgramadaEfectiva: l.fecha_programada_efectiva || null,
+      fechaPagoReal: l.fecha_pago_real || null,
+    })),
+  }));
+  return {
+    id: distribucionRow.id, version: distribucionRow.version, estado: distribucionRow.estado,
+    motivoCorreccion: distribucionRow.motivo_correccion || null, confirmedAt: distribucionRow.confirmed_at || null,
+    confirmedBy: distribucionRow.confirmed_by || null, createdBy: distribucionRow.created_by, createdAt: distribucionRow.created_at,
+    comisiones,
+  };
+}
+
 async function distribucionVigente(db, requestId, ventaId) {
   const rows = await query(
     db, requestId,
@@ -85,44 +124,40 @@ export async function onRequest(context) {
   }
 
   if (request.method === 'GET') {
+    // RIO-119 (sexto bloque, 04/09/2026): reevaluación perezosa e
+    // idempotente en cada lectura — así el vencimiento de los 10 días
+    // corridos se refleja solo, sin depender de que ocurra otro evento
+    // después. reevaluarLiberacionesDeVenta solo toca filas 'retenida' y
+    // nunca crea nada nuevo, así que llamarla en cada GET es segura
+    // (nunca duplica comisiones, liberaciones ni programaciones).
+    await reevaluarLiberacionesDeVenta(env.DB, requestId, venta.id, roleIdentity.email);
+
     const distribucion = await distribucionVigente(env.DB, requestId, venta.id);
-    if (!distribucion) return ok({ distribucion: null, participaciones: [], resumen: null, comisiones: [], finanzasEmpresa: null }, requestId);
+    const versionesAnterioresRows = await query(
+      env.DB, requestId,
+      "SELECT * FROM venta_distribuciones WHERE venta_id = ? AND estado = 'reemplazada' ORDER BY version DESC",
+      [venta.id]
+    );
+    const versionesAnteriores = await Promise.all(versionesAnterioresRows.map(async (d) => ({
+      ...(await serializeDistribucionConComisiones(env.DB, requestId, d)),
+      versionReemplazantePor: d.version + 1,
+    })));
+
+    if (!distribucion) return ok({ distribucion: null, participaciones: [], resumen: null, comisiones: [], finanzasEmpresa: null, versionesAnteriores }, requestId);
     const participacionRows = await query(env.DB, requestId, 'SELECT * FROM venta_participaciones WHERE distribucion_id = ? ORDER BY concepto ASC, created_at ASC', [distribucion.id]);
     const resumen = validarActivacionProyecto(
       { comercial: distribucion.porcentaje_comercial, supervision: distribucion.porcentaje_supervision, desarrollo: distribucion.porcentaje_desarrollo },
       participacionRows.map((p) => ({ concepto: p.concepto, beneficiarioEmail: p.beneficiario_email, porcentaje: p.porcentaje, faseId: p.fase_id }))
     );
 
-    const comisionRows = await query(env.DB, requestId, 'SELECT * FROM comisiones WHERE distribucion_id = ? ORDER BY created_at ASC', [distribucion.id]);
+    const { comisiones } = await serializeDistribucionConComisiones(env.DB, requestId, distribucion);
     const finanzasRows = await query(env.DB, requestId, 'SELECT * FROM proyecto_finanzas_empresa WHERE distribucion_id = ? ORDER BY created_at DESC', [distribucion.id]);
-    const liberacionRows = comisionRows.length
-      ? await query(
-          env.DB, requestId,
-          `SELECT cl.*, p.etiqueta AS pago_etiqueta, p.monto AS pago_monto FROM comision_liberaciones cl
-           JOIN pagos_esperados p ON p.id = cl.pago_id WHERE cl.comision_id IN (${comisionRows.map(() => '?').join(',')})`,
-          comisionRows.map((c) => c.id)
-        )
-      : [];
 
     return ok({
       distribucion: serializeDistribucion(distribucion),
       participaciones: participacionRows.map(serializeParticipacion),
       resumen,
-      comisiones: comisionRows.map((c) => ({
-        id: c.id, tipo: c.tipo, beneficiarioEmail: c.beneficiario_email, porcentajeSnapshot: c.porcentaje_snapshot,
-        baseSnapshot: c.base_snapshot, montoBase: c.monto_base, moneda: c.moneda, montoComision: c.monto_comision,
-        estado: c.estado, esEstimacion: !!c.es_estimacion, componenteId: c.componente_id || null,
-        // RIO-119 (quinto bloque, 04/09/2026): liberación por cuota — cada
-        // participación se habilita cuota por cuota, nunca todo o nada.
-        liberaciones: liberacionRows.filter((l) => l.comision_id === c.id).map((l) => ({
-          id: l.id, pagoId: l.pago_id, pagoEtiqueta: l.pago_etiqueta || null, pagoMonto: l.pago_monto,
-          montoLiberable: l.monto_liberable, moneda: l.moneda, estado: l.estado,
-          motivoRetencion: l.motivo_retencion ? JSON.parse(l.motivo_retencion) : [],
-          fechaAcreditacion: l.fecha_acreditacion || null, fechaCumplimientoResguardo: l.fecha_cumplimiento_resguardo || null,
-          fechaHabilitacion: l.fecha_habilitacion || null, fechaProgramadaEfectiva: l.fecha_programada_efectiva || null,
-          fechaPagoReal: l.fecha_pago_real || null,
-        })),
-      })),
+      comisiones,
       finanzasEmpresa: finanzasRows[0] ? {
         id: finanzasRows[0].id, montoBruto: finanzasRows[0].monto_bruto, costosDirectos: finanzasRows[0].costos_directos,
         utilidadNeta: finanzasRows[0].utilidad_neta, porcentajeEmpresa: finanzasRows[0].porcentaje_empresa,
@@ -130,6 +165,11 @@ export async function onRequest(context) {
         fondosEstimadosPendientes: finanzasRows[0].monto_empresa - finanzasRows[0].fondos_obtenidos,
         moneda: finanzasRows[0].moneda, esEstimacion: !!finanzasRows[0].es_estimacion, createdAt: finanzasRows[0].created_at,
       } : null,
+      // RIO-119 (sexto bloque, 04/09/2026): versiones reemplazadas por una
+      // corrección — visibles SOLO acá, en su propia sección de
+      // historial/auditoría. Nunca se mezclan con `comisiones`/`resumen`
+      // de arriba, que son siempre los de la versión VIGENTE.
+      versionesAnteriores,
     }, requestId);
   }
 
@@ -291,6 +331,19 @@ export async function onRequest(context) {
     if (typeof body.motivo !== 'string' || !body.motivo.trim()) {
       return Errors.validation('La corrección administrativa requiere un motivo.', requestId);
     }
+    // RIO-119 (sexto bloque, 04/09/2026): "si una comisión de la versión
+    // anterior ya recibió un pago o adelanto, no la anules silenciosamente
+    // — bloqueá la corrección automática y exigí un procedimiento
+    // administrativo explícito de ajuste." Ese procedimiento explícito
+    // todavía no está construido (deliberadamente, ver informe de cierre)
+    // — por ahora la corrección queda bloqueada por completo en este caso.
+    if (await distribucionTienePagosOAdelantos(env.DB, requestId, vigente.id)) {
+      return Errors.conflict(
+        'CORRECCION_BLOQUEADA_POR_PAGOS',
+        'Esta distribución ya tiene comisiones pagadas o adelantos registrados — no se puede corregir automáticamente. Requiere un ajuste administrativo explícito, todavía no implementado.',
+        requestId
+      );
+    }
 
     const participacionRows = await query(env.DB, requestId, 'SELECT * FROM venta_participaciones WHERE distribucion_id = ?', [vigente.id]);
     const nuevaId = crypto.randomUUID();
@@ -310,6 +363,15 @@ export async function onRequest(context) {
     } catch (e) {
       return Errors.internal(requestId);
     }
+    // Deja el estado persistido reflejando de inmediato que estas
+    // liberaciones ya no son de la versión vigente — nunca vuelven a
+    // habilitarse mientras su distribución siga 'reemplazada' (el gate ya
+    // las bloquea igual, esto es para que se note sin esperar el próximo
+    // evento).
+    await retenerLiberacionesPorCorreccion(env.DB, requestId, {
+      distribucionId: vigente.id, actorEmail: roleIdentity.email,
+      motivo: `Distribución reemplazada por corrección (v${vigente.version} → v${vigente.version + 1}): ${body.motivo.trim()}`,
+    });
     await logEvento(env.DB, requestId, {
       ventaId: venta.id, entidad: 'venta_distribucion', entidadId: nuevaId, estadoAnterior: 'confirmada', estadoNuevo: 'correccion_iniciada',
       usuarioEmail: roleIdentity.email, motivoNota: body.motivo.trim(),
@@ -410,5 +472,17 @@ export async function onRequest(context) {
     return ok({ id }, requestId, 201);
   }
 
-  return Errors.validation('action inválida. Valores permitidos: definir-pools, agregar-participacion, quitar-participacion, activar, corregir, configurar-liberacion, configurar-plazo-resguardo, cerrar-costos, recalcular-finanzas-empresa.', requestId);
+  // RIO-119 (sexto bloque, 04/09/2026): acción administrativa VISIBLE para
+  // forzar la reevaluación ahora mismo — nunca es la única vía (el GET ya
+  // reevalúa de forma perezosa cada vez que se consulta), pero deja un
+  // botón explícito y auditado para cuando administración quiera
+  // confirmar el estado sin tener que reabrir el panel. Idempotente por
+  // el mismo motivo que el GET: reevaluarLiberacionesDeVenta nunca crea
+  // nada nuevo, solo actualiza filas 'retenida'.
+  if (body?.action === 'reevaluar-vencimientos') {
+    await reevaluarLiberacionesDeVenta(env.DB, requestId, venta.id, roleIdentity.email);
+    return ok({ action: 'reevaluar-vencimientos' }, requestId);
+  }
+
+  return Errors.validation('action inválida. Valores permitidos: definir-pools, agregar-participacion, quitar-participacion, activar, corregir, configurar-liberacion, configurar-plazo-resguardo, cerrar-costos, recalcular-finanzas-empresa, reevaluar-vencimientos.', requestId);
 }

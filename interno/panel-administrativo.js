@@ -385,10 +385,17 @@
     }
   }
 
-  // RIO-119 (cuarto bloque, 03/09/2026): registro de referencia de lo ya
-  // pagado ANTES de que el proyecto se incorporara a este sistema — tabla
-  // separada de `comisiones`, nunca entra al calendario 10/25 ni genera
-  // deuda actual (ver migración 0029 para la auditoría de alternativas).
+  // RIO-119 (cuarto bloque, 03/09/2026; ampliado a 3 tipos de registro en
+  // el sexto bloque, 04/09/2026): registro de lo ocurrido ANTES de que el
+  // proyecto se incorporara a este sistema — tabla separada de
+  // `comisiones`, nunca entra al calendario 10/25 ni genera deuda actual
+  // por sí sola (ver migración 0031). 'obligacion_pendiente' es la única
+  // excepción real: una deuda confirmada, todavía sin pagar.
+  var TIPO_REGISTRO_HISTORICO_LABEL = {
+    solo_referencia: 'Solo referencia', reconstruido: 'Histórico reconstruido', obligacion_pendiente: 'Obligación pendiente',
+  };
+  var TIPO_REGISTRO_HISTORICO_BADGE = { solo_referencia: 'neutral', reconstruido: 'blue', obligacion_pendiente: 'amber' };
+
   async function cargarComisionesHistoricasDelDetalle(ventaId, moneda) {
     var slot = document.getElementById('pvComisionesHistoricasSlot');
     if (!slot) return;
@@ -396,46 +403,88 @@
     if (!r.ok || !r.body || !r.body.ok) { slot.innerHTML = pvErrorHTML('No se pudieron cargar las comisiones históricas.'); return; }
     var lista = r.body.data.comisionesHistoricas || [];
     var filasHTML = lista.map(function (c) {
+      var importe = c.importePagado != null ? fmtMoneda(c.importePagado, c.moneda) : '—';
       return (
         '<div class="pv-notif-card">' +
           '<div class="pv-notif-head">' +
-            '<span>' + escapeHtml(TIPO_PLAN_LABEL_DIST[c.concepto] || c.concepto) + ' — ' + escapeHtml(c.beneficiarioEmail) + ' — <strong>' + fmtMoneda(c.importePagado, c.moneda) + '</strong></span>' +
-            '<span class="pv-badge pv-badge--neutral">Histórica</span>' +
+            '<span>' + escapeHtml(TIPO_REGISTRO_HISTORICO_LABEL[c.tipoRegistro] || c.tipoRegistro) +
+              (c.concepto ? ' — ' + escapeHtml(TIPO_PLAN_LABEL_DIST[c.concepto] || c.concepto) : '') +
+              (c.beneficiarioEmail ? ' — ' + escapeHtml(c.beneficiarioEmail) : '') +
+              ' — <strong>' + importe + '</strong></span>' +
+            '<span class="pv-badge pv-badge--' + (TIPO_REGISTRO_HISTORICO_BADGE[c.tipoRegistro] || 'neutral') + '">' + escapeHtml(TIPO_REGISTRO_HISTORICO_LABEL[c.tipoRegistro] || c.tipoRegistro) +
+              (c.tipoRegistro === 'obligacion_pendiente' ? (c.confirmadoPorAdmin ? ' · confirmada' : ' · SIN confirmar') : '') + '</span>' +
           '</div>' +
+          (c.nivelCerteza ? '<div style="font-size:.74rem;color:var(--muted);">Certeza: ' + escapeHtml(c.nivelCerteza) + '</div>' : '') +
           '<div style="font-size:.78rem;color:var(--muted);">' + escapeHtml(c.fechaExacta || c.fechaAproximada || '—') + ' · Fuente: ' + escapeHtml(c.fuente) + (c.evidencia ? ' · ' + escapeHtml(c.evidencia) : '') + '</div>' +
+          (c.observaciones ? '<div style="font-size:.76rem;">' + escapeHtml(c.observaciones) + '</div>' : '') +
         '</div>'
       );
     }).join('') || '<p class="pv-materiales-vacio">Todavía no hay comisiones históricas registradas.</p>';
 
     slot.innerHTML = filasHTML +
       '<form class="pv-accion-form" data-agregar-comision-historica>' +
-        '<label>Beneficiario (correo)</label><input type="email" name="beneficiarioEmail" required>' +
-        '<label>Concepto</label><select name="concepto"><option value="comercial">Comercial</option><option value="supervision">Supervisión</option><option value="desarrollo">Desarrollo</option><option value="realizacion">Realización</option><option value="produccion">Producción</option></select>' +
-        '<label>Importe pagado</label><input type="number" name="importePagado" min="0" step="1" required>' +
+        '<label>Tipo de registro</label>' +
+        '<select name="tipoRegistro" data-tipo-registro>' +
+          '<option value="solo_referencia">Solo referencia — sin reconstrucción económica</option>' +
+          '<option value="reconstruido">Histórico económicamente reconstruido — importes ya ocurridos</option>' +
+          '<option value="obligacion_pendiente">Obligación histórica pendiente — deuda real, todavía sin pagar (EXCEPCIONAL)</option>' +
+        '</select>' +
+        '<label>Beneficiario (correo' + '<span data-obligacion-marca hidden> — obligatorio para obligación pendiente</span>)</label><input type="email" name="beneficiarioEmail">' +
+        '<label>Concepto (opcional)</label><select name="concepto"><option value="">— Sin concepto —</option><option value="comercial">Comercial</option><option value="supervision">Supervisión</option><option value="desarrollo">Desarrollo</option><option value="realizacion">Realización</option><option value="produccion">Producción</option></select>' +
+        '<label>Importe (pagado, o adeudado si es obligación pendiente)</label><input type="number" name="importePagado" min="0" step="1">' +
+        '<label>Moneda</label><select name="moneda"><option value="' + escapeHtml(moneda || 'CLP') + '" selected>' + escapeHtml(moneda || 'CLP') + '</option>' + (moneda === 'ARS' ? '<option value="CLP">CLP</option>' : '<option value="ARS">ARS</option>') + '</select>' +
+        '<label>Distribución conocida (opcional, texto libre)</label><input type="text" name="distribucionConocida" placeholder="ej. 25% comercial / 45% desarrollo">' +
+        '<label>Nivel de certeza del dato</label><select name="nivelCerteza"><option value="">Sin especificar</option><option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option></select>' +
         '<label>Fecha exacta (si se conoce)</label><input type="date" name="fechaExacta">' +
         '<label>Fecha aproximada (si no hay fecha exacta)</label><input type="text" name="fechaAproximada" placeholder="ej. 2025-06">' +
-        '<label>Evidencia (opcional)</label><input type="text" name="evidencia" placeholder="ej. captura de transferencia, planilla">' +
-        '<label>Fuente (obligatorio)</label><input type="text" name="fuente" placeholder="de dónde se obtuvo este dato" required>' +
-        '<button type="submit" class="pv-btn pv-btn--primary">Registrar comisión histórica</button>' +
+        '<label>Evidencia (obligatoria para obligación pendiente)</label><input type="text" name="evidencia" placeholder="ej. captura de transferencia, planilla">' +
+        '<label>Observaciones (opcional)</label><textarea name="observaciones"></textarea>' +
+        '<label>Fuente (obligatorio — de dónde se obtuvo este dato)</label><input type="text" name="fuente" required>' +
+        '<div data-obligacion-bloque hidden style="border:1px solid var(--pv-amber, #b8860b);border-radius:6px;padding:8px;margin-top:6px;">' +
+          '<p style="font-size:.76rem;margin:0 0 6px;"><strong>Obligación histórica pendiente:</strong> esto registra una deuda REAL todavía sin pagar — nunca se infiere ni se genera automáticamente. Requiere beneficiario, monto, moneda y evidencia disponible.</p>' +
+          '<label><input type="checkbox" name="confirmarObligacion"> Confirmo administrativamente que esta obligación existe y está pendiente de pago</label>' +
+        '</div>' +
+        '<button type="submit" class="pv-btn pv-btn--primary">Registrar</button>' +
         '<span class="pv-status-msg" data-status></span>' +
       '</form>';
 
     var form = slot.querySelector('[data-agregar-comision-historica]');
+    var tipoSelect = form.querySelector('[data-tipo-registro]');
+    var obligacionBloque = form.querySelector('[data-obligacion-bloque]');
+    var obligacionMarca = form.querySelector('[data-obligacion-marca]');
+    function actualizarVisibilidadObligacion() {
+      var esObligacion = tipoSelect.value === 'obligacion_pendiente';
+      obligacionBloque.hidden = !esObligacion;
+      obligacionMarca.hidden = !esObligacion;
+    }
+    tipoSelect.addEventListener('change', actualizarVisibilidadObligacion);
+    actualizarVisibilidadObligacion();
+
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
       var fd = new FormData(form);
+      var tipoRegistro = fd.get('tipoRegistro');
+      if (tipoRegistro === 'obligacion_pendiente') {
+        if (!fd.get('confirmarObligacion')) { mostrarStatus(form, 'Marcá la confirmación administrativa para registrar una obligación pendiente.', true); return; }
+        if (!confirm('Vas a registrar una OBLIGACIÓN HISTÓRICA PENDIENTE: una deuda real todavía sin pagar, quedará auditada con tu usuario. ¿Confirmás?')) return;
+      }
       var r2 = await apiPost('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/comisiones-historicas', {
-        beneficiarioEmail: fd.get('beneficiarioEmail').trim(),
-        concepto: fd.get('concepto'),
-        importePagado: parseInt(fd.get('importePagado'), 10),
-        moneda: moneda || 'CLP',
+        tipoRegistro: tipoRegistro,
+        beneficiarioEmail: fd.get('beneficiarioEmail').trim() || undefined,
+        concepto: fd.get('concepto') || undefined,
+        importePagado: fd.get('importePagado') !== '' ? parseInt(fd.get('importePagado'), 10) : undefined,
+        moneda: fd.get('moneda') || undefined,
+        distribucionConocida: fd.get('distribucionConocida').trim() || undefined,
+        nivelCerteza: fd.get('nivelCerteza') || undefined,
         fechaExacta: fd.get('fechaExacta') || undefined,
         fechaAproximada: fd.get('fechaAproximada') ? fd.get('fechaAproximada').trim() : undefined,
         evidencia: fd.get('evidencia') ? fd.get('evidencia').trim() : undefined,
+        observaciones: fd.get('observaciones').trim() || undefined,
         fuente: fd.get('fuente').trim(),
+        confirmarObligacion: tipoRegistro === 'obligacion_pendiente' ? true : undefined,
       });
       if (!r2.ok || !r2.body || !r2.body.ok) { mostrarStatus(form, (r2.body && r2.body.error && r2.body.error.message) || 'No se pudo registrar.', true); return; }
-      await cargarComisionesHistoricasDelDetalle(ventaId);
+      await cargarComisionesHistoricasDelDetalle(ventaId, moneda);
     });
   }
 
@@ -693,7 +742,73 @@
     );
   }
 
-  function distribucionHTML(distribucion, participaciones, resumen, comisiones, finanzasEmpresa) {
+  // RIO-119 (sexto bloque, 04/09/2026): historial de versiones reemplazadas
+  // por una corrección administrativa — SIEMPRE en su propia sección,
+  // nunca mezclado con la distribución vigente ni con sus totales. Cada
+  // entrada trae su propio motivo/autor/fecha (los de la corrección que la
+  // originó, es decir, por qué reemplazó a la versión previa) y la versión
+  // que la reemplazó a ella.
+  function versionesAnterioresHTML(versiones) {
+    if (!versiones || versiones.length === 0) return '';
+    var bloques = versiones.map(function (v) {
+      var comisionesHTML = (v.comisiones || []).map(function (c) {
+        return (
+          '<div class="pv-notif-card" style="opacity:.7;">' +
+            '<div class="pv-notif-head">' +
+              '<span>' + escapeHtml(TIPO_PLAN_LABEL_DIST[c.tipo] || c.tipo) + ' — ' + escapeHtml(c.beneficiarioEmail) + ' — <strong>' + fmtMoneda(c.montoComision, c.moneda) + '</strong> (' + c.porcentajeSnapshot + '%)</span>' +
+              '<span class="pv-badge pv-badge--neutral">Reemplazada — no vigente</span>' +
+            '</div>' +
+          '</div>'
+        );
+      }).join('') || '<p class="pv-materiales-vacio">Sin comisiones en esta versión.</p>';
+      return (
+        '<details class="pv-antecedentes" open style="margin-bottom:8px;">' +
+          '<summary>Versión ' + v.version + ' — reemplazada por la versión ' + v.versionReemplazantePor + '</summary>' +
+          '<div class="pv-antecedentes-body">' +
+            '<dl class="pv-kv">' +
+              '<dt>Creada el</dt><dd>' + fmtFecha(v.createdAt) + '</dd>' +
+              '<dt>Autor</dt><dd>' + escapeHtml(v.createdBy || '—') + '</dd>' +
+              (v.motivoCorreccion ? '<dt>Motivo de la corrección que la originó</dt><dd>' + escapeHtml(v.motivoCorreccion) + '</dd>' : '') +
+              '<dt>Versión reemplazante</dt><dd>v' + v.versionReemplazantePor + '</dd>' +
+            '</dl>' +
+            comisionesHTML +
+          '</div>' +
+        '</details>'
+      );
+    }).join('');
+    return (
+      '<div class="pv-detail-section"><p class="pv-detail-section-title">Historial de versiones anteriores (reemplazadas)</p>' +
+        '<p style="font-size:.72rem;color:var(--muted);margin:0 0 8px;">Visibles solo acá, para auditoría — nunca cuentan en los totales vigentes ni pueden habilitarse, adelantarse o liquidarse.</p>' +
+        bloques +
+      '</div>'
+    );
+  }
+
+  // RIO-119 (sexto bloque, 04/09/2026): Nua Bushi es un proyecto ACTIVO, no
+  // histórico — sus datos reales todavía no se cargan en Preview. Este
+  // checklist queda preparado en el propio Panel para cuando se cargue por
+  // el flujo normal de proyecto personalizado, ya en Producción.
+  function nuaBushiChecklistHTML() {
+    var items = [
+      'Cliente y contactos', 'Precio total y moneda', 'Cuotas pactadas',
+      'Primera cuota ya recibida y fecha real de acreditación', 'Fases e hitos', 'Costos',
+      'Participantes', 'Distribución económica', 'Porcentaje de empresa', 'Comprobantes',
+      'Estado actual del proyecto', 'Vínculo con su página de Notion',
+    ];
+    return (
+      '<details class="pv-antecedentes" style="margin-top:10px;">' +
+        '<summary>Checklist — carga futura de Nua Bushi (proyecto activo, todavía sin datos reales acá)</summary>' +
+        '<div class="pv-antecedentes-body">' +
+          '<p style="font-size:.76rem;color:var(--muted);margin:0 0 8px;">Nua Bushi es un proyecto activo, no histórico. Sus datos reales se cargan más adelante por este mismo flujo de proyecto personalizado, una vez que RIO-119 esté validado en Producción. Tener a mano al cargarlo:</p>' +
+          '<ul style="margin:0;padding-left:18px;font-size:.78rem;">' +
+            items.map(function (i) { return '<li>' + escapeHtml(i) + '</li>'; }).join('') +
+          '</ul>' +
+        '</div>' +
+      '</details>'
+    );
+  }
+
+  function distribucionHTML(distribucion, participaciones, resumen, comisiones, finanzasEmpresa, versionesAnteriores) {
     if (!distribucion) {
       return (
         '<form class="pv-accion-form" data-definir-pools style="border-top:none;padding-top:0;">' +
@@ -705,7 +820,8 @@
           '<label>Pool desarrollo (bolsa única del proyecto) %</label><input type="number" name="porcentajeDesarrollo" min="0" max="100">' +
           '<button type="submit" class="pv-btn pv-btn--primary">Definir pools</button>' +
           '<span class="pv-status-msg" data-status></span>' +
-        '</form>'
+        '</form>' +
+        versionesAnterioresHTML(versionesAnteriores) + nuaBushiChecklistHTML()
       );
     }
 
@@ -785,7 +901,9 @@
         '<p style="font-size:.78rem;color:var(--muted);">Confirmada el ' + fmtFecha(distribucion.confirmedAt) + ' por ' + escapeHtml(distribucion.confirmedBy || '—') + '. Snapshot inmutable — un cambio posterior exige una corrección administrativa auditada.</p>' +
         (comisiones && comisiones.length ? '<p style="font-size:.78rem;color:var(--muted);">' + comisiones.length + ' comisión(es) generada(s) — provisionales, no pueden pagarse hasta que se confirme la política de liberación.</p>' : '') +
         configAvanzadaHTML +
-        '<div class="pv-btn-row"><button type="button" class="pv-btn" data-recalcular-finanzas>Recalcular finanzas de empresa</button></div>' +
+        '<div class="pv-btn-row"><button type="button" class="pv-btn" data-recalcular-finanzas>Recalcular finanzas de empresa</button>' +
+          '<button type="button" class="pv-btn" data-reevaluar-vencimientos title="El plazo de resguardo de 10 días se detecta solo con cada consulta — este botón fuerza la revisión ahora mismo, sin esperar la próxima carga del panel.">Reevaluar vencimientos</button></div>' +
+        '<p class="pv-status-msg" data-reevaluar-status></p>' +
         '<form class="pv-accion-form" data-corregir-distribucion style="border-top:none;">' +
           '<label>Motivo de la corrección (obligatorio)</label><textarea name="motivo" required></textarea>' +
           '<button type="submit" class="pv-btn pv-btn--danger">Corregir (crea una nueva versión auditada)</button>' +
@@ -795,7 +913,8 @@
 
     return finanzasEmpresaHTML(finanzasEmpresa) +
       '<div class="pv-notif-card" style="margin-bottom:12px;"><strong>Estado: ' + escapeHtml(distribucion.estado) + ' (v' + distribucion.version + ')</strong>' + resumenHTML + '</div>' +
-      filasHTML + comisionesGeneradasHTML(comisiones) + accionesHTML;
+      filasHTML + comisionesGeneradasHTML(comisiones) + accionesHTML +
+      versionesAnterioresHTML(versionesAnteriores) + nuaBushiChecklistHTML();
   }
 
   async function cargarDistribucionDelDetalle(ventaId) {
@@ -805,7 +924,7 @@
     if (!r.ok || !r.body || !r.body.ok) { slot.innerHTML = pvErrorHTML('No se pudo cargar la distribución económica.'); return; }
     var data = r.body.data;
     try {
-      slot.innerHTML = distribucionHTML(data.distribucion, data.participaciones, data.resumen, data.comisiones, data.finanzasEmpresa);
+      slot.innerHTML = distribucionHTML(data.distribucion, data.participaciones, data.resumen, data.comisiones, data.finanzasEmpresa, data.versionesAnteriores);
     } catch (e) {
       slot.innerHTML = pvErrorHTML('No se pudo mostrar la distribución económica.');
       return;
@@ -921,6 +1040,25 @@
         recalcularBtn.disabled = true;
         var r = await apiPost('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/distribucion', { action: 'recalcular-finanzas-empresa', motivo: motivo.trim() || undefined });
         if (!r.ok || !r.body || !r.body.ok) { alert((r.body && r.body.error && r.body.error.message) || 'No se pudo recalcular.'); recalcularBtn.disabled = false; return; }
+        await cargarDistribucionDelDetalle(ventaId);
+      });
+    }
+
+    // RIO-119 (sexto bloque, 04/09/2026): acción visible para forzar la
+    // reevaluación de vencimientos ahora — el GET ya reevalúa solo cada vez
+    // que se carga el panel (perezoso e idempotente), este botón es el
+    // disparador manual explícito que pidió Brenda.
+    var reevaluarBtn = slot.querySelector('[data-reevaluar-vencimientos]');
+    if (reevaluarBtn) {
+      reevaluarBtn.addEventListener('click', async function () {
+        reevaluarBtn.disabled = true;
+        var statusEl = slot.querySelector('[data-reevaluar-status]');
+        var r = await apiPost('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/distribucion', { action: 'reevaluar-vencimientos' });
+        if (!r.ok || !r.body || !r.body.ok) {
+          if (statusEl) { statusEl.textContent = (r.body && r.body.error && r.body.error.message) || 'No se pudo reevaluar.'; statusEl.className = 'pv-status-msg err'; }
+          reevaluarBtn.disabled = false;
+          return;
+        }
         await cargarDistribucionDelDetalle(ventaId);
       });
     }

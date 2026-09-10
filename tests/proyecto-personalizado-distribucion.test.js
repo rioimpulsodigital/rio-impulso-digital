@@ -55,6 +55,9 @@ function fakeDb(seed = {}) {
     if (sql.startsWith('SELECT id, producto FROM ventas WHERE id')) {
       return state.ventas.filter((v) => v.id === p[0]).map((v) => ({ id: v.id, producto: v.producto }));
     }
+    if (sql.startsWith("SELECT * FROM venta_distribuciones WHERE venta_id") && sql.includes("estado = 'reemplazada'")) {
+      return state.venta_distribuciones.filter((d) => d.venta_id === p[0] && d.estado === 'reemplazada').sort((a, b) => b.version - a.version);
+    }
     if (sql.startsWith("SELECT * FROM venta_distribuciones WHERE venta_id")) {
       return state.venta_distribuciones.filter((d) => d.venta_id === p[0] && d.estado !== 'reemplazada').sort((a, b) => b.version - a.version);
     }
@@ -153,6 +156,24 @@ function fakeDb(seed = {}) {
     if (sql.startsWith("SELECT id, estado FROM comisiones WHERE venta_id") && sql.includes("estado IN ('habilitada', 'programada')")) return [];
     if (sql.startsWith('SELECT * FROM incidencias WHERE id')) return state.incidencias.filter((i) => i.id === p[0]);
     if (sql.startsWith('SELECT id FROM comisiones WHERE venta_id')) return [];
+    if (sql.includes('FROM comision_liberaciones cl JOIN comisiones c ON c.id = cl.comision_id') && sql.includes("cl.estado = 'pagada'")) {
+      return state.comision_liberaciones.filter((l) => {
+        const c = state.comisiones.find((x) => x.id === l.comision_id);
+        return c && c.distribucion_id === p[0] && l.estado === 'pagada';
+      }).map((l) => ({ id: l.id }));
+    }
+    if (sql.includes('FROM comision_adelantos a JOIN comisiones c ON c.id = a.comision_id')) {
+      return state.comision_adelantos.filter((a) => {
+        const c = state.comisiones.find((x) => x.id === a.comision_id);
+        return c && c.distribucion_id === p[0];
+      }).map((a) => ({ id: a.id }));
+    }
+    if (sql.includes('FROM comision_liberaciones cl JOIN comisiones c ON c.id = cl.comision_id') && sql.includes("cl.estado IN ('retenida', 'habilitada', 'programada')")) {
+      return state.comision_liberaciones.filter((l) => {
+        const c = state.comisiones.find((x) => x.id === l.comision_id);
+        return c && c.distribucion_id === p[0] && ['retenida', 'habilitada', 'programada'].includes(l.estado);
+      }).map((l) => ({ id: l.id, estado: l.estado }));
+    }
     throw new Error('SELECT inesperado en test: ' + sql);
   }
 
@@ -223,9 +244,10 @@ function fakeDb(seed = {}) {
       });
     } else if (sql.startsWith('INSERT INTO comisiones_historicas')) {
       state.comisiones_historicas.push({
-        id: p[0], venta_id: p[1], beneficiario_email: p[2], concepto: p[3], importe_pagado: p[4], moneda: p[5],
-        fecha_exacta: p[6], fecha_aproximada: p[7], evidencia: p[8], fuente: p[9], declarado_por: p[10],
-        estado: 'historica_pagada_antes_incorporacion', created_at: '2026-09-03',
+        id: p[0], venta_id: p[1], tipo_registro: p[2], beneficiario_email: p[3], concepto: p[4],
+        distribucion_conocida: p[5], pagos_recibidos: p[6], importe_pagado: p[7], monto_empresa: p[8], moneda: p[9],
+        estado_final: p[10], observaciones: p[11], nivel_certeza: p[12], fecha_exacta: p[13], fecha_aproximada: p[14],
+        evidencia: p[15], fuente: p[16], declarado_por: p[17], confirmado_por_admin: p[18], created_at: '2026-09-04',
       });
     } else if (sql.startsWith('UPDATE venta_distribuciones SET politica_liberacion')) {
       const d = state.venta_distribuciones.find((x) => x.id === p[2]);
@@ -815,46 +837,83 @@ function seedVentaHistorica(overrides = {}) {
   return { ventas: [{ id: 'venta-hist', producto: 'proyecto_personalizado', modo_historico: 'reconstruccion' }], ...overrides };
 }
 
-test('comisiones-historicas: admin puede registrar una participación histórica pagada antes de la incorporación', async () => {
+test('comisiones-historicas: "solo_referencia" se registra sin generar ninguna comisión real', async () => {
   const db = fakeDb(seedVentaHistorica());
   const response = await comisionesHistoricasHandler(fakeContext({
-    body: { beneficiarioEmail: 'antiguo@example.com', concepto: 'desarrollo', importePagado: 500000, moneda: 'CLP', fechaAproximada: '2025-06', evidencia: 'Transferencia manual, sin comprobante digital', fuente: 'Declarado por Brenda de memoria' },
+    body: { tipoRegistro: 'solo_referencia', observaciones: 'Proyecto viejo, sin datos económicos', fechaAproximada: '2024', fuente: 'Memoria de Brenda' },
     roleIdentity: admin(), db, params: { id: 'venta-hist' },
   }));
   assert.equal(response.status, 201);
   assert.equal(db._state.comisiones_historicas.length, 1);
-  assert.equal(db._state.comisiones_historicas[0].estado, 'historica_pagada_antes_incorporacion');
-  // Nunca toca la tabla real de comisiones — estructuralmente invisible para el calendario 10/25.
-  assert.equal(db._state.comisiones.length, 0);
+  assert.equal(db._state.comisiones_historicas[0].tipo_registro, 'solo_referencia');
+  assert.equal(db._state.comisiones.length, 0); // nunca genera una comisión real.
 });
 
-test('comisiones-historicas: exige fechaExacta o fechaAproximada (al menos una)', async () => {
+test('comisiones-historicas: "reconstruido" registra importes ya pagados sin generar una deuda nueva', async () => {
   const db = fakeDb(seedVentaHistorica());
   const response = await comisionesHistoricasHandler(fakeContext({
-    body: { beneficiarioEmail: 'antiguo@example.com', concepto: 'desarrollo', importePagado: 500000, moneda: 'CLP', fuente: 'x' },
+    body: { tipoRegistro: 'reconstruido', beneficiarioEmail: 'antiguo@example.com', concepto: 'desarrollo', importePagado: 500000, moneda: 'CLP', fechaAproximada: '2025-06', evidencia: 'Transferencia manual, sin comprobante digital', fuente: 'Declarado por Brenda de memoria' },
+    roleIdentity: admin(), db, params: { id: 'venta-hist' },
+  }));
+  assert.equal(response.status, 201);
+  assert.equal(db._state.comisiones_historicas[0].tipo_registro, 'reconstruido');
+  assert.equal(db._state.comisiones_historicas[0].confirmado_por_admin, 0); // no es una obligación pendiente.
+  // Nunca toca la tabla real de comisiones — estructuralmente invisible para el calendario 10/25.
+  assert.equal(db._state.comisiones.length, 0);
+  assert.equal(db._state.comision_liberaciones.length, 0);
+});
+
+test('comisiones-historicas: "obligacion_pendiente" exige confirmación administrativa explícita', async () => {
+  const db = fakeDb(seedVentaHistorica());
+  const sinConfirmar = await comisionesHistoricasHandler(fakeContext({
+    body: { tipoRegistro: 'obligacion_pendiente', beneficiarioEmail: 'antiguo@example.com', importePagado: 300000, moneda: 'CLP', fechaAproximada: '2025-01', evidencia: 'Acuerdo verbal registrado en Notion', fuente: 'x' },
+    roleIdentity: admin(), db, params: { id: 'venta-hist' },
+  }));
+  assert.equal(sinConfirmar.status, 400); // falta confirmarObligacion=true.
+
+  const confirmada = await comisionesHistoricasHandler(fakeContext({
+    body: { tipoRegistro: 'obligacion_pendiente', beneficiarioEmail: 'antiguo@example.com', importePagado: 300000, moneda: 'CLP', fechaAproximada: '2025-01', evidencia: 'Acuerdo verbal registrado en Notion', fuente: 'x', confirmarObligacion: true },
+    roleIdentity: admin(), db, params: { id: 'venta-hist' },
+  }));
+  assert.equal(confirmada.status, 201);
+  assert.equal(db._state.comisiones_historicas[0].confirmado_por_admin, 1);
+});
+
+test('comisiones-historicas: "obligacion_pendiente" exige beneficiario, monto, moneda y evidencia', async () => {
+  const db = fakeDb(seedVentaHistorica());
+  const response = await comisionesHistoricasHandler(fakeContext({
+    body: { tipoRegistro: 'obligacion_pendiente', fechaAproximada: '2025-01', fuente: 'x', confirmarObligacion: true },
     roleIdentity: admin(), db, params: { id: 'venta-hist' },
   }));
   assert.equal(response.status, 400);
 });
 
-test('comisiones-historicas: rechaza moneda o concepto inválido', async () => {
+test('comisiones-historicas: exige fechaExacta o fechaAproximada (al menos una)', async () => {
   const db = fakeDb(seedVentaHistorica());
-  const r1 = await comisionesHistoricasHandler(fakeContext({
-    body: { beneficiarioEmail: 'a@example.com', concepto: 'desarrollo', importePagado: 1000, moneda: 'USD', fechaExacta: '2025-01-01', fuente: 'x' },
+  const response = await comisionesHistoricasHandler(fakeContext({
+    body: { tipoRegistro: 'solo_referencia', fuente: 'x' },
     roleIdentity: admin(), db, params: { id: 'venta-hist' },
   }));
+  assert.equal(response.status, 400);
+});
+
+test('comisiones-historicas: rechaza tipoRegistro, moneda, concepto o nivelCerteza inválidos', async () => {
+  const db = fakeDb(seedVentaHistorica());
+  const base = { fechaExacta: '2025-01-01', fuente: 'x' };
+  const r1 = await comisionesHistoricasHandler(fakeContext({ body: { ...base, tipoRegistro: 'inventado' }, roleIdentity: admin(), db, params: { id: 'venta-hist' } }));
   assert.equal(r1.status, 400);
-  const r2 = await comisionesHistoricasHandler(fakeContext({
-    body: { beneficiarioEmail: 'a@example.com', concepto: 'inventado', importePagado: 1000, moneda: 'CLP', fechaExacta: '2025-01-01', fuente: 'x' },
-    roleIdentity: admin(), db, params: { id: 'venta-hist' },
-  }));
+  const r2 = await comisionesHistoricasHandler(fakeContext({ body: { ...base, tipoRegistro: 'reconstruido', moneda: 'USD' }, roleIdentity: admin(), db, params: { id: 'venta-hist' } }));
   assert.equal(r2.status, 400);
+  const r3 = await comisionesHistoricasHandler(fakeContext({ body: { ...base, tipoRegistro: 'reconstruido', concepto: 'inventado' }, roleIdentity: admin(), db, params: { id: 'venta-hist' } }));
+  assert.equal(r3.status, 400);
+  const r4 = await comisionesHistoricasHandler(fakeContext({ body: { ...base, tipoRegistro: 'reconstruido', nivelCerteza: 'inventado' }, roleIdentity: admin(), db, params: { id: 'venta-hist' } }));
+  assert.equal(r4.status, 400);
 });
 
 test('comisiones-historicas: solo aplica a ventas marcadas como importación histórica', async () => {
   const db = fakeDb(seedProyectoActivable());
   const response = await comisionesHistoricasHandler(fakeContext({
-    body: { beneficiarioEmail: 'a@example.com', concepto: 'desarrollo', importePagado: 1000, moneda: 'CLP', fechaExacta: '2025-01-01', fuente: 'x' },
+    body: { tipoRegistro: 'solo_referencia', fechaExacta: '2025-01-01', fuente: 'x' },
     roleIdentity: admin(), db, params: { id: 'venta-1' },
   }));
   assert.equal(response.status, 400);
@@ -863,12 +922,13 @@ test('comisiones-historicas: solo aplica a ventas marcadas como importación his
 test('comisiones-historicas: GET lista lo registrado', async () => {
   const db = fakeDb(seedVentaHistorica());
   await comisionesHistoricasHandler(fakeContext({
-    body: { beneficiarioEmail: 'a@example.com', concepto: 'comercial', importePagado: 100000, moneda: 'CLP', fechaExacta: '2025-01-01', fuente: 'x' },
+    body: { tipoRegistro: 'reconstruido', beneficiarioEmail: 'a@example.com', concepto: 'comercial', importePagado: 100000, moneda: 'CLP', fechaExacta: '2025-01-01', fuente: 'x' },
     roleIdentity: admin(), db, params: { id: 'venta-hist' },
   }));
   const response = await comisionesHistoricasHandler(fakeContext({ method: 'GET', roleIdentity: admin(), db, params: { id: 'venta-hist' } }));
   const body = (await response.json()).data;
   assert.equal(body.comisionesHistoricas.length, 1);
+  assert.equal(body.comisionesHistoricas[0].tipoRegistro, 'reconstruido');
 });
 
 // ── 403 para roles no administrativos (cuarto bloque) ──
@@ -1301,4 +1361,163 @@ test('GET adelantos: muestra monto original, adelantos acumulados y saldo pendie
   assert.equal(body.comision.adelantosAcumulados, 30000);
   assert.equal(body.comision.saldoPendiente, 250000 - 30000);
   assert.equal(body.adelantos.length, 1);
+});
+
+// ── Sexto bloque (04/09/2026): cumplimiento automático de los 10 días,
+// correcciones de distribución (exclusión estricta de lo reemplazado) ──
+
+test('plazo: todavía no venció (3 de 10 días) queda retenida', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  acreditarCuotaHaceNDias(db, 'pago-1', 3);
+  await reevaluarLiberacionesDeVenta(db, 'req-test', 'venta-1', 'admin@example.com');
+  assert.equal(liberacionDe(db, 'pago-1', 'comercial@example.com').estado, 'retenida');
+});
+
+test('plazo: vence al cumplirse exactamente los 10 días corridos', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  acreditarCuotaHaceNDias(db, 'pago-1', 10);
+  db._state.pagos_esperados.find((p) => p.id === 'pago-1').hito_validado = 1;
+  await reevaluarLiberacionesDeVenta(db, 'req-test', 'venta-1', 'admin@example.com');
+  assert.equal(liberacionDe(db, 'pago-1', 'comercial@example.com').estado, 'programada');
+});
+
+test('plazo vencido SIN ningún evento posterior: una consulta (GET) detecta el vencimiento sola, sin que nadie toque otro dato', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  // La cuota se acredita hace 11 días y el hito queda validado — pero
+  // NINGÚN evento nuevo dispara una reevaluación explícita después de eso
+  // (nunca se llama reevaluarLiberacionesDeVenta ni la acción manual "
+  // reevaluar-vencimientos"): la liberación queda tal cual la dejó
+  // 'activar' (evaluada UNA sola vez, al momento de generarse, cuando
+  // todavía no estaba ni acreditada).
+  acreditarCuotaHaceNDias(db, 'pago-1', 11);
+  db._state.pagos_esperados.find((p) => p.id === 'pago-1').hito_validado = 1;
+  assert.equal(liberacionDe(db, 'pago-1', 'comercial@example.com').estado, 'retenida'); // todavía sin re-evaluar.
+
+  // Simplemente CONSULTAR (GET) el panel administrativo debe detectar el
+  // vencimiento por sí solo, sin que nadie haya disparado otro evento.
+  const response = await distribucionHandler(fakeContext({ method: 'GET', roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  assert.equal(response.status, 200);
+  assert.equal(liberacionDe(db, 'pago-1', 'comercial@example.com').estado, 'programada');
+});
+
+test('múltiples reevaluaciones (incluida la acción "Reevaluar vencimientos") nunca duplican liberaciones ni programaciones', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  acreditarCuotaHaceNDias(db, 'pago-1', 11);
+  db._state.pagos_esperados.find((p) => p.id === 'pago-1').hito_validado = 1;
+
+  const cantidadLiberacionesAntes = db._state.comision_liberaciones.length;
+  for (let i = 0; i < 4; i++) {
+    await distribucionHandler(fakeContext({ body: { action: 'reevaluar-vencimientos' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  }
+  assert.equal(db._state.comision_liberaciones.length, cantidadLiberacionesAntes); // nunca crea filas nuevas.
+  const lib = liberacionDe(db, 'pago-1', 'comercial@example.com');
+  assert.equal(lib.estado, 'programada');
+  // La fecha programada no cambia entre reevaluaciones repetidas.
+  const fechaProgramadaInicial = lib.fecha_programada_efectiva;
+  await distribucionHandler(fakeContext({ body: { action: 'reevaluar-vencimientos' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  assert.equal(liberacionDe(db, 'pago-1', 'comercial@example.com').fecha_programada_efectiva, fechaProgramadaInicial);
+});
+
+test('reevaluar-vencimientos es exclusivo de administración', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  const response = await distribucionHandler(fakeContext({ body: { action: 'reevaluar-vencimientos' }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1' } }));
+  assert.equal(response.status, 403);
+});
+
+test('corrección: la distribución corregida conserva la versión anterior en versionesAnteriores, con motivo/autor/fecha', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  await distribucionHandler(fakeContext({ body: { action: 'corregir', motivo: 'Se reemplaza al desarrollador' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+
+  const response = await distribucionHandler(fakeContext({ method: 'GET', roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  const body = (await response.json()).data;
+  assert.equal(body.versionesAnteriores.length, 1);
+  assert.equal(body.versionesAnteriores[0].estado, 'reemplazada');
+  assert.equal(body.versionesAnteriores[0].motivoCorreccion, null); // motivo va en la NUEVA versión (donde se registró), no en la vieja.
+  assert.equal(body.versionesAnteriores[0].version, 1);
+  assert.equal(body.versionesAnteriores[0].versionReemplazantePor, 2);
+});
+
+test('corrección: las comisiones de la versión reemplazada aparecen SOLO en versionesAnteriores, nunca en `comisiones` (los totales vigentes)', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  await distribucionHandler(fakeContext({ body: { action: 'corregir', motivo: 'x' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+
+  const response = await distribucionHandler(fakeContext({ method: 'GET', roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  const body = (await response.json()).data;
+  assert.equal(body.comisiones.length, 0); // la nueva versión (borrador) todavía no generó comisiones.
+  assert.equal(body.versionesAnteriores[0].comisiones.length, 3); // las 3 originales, visibles SOLO acá.
+});
+
+test('corrección: una comisión reemplazada nunca puede habilitarse, adelantarse ni sumar saldo — su saldo disponible es siempre 0', async () => {
+  const db = fakeDb(seedProyectoActivable());
+  // Costos cerrados ANTES de activar — así la comisión queda definitiva
+  // (es_estimacion=0) y el rechazo del adelanto se debe realmente a la
+  // distribución reemplazada, no a que todavía sea una estimación (ver
+  // setupComisionConSaldo, mismo patrón).
+  await distribucionHandler(fakeContext({ body: { action: 'definir-pools', plantillaId: 'pl-desarrollo' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  await distribucionHandler(fakeContext({ body: { action: 'cerrar-costos' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  for (const p of PARTICIPACIONES_COMPLETAS) {
+    await distribucionHandler(fakeContext({ body: { action: 'agregar-participacion', ...p }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  }
+  await distribucionHandler(fakeContext({ body: { action: 'activar' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  const comisionId = db._state.comisiones.find((c) => c.beneficiario_email === 'comercial@example.com').id;
+
+  await distribucionHandler(fakeContext({ body: { action: 'corregir', motivo: 'x' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+
+  assert.equal(await saldoDisponibleComision(db, 'req-test', comisionId), 0);
+  habilitarCapacidadAdelanto(db, 'comercial@example.com');
+  const response = await adelantosHandler(fakeContext({
+    body: { monto: 1000, moneda: 'CLP', motivo: 'x', idempotencyKey: 'adel-reemplazada' },
+    roleIdentity: admin(), db, params: { id: 'venta-1', comisionId },
+  }));
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).error.code, 'DISTRIBUCION_REEMPLAZADA');
+});
+
+test('corrección: liberaciones ya habilitadas/programadas de la versión reemplazada quedan retenidas de inmediato, sin esperar la próxima reevaluación', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  acreditarCuotaHaceNDias(db, 'pago-1', 11);
+  db._state.pagos_esperados.find((p) => p.id === 'pago-1').hito_validado = 1;
+  await reevaluarLiberacionesDeVenta(db, 'req-test', 'venta-1', 'admin@example.com');
+  assert.equal(liberacionDe(db, 'pago-1', 'comercial@example.com').estado, 'programada');
+
+  await distribucionHandler(fakeContext({ body: { action: 'corregir', motivo: 'x' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  assert.equal(liberacionDe(db, 'pago-1', 'comercial@example.com').estado, 'retenida');
+  assert.deepEqual(JSON.parse(liberacionDe(db, 'pago-1', 'comercial@example.com').motivo_retencion), ['distribucion_reemplazada']);
+});
+
+test('corrección: se BLOQUEA (nunca se anula silenciosamente) si una comisión de la versión vigente ya está pagada', async () => {
+  const db = fakeDb(seedProyectoConCuotas());
+  await activarDistribucionCompleta(db, PARTICIPACIONES_COMPLETAS);
+  const lib = db._state.comision_liberaciones[0];
+  lib.estado = 'pagada'; // simula que ya se pagó.
+
+  const response = await distribucionHandler(fakeContext({ body: { action: 'corregir', motivo: 'x' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).error.code, 'CORRECCION_BLOQUEADA_POR_PAGOS');
+  // La distribución sigue confirmada, nunca se tocó.
+  assert.equal(db._state.venta_distribuciones.find((d) => d.version === 1).estado, 'confirmada');
+});
+
+test('corrección: se BLOQUEA si una comisión de la versión vigente ya recibió un adelanto', async () => {
+  const { db, comisionId } = await setupComisionConSaldo();
+  await adelantosHandler(fakeContext({ body: { monto: 10000, moneda: 'CLP', motivo: 'x', idempotencyKey: 'adel-bloqueo' }, roleIdentity: admin(), db, params: { id: 'venta-1', comisionId } }));
+
+  const response = await distribucionHandler(fakeContext({ body: { action: 'corregir', motivo: 'x' }, roleIdentity: admin(), db, params: { id: 'venta-1' } }));
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).error.code, 'CORRECCION_BLOQUEADA_POR_PAGOS');
+});
+
+test('Nua Bushi: ningún fixture ni dato de prueba de esta suite hace referencia a datos reales — todo es ficticio', () => {
+  // Verificación de disciplina, no de comportamiento: confirma que ningún
+  // email/cliente/proyecto usado en este archivo es un dato real de Nua
+  // Bushi u otro proyecto histórico real.
+  const contenido = PARTICIPACIONES_COMPLETAS.map((p) => p.beneficiarioEmail).join(',');
+  assert.ok(!/nua ?bushi/i.test(contenido));
 });
