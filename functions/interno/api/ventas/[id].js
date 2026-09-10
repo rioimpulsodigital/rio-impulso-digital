@@ -167,7 +167,14 @@ export async function onRequest(context) {
         supervisionAplica: !!venta.supervision_aplica,
         motivoSinSupervision: venta.motivo_sin_supervision || null,
         porcentajeSupervisionAplicado: venta.porcentaje_supervision_aplicado,
-        porcentajeFinalEmpresa: venta.porcentaje_final_empresa,
+        // RIO-119 (cierre técnico — verificación de exposición del Portal
+        // del Vendedor, 10/09/2026): el % de empresa nunca es visible fuera
+        // de administración — mismo criterio que ya aplica `/distribucion`
+        // (exclusivo de manageUsers). El vendedor/supervisor nunca lo
+        // necesitó (panel-vendedor.js nunca lo lee), pero hasta ahora el
+        // valor viajaba igual en el JSON crudo de este endpoint — corregido
+        // acá, redactado a null para cualquier rol que no sea admin.
+        porcentajeFinalEmpresa: esAdmin ? venta.porcentaje_final_empresa : null,
         // RIO-119 (ampliación de alcance — proyectos personalizados,
         // 02/09/2026): null salvo producto === 'proyecto_personalizado'.
         nombreProyecto: venta.nombre_proyecto || null,
@@ -176,7 +183,15 @@ export async function onRequest(context) {
         // RIO-119 (tercer bloque, item 5, 02/09/2026): snapshot INMUTABLE
         // de la distribución aprobada al registrar el proyecto — nunca se
         // recalcula después.
-        distribucionSnapshot: venta.distribucion_snapshot ? JSON.parse(venta.distribucion_snapshot) : null,
+        // RIO-119 (cierre técnico, 10/09/2026): igual que arriba, redactado
+        // a null fuera de administración — incluye la distribución
+        // completa (pools de comercial/supervisión/desarrollo, cada
+        // participación con su % y beneficiario) y el % de empresa del
+        // proyecto, exactamente lo que Brenda pidió que el Portal del
+        // Vendedor nunca exponga. El detalle propio de cada participación
+        // ya se resuelve por `/ventas/:id/comisiones`, que SÍ filtra a
+        // "solo lo mío" — esta ruta nunca reemplazó a esa.
+        distribucionSnapshot: esAdmin && venta.distribucion_snapshot ? JSON.parse(venta.distribucion_snapshot) : null,
         // RIO-119 (tercer bloque, item 5, 03/09/2026): 'referencia' o
         // 'reconstruccion' — null en cualquier venta del flujo normal.
         modoHistorico: venta.modo_historico || null,

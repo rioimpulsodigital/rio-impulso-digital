@@ -69,7 +69,15 @@ function calcularEstadoOperativo(row) {
   return row.proyecto_estado || null;
 }
 
-function serializeVenta(row) {
+// RIO-119 (cierre técnico — verificación de exposición del Portal del
+// Vendedor, 10/09/2026): `esAdmin` redacta `distribucionSnapshot` (pools
+// completos de comercial/supervisión/desarrollo por beneficiario y el %
+// de empresa) para cualquier rol que no sea administración — mismo
+// criterio que ya aplica el detalle (`[id].js`) y `/distribucion`
+// (exclusivo de manageUsers). Antes viajaba igual en el listado para
+// quien fuera dueño de la venta; el Portal del Vendedor nunca lo leía,
+// pero el JSON crudo sí lo exponía.
+function serializeVenta(row, esAdmin) {
   return {
     id: row.id,
     codigoVenta: row.codigo_venta,
@@ -128,7 +136,7 @@ function serializeVenta(row) {
     // RIO-119 (tercer bloque, item 5, 02/09/2026): snapshot INMUTABLE de
     // la distribución aprobada al registrar un proyecto personalizado —
     // nunca se recalcula después, aunque cambien los planes de comisión.
-    distribucionSnapshot: row.distribucion_snapshot ? JSON.parse(row.distribucion_snapshot) : null,
+    distribucionSnapshot: esAdmin && row.distribucion_snapshot ? JSON.parse(row.distribucion_snapshot) : null,
     // RIO-119 (tercer bloque, item 5, 03/09/2026): 'referencia' o
     // 'reconstruccion' — null en cualquier venta del flujo normal.
     modoHistorico: row.modo_historico || null,
@@ -286,7 +294,8 @@ async function handleList(context) {
     );
   }
 
-  return ok({ ventas: rows.map(serializeVenta) }, requestId);
+  const esAdmin = roleIdentity.role === 'admin';
+  return ok({ ventas: rows.map((row) => serializeVenta(row, esAdmin)) }, requestId);
 }
 
 async function handleCreate(context) {

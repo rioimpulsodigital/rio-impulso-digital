@@ -1071,6 +1071,57 @@ test('GET /ventas/:id — el snapshot de distribución guardado nunca se recalcu
   assert.deepEqual(detalle.distribucionSnapshot, created.distribucionSnapshot);
 });
 
+// RIO-119 (cierre técnico — verificación de exposición del Portal del
+// Vendedor, 10/09/2026): Brenda pidió confirmar que el vendedor nunca ve
+// distribución completa ni % de empresa. Se encontró que el JSON crudo de
+// GET /ventas/:id y GET /ventas SÍ los exponía para cualquiera que pudiera
+// ver la venta (aunque panel-vendedor.js nunca los leyera) — corregido, y
+// bloqueado acá para que no vuelva a pasar desapercibido.
+test('GET /ventas/:id — el vendedor dueño de un proyecto personalizado NUNCA recibe distribucionSnapshot ni porcentajeFinalEmpresa (exclusivo de administración)', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  const distribucion = [
+    { concepto: 'comercial', beneficiarioEmail: 'vendedor.dueño@example.com', porcentaje: 25 },
+    { concepto: 'desarrollo', beneficiarioEmail: 'dev@example.com', porcentaje: 45 },
+  ];
+  const createResponse = await ventasHandler(fakeContext({ method: 'POST', body: { ...PROYECTO_PERSONALIZADO_BASE, distribucion }, roleIdentity: admin, db }));
+  const created = (await createResponse.json()).data.venta;
+  // Simula que la venta pertenece a un vendedor real (no a quien la
+  // registró) — mismo criterio que "administración asigna su venta a un
+  // equipo supervisado", sin depender de si proyecto_personalizado admite
+  // hoy ese flujo completo en el POST.
+  db._state.ventas.find((v) => v.id === created.id).vendedor_email = 'vendedor.dueño@example.com';
+
+  const vendedorDueño = roleIdentity({ email: 'vendedor.dueño@example.com', role: 'ejecutivo', allowedMarkets: ['CL'], permissions: PERMISSIONS.ejecutivo });
+  const response = await ventaDetailHandler(fakeContext({ roleIdentity: vendedorDueño, db, params: { id: created.id } }));
+  assert.equal(response.status, 200);
+  const detalle = (await response.json()).data.venta;
+  assert.equal(detalle.distribucionSnapshot, null);
+  assert.equal(detalle.porcentajeFinalEmpresa, null);
+});
+
+test('GET /ventas — el listado nunca expone distribucionSnapshot fuera de administración', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
+  const distribucion = [{ concepto: 'comercial', beneficiarioEmail: 'vendedor.dueño@example.com', porcentaje: 80 }];
+  const createResponse = await ventasHandler(fakeContext({ method: 'POST', body: { ...PROYECTO_PERSONALIZADO_BASE, distribucion }, roleIdentity: admin, db }));
+  const created = (await createResponse.json()).data.venta;
+  db._state.ventas.find((v) => v.id === created.id).vendedor_email = 'vendedor.dueño@example.com';
+
+  const vendedorDueño = roleIdentity({ email: 'vendedor.dueño@example.com', role: 'ejecutivo', allowedMarkets: ['CL'], permissions: PERMISSIONS.ejecutivo });
+  const listResponse = await ventasHandler(fakeContext({ method: 'GET', roleIdentity: vendedorDueño, db }));
+  const listado = (await listResponse.json()).data.ventas;
+  const propia = listado.find((v) => v.id === created.id);
+  assert.ok(propia);
+  assert.equal(propia.distribucionSnapshot, null);
+
+  // El mismo listado, visto por administración, sigue exponiendo el
+  // snapshot completo — la redacción es por rol, no una pérdida de dato.
+  const listResponseAdmin = await ventasHandler(fakeContext({ method: 'GET', roleIdentity: admin, db }));
+  const listadoAdmin = (await listResponseAdmin.json()).data.ventas;
+  assert.ok(listadoAdmin.find((v) => v.id === created.id).distribucionSnapshot);
+});
+
 test('POST /ventas — proyecto personalizado: la suma de las fases debe ser exactamente el precio pactado', async () => {
   const db = fakeDb();
   const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL'], permissions: PERMISSIONS.admin });
