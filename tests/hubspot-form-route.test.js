@@ -28,7 +28,7 @@ function fakeDb(seed = {}) {
       bind(...params) { p = params; return this; },
       all: async () => ({ results: runSelect(sql, p) }),
       first: async () => runSelect(sql, p)[0] || null,
-      run: async () => { runMutation(sql, p); return { success: true }; },
+      run: async () => ({ success: true, meta: { changes: runMutation(sql, p) } }),
     };
   }
   function runSelect(sql, p) {
@@ -40,19 +40,40 @@ function fakeDb(seed = {}) {
       const fila = state.hubspot_sync.find((h) => h.venta_id === p[0]);
       return fila ? [{ id: fila.id, estado: fila.estado, intentos: fila.intentos }] : [];
     }
+    if (sql.startsWith('SELECT id, estado FROM hubspot_sync WHERE venta_id')) {
+      const fila = state.hubspot_sync.find((h) => h.venta_id === p[0]);
+      return fila ? [{ id: fila.id, estado: fila.estado }] : [];
+    }
     throw new Error('SELECT inesperado en test: ' + sql);
   }
   function runMutation(sql, p) {
+    if (sql.startsWith('INSERT INTO hubspot_sync') && sql.includes("'procesando', 'forms_api_browser'")) {
+      state.hubspot_sync.push({ id: p[0], venta_id: p[1], estado: 'procesando', intentos: 1, ultimo_intento_at: p[2] });
+      return 1;
+    }
     if (sql.startsWith('INSERT INTO hubspot_sync')) {
       state.hubspot_sync.push({ id: p[0], venta_id: p[1], estado: p[2], intentos: 1, ultima_respuesta_resumen: p[4] || null });
-    } else if (sql.startsWith('UPDATE hubspot_sync SET estado')) {
+      return 1;
+    }
+    if (sql.startsWith("UPDATE hubspot_sync SET estado = 'procesando'")) {
+      const [ahora, updatedAt, ventaId, limiteLease] = p;
+      const fila = state.hubspot_sync.find((h) => h.venta_id === ventaId);
+      if (!fila) return 0;
+      const elegible = ['pendiente', 'error'].includes(fila.estado) || (fila.estado === 'procesando' && fila.ultimo_intento_at <= limiteLease);
+      if (!elegible) return 0;
+      fila.estado = 'procesando'; fila.intentos = (fila.intentos || 0) + 1; fila.ultimo_intento_at = ahora; fila.updated_at = updatedAt;
+      return 1;
+    }
+    if (sql.startsWith('UPDATE hubspot_sync SET estado')) {
       const fila = state.hubspot_sync.find((h) => h.id === p[5]);
       if (fila) Object.assign(fila, { estado: p[0], intentos: p[1], ultima_respuesta_resumen: p[3] || null });
-    } else if (sql.startsWith('INSERT INTO eventos_historial')) {
-      state.eventos_historial.push({ id: p[0] });
-    } else {
-      throw new Error('mutación inesperada en test: ' + sql);
+      return fila ? 1 : 0;
     }
+    if (sql.startsWith('INSERT INTO eventos_historial')) {
+      state.eventos_historial.push({ id: p[0] });
+      return 1;
+    }
+    throw new Error('mutación inesperada en test: ' + sql);
   }
   return { _state: state, prepare: (sql) => makeStatement(sql) };
 }
@@ -113,4 +134,29 @@ test('método no permitido (GET) — 405', async () => {
   const db = fakeDb(VENTA_BASE);
   const response = await hubspotFormHandler(fakeContext({ method: 'GET', roleIdentity: roleIdentity(), db }));
   assert.equal(response.status, 405);
+});
+
+// ── action: 'reclamar-intento' (RIO-120, corrección de confiabilidad, 11/09/2026) ──
+
+test('reclamar-intento — autoriza cuando no hay ningún intento previo (registro recién creado)', async () => {
+  const db = fakeDb({ ventas: VENTA_BASE.ventas, hubspot_sync: [{ id: 'h1', venta_id: 'v1', estado: 'pendiente', intentos: 0, ultimo_intento_at: null }] });
+  const response = await hubspotFormHandler(fakeContext({ body: { action: 'reclamar-intento' }, roleIdentity: roleIdentity(), db }));
+  assert.equal(response.status, 200);
+  const body = (await response.json()).data;
+  assert.equal(body.autorizado, true);
+});
+
+test('reclamar-intento — sobre una venta ya "enviado" nunca autoriza (no reenvía un correo ya confirmado)', async () => {
+  const db = fakeDb({ ventas: VENTA_BASE.ventas, hubspot_sync: [{ id: 'h1', venta_id: 'v1', estado: 'enviado', intentos: 1 }] });
+  const response = await hubspotFormHandler(fakeContext({ body: { action: 'reclamar-intento' }, roleIdentity: roleIdentity(), db }));
+  const body = (await response.json()).data;
+  assert.equal(body.autorizado, false);
+  assert.equal(body.motivo, 'ya_enviado');
+});
+
+test('reclamar-intento — un ejecutivo ajeno a la venta recibe 403, igual que para reportar el resultado', async () => {
+  const db = fakeDb(VENTA_BASE);
+  const otro = roleIdentity({ email: 'otro@example.com' });
+  const response = await hubspotFormHandler(fakeContext({ body: { action: 'reclamar-intento' }, roleIdentity: otro, db }));
+  assert.equal(response.status, 403);
 });

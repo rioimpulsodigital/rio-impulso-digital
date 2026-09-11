@@ -1594,15 +1594,15 @@
   }
 
   // ── Sincronización HubSpot (RIO-120, 11/09/2026 — alcance simplificado
-  // por Brenda) ──────────────────────────────────────────────────────────
-  // Vista de SOLO LECTURA, exclusiva de administración — el vendedor nunca
-  // ve nada de esto. El envío real del formulario lo hace el navegador del
-  // vendedor (kit-venta-ficha-y-landing-page.html) — acá solo se refleja
-  // el resultado que ya reportó (pendiente/enviado/error). Deliberadamente
-  // sin botones de reintentar/descartar ni IDs de contacto/negocio
-  // (Brenda: "panel complejo de sincronización... descartado").
-  var HUBSPOT_ESTADO_LABEL = { pendiente: 'Pendiente', enviado: 'Enviado', error: 'Error' };
-  var HUBSPOT_ESTADO_BADGE = { pendiente: 'neutral', enviado: 'green', error: 'red' };
+  // por Brenda, con corrección de confiabilidad el mismo día) ─────────────
+  // Vista exclusiva de administración — el vendedor nunca ve nada de esto.
+  // El envío real del formulario lo hace el navegador del vendedor
+  // (kit-venta-ficha-y-landing-page.html), reintentado solo en cada
+  // confirmación futura del Kit — "Reintentar" acá es el fallback
+  // exclusivo de administración para cuando esa sesión real ya no está
+  // disponible (pestaña cerrada, etc.), nunca Objects API ni un negocio.
+  var HUBSPOT_ESTADO_LABEL = { pendiente: 'Pendiente', procesando: 'Intento en curso', enviado: 'Enviado', error: 'Error' };
+  var HUBSPOT_ESTADO_BADGE = { pendiente: 'neutral', procesando: 'blue', enviado: 'green', error: 'red' };
 
   async function cargarHubspotSync() {
     var el = document.getElementById('pvHubspotResult');
@@ -1624,6 +1624,7 @@
       return;
     }
     el.innerHTML = lista.map(function (s) {
+      var puedeReintentar = s.estado === 'error' || s.estado === 'pendiente';
       return (
         '<div class="pv-notif-card">' +
           '<div class="pv-notif-head">' +
@@ -1633,7 +1634,10 @@
           '<div class="pv-notif-meta">Vendedor: ' + escapeHtml(s.vendedorEmail || '—') + ' · Venta: ' + fmtFecha(s.ventaCreatedAt) + '</div>' +
           '<div style="font-size:.78rem;color:var(--muted);">Intentos: ' + s.intentos + ' · Último intento: ' + fmtFecha(s.ultimoIntentoAt) + '</div>' +
           (s.resumen ? '<div style="font-size:.78rem;color:var(--muted);">Resultado: ' + escapeHtml(s.resumen) + '</div>' : '') +
-          '<div class="pv-btn-row" style="margin-top:6px;"><button type="button" class="pv-btn" data-ver-venta-hubspot="' + escapeHtml(s.ventaId) + '">Ver venta</button></div>' +
+          '<div class="pv-btn-row" style="margin-top:6px;">' +
+            (puedeReintentar ? '<button type="button" class="pv-btn pv-btn--primary" data-reintentar-hubspot="' + escapeHtml(s.ventaId) + '">Reintentar</button>' : '') +
+            '<button type="button" class="pv-btn" data-ver-venta-hubspot="' + escapeHtml(s.ventaId) + '">Ver venta</button>' +
+          '</div>' +
         '</div>'
       );
     }).join('');
@@ -1643,6 +1647,15 @@
         var ventaId = btn.getAttribute('data-ver-venta-hubspot');
         activarTab('ventas');
         abrirDetalleVenta(ventaId);
+      });
+    });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-reintentar-hubspot]'), function (btn) {
+      btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        var ventaId = btn.getAttribute('data-reintentar-hubspot');
+        var r = await apiPost('/interno/api/hubspot-sync/' + encodeURIComponent(ventaId), { action: 'reintentar' });
+        if (!r.ok || !r.body || !r.body.ok) { alert((r.body && r.body.error && r.body.error.message) || 'No se pudo reintentar.'); btn.disabled = false; return; }
+        await cargarHubspotSync();
       });
     });
   }
