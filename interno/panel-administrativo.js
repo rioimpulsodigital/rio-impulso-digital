@@ -1593,18 +1593,16 @@
     });
   }
 
-  // ── Sincronización HubSpot (RIO-120, 11/09/2026) ─────────────────────
-  // Vista exclusiva de administración — el vendedor nunca ve nada de esto.
-  // Nunca muestra la respuesta cruda de HubSpot, solo el resumen ya
-  // saneado que devuelve la API (ver functions/_shared/hubspot.js).
-  var HUBSPOT_ESTADO_LABEL = {
-    legacy_form_accepted: 'Legacy (Forms API) — sin confirmar', pendiente: 'Pendiente', procesando: 'Procesando',
-    sincronizado: 'Sincronizado', error: 'Error', reintento_pendiente: 'Reintento pendiente', descartado: 'Descartado',
-  };
-  var HUBSPOT_ESTADO_BADGE = {
-    legacy_form_accepted: 'neutral', pendiente: 'neutral', procesando: 'blue', sincronizado: 'green',
-    error: 'red', reintento_pendiente: 'amber', descartado: 'neutral',
-  };
+  // ── Sincronización HubSpot (RIO-120, 11/09/2026 — alcance simplificado
+  // por Brenda) ──────────────────────────────────────────────────────────
+  // Vista de SOLO LECTURA, exclusiva de administración — el vendedor nunca
+  // ve nada de esto. El envío real del formulario lo hace el navegador del
+  // vendedor (kit-venta-ficha-y-landing-page.html) — acá solo se refleja
+  // el resultado que ya reportó (pendiente/enviado/error). Deliberadamente
+  // sin botones de reintentar/descartar ni IDs de contacto/negocio
+  // (Brenda: "panel complejo de sincronización... descartado").
+  var HUBSPOT_ESTADO_LABEL = { pendiente: 'Pendiente', enviado: 'Enviado', error: 'Error' };
+  var HUBSPOT_ESTADO_BADGE = { pendiente: 'neutral', enviado: 'green', error: 'red' };
 
   async function cargarHubspotSync() {
     var el = document.getElementById('pvHubspotResult');
@@ -1617,8 +1615,8 @@
     }
     var lista = r.body.data.sincronizaciones || [];
     var badge = document.getElementById('pvHubspotBadge');
-    var conProblema = lista.filter(function (s) { return s.estado === 'error' || s.estado === 'reintento_pendiente'; }).length;
-    if (conProblema > 0) { badge.textContent = conProblema > 99 ? '99+' : String(conProblema); badge.style.display = 'inline-flex'; }
+    var conError = lista.filter(function (s) { return s.estado === 'error'; }).length;
+    if (conError > 0) { badge.textContent = conError > 99 ? '99+' : String(conError); badge.style.display = 'inline-flex'; }
     else { badge.style.display = 'none'; }
 
     if (lista.length === 0) {
@@ -1626,18 +1624,6 @@
       return;
     }
     el.innerHTML = lista.map(function (s) {
-      var esLegacy = s.canal === 'forms_api_legacy';
-      var accionesHTML = '';
-      if (!esLegacy && s.estado !== 'descartado') {
-        accionesHTML =
-          '<div class="pv-btn-row" style="margin-top:6px;">' +
-            ((s.estado === 'error' || s.estado === 'reintento_pendiente') ? '<button type="button" class="pv-btn pv-btn--primary" data-reintentar-hubspot="' + escapeHtml(s.ventaId) + '">Reintentar</button>' : '') +
-            '<button type="button" class="pv-btn pv-btn--danger" data-descartar-hubspot="' + escapeHtml(s.ventaId) + '">Descartar</button>' +
-            '<button type="button" class="pv-btn" data-ver-venta-hubspot="' + escapeHtml(s.ventaId) + '">Ver venta (historial)</button>' +
-          '</div>';
-      } else {
-        accionesHTML = '<div class="pv-btn-row" style="margin-top:6px;"><button type="button" class="pv-btn" data-ver-venta-hubspot="' + escapeHtml(s.ventaId) + '">Ver venta (historial)</button></div>';
-      }
       return (
         '<div class="pv-notif-card">' +
           '<div class="pv-notif-head">' +
@@ -1645,12 +1631,9 @@
             '<span class="pv-badge pv-badge--' + (HUBSPOT_ESTADO_BADGE[s.estado] || 'neutral') + '">' + escapeHtml(HUBSPOT_ESTADO_LABEL[s.estado] || s.estado) + '</span>' +
           '</div>' +
           '<div class="pv-notif-meta">Vendedor: ' + escapeHtml(s.vendedorEmail || '—') + ' · Venta: ' + fmtFecha(s.ventaCreatedAt) + '</div>' +
-          '<div style="font-size:.78rem;color:var(--muted);">Intentos: ' + s.intentos + ' · Último intento: ' + fmtFecha(s.ultimoIntentoAt) +
-            (s.proximoReintentoAt ? ' · Próximo reintento: ' + fmtFecha(s.proximoReintentoAt) : '') + '</div>' +
+          '<div style="font-size:.78rem;color:var(--muted);">Intentos: ' + s.intentos + ' · Último intento: ' + fmtFecha(s.ultimoIntentoAt) + '</div>' +
           (s.resumen ? '<div style="font-size:.78rem;color:var(--muted);">Resultado: ' + escapeHtml(s.resumen) + '</div>' : '') +
-          (s.hubspotContactId ? '<div style="font-size:.78rem;color:var(--muted);">ID contacto: ' + escapeHtml(s.hubspotContactId) + (s.hubspotDealId ? ' · ID negocio: ' + escapeHtml(s.hubspotDealId) : '') + '</div>' : '') +
-          (s.estado === 'descartado' ? '<div style="font-size:.78rem;color:var(--muted);">Descartado por ' + escapeHtml(s.descartadoPor || '—') + ' · ' + escapeHtml(s.motivoDescarte || '') + '</div>' : '') +
-          accionesHTML +
+          '<div class="pv-btn-row" style="margin-top:6px;"><button type="button" class="pv-btn" data-ver-venta-hubspot="' + escapeHtml(s.ventaId) + '">Ver venta</button></div>' +
         '</div>'
       );
     }).join('');
@@ -1660,26 +1643,6 @@
         var ventaId = btn.getAttribute('data-ver-venta-hubspot');
         activarTab('ventas');
         abrirDetalleVenta(ventaId);
-      });
-    });
-    Array.prototype.forEach.call(el.querySelectorAll('[data-reintentar-hubspot]'), function (btn) {
-      btn.addEventListener('click', async function () {
-        btn.disabled = true;
-        var ventaId = btn.getAttribute('data-reintentar-hubspot');
-        var r = await apiPost('/interno/api/hubspot-sync/' + encodeURIComponent(ventaId), { action: 'reintentar' });
-        if (!r.ok || !r.body || !r.body.ok) { alert((r.body && r.body.error && r.body.error.message) || 'No se pudo reintentar.'); btn.disabled = false; return; }
-        await cargarHubspotSync();
-      });
-    });
-    Array.prototype.forEach.call(el.querySelectorAll('[data-descartar-hubspot]'), function (btn) {
-      btn.addEventListener('click', async function () {
-        var motivo = prompt('Motivo para descartar esta sincronización (obligatorio):');
-        if (!motivo || !motivo.trim()) return;
-        btn.disabled = true;
-        var ventaId = btn.getAttribute('data-descartar-hubspot');
-        var r = await apiPost('/interno/api/hubspot-sync/' + encodeURIComponent(ventaId), { action: 'descartar', motivo: motivo.trim() });
-        if (!r.ok || !r.body || !r.body.ok) { alert((r.body && r.body.error && r.body.error.message) || 'No se pudo descartar.'); btn.disabled = false; return; }
-        await cargarHubspotSync();
       });
     });
   }

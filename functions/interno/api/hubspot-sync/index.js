@@ -1,12 +1,11 @@
-// GET /interno/api/hubspot-sync — RIO-120 (11/09/2026). Lista el estado de
-// sincronización con HubSpot de cada venta — exclusivo de administración
-// (Brenda: "solo Administración puede ver errores técnicos... el vendedor
-// nunca ve estados técnicos de HubSpot"). El vendedor sigue viendo
-// únicamente que su venta quedó registrada (ver el Kit y panel-vendedor.js,
-// que nunca leen esto).
-//
-// Nunca expone la respuesta cruda de HubSpot — solo el resumen ya
-// saneado que guarda functions/_shared/hubspot.js.
+// GET /interno/api/hubspot-sync — RIO-120 (11/09/2026, alcance
+// simplificado por Brenda). Vista de solo lectura del resultado del envío
+// del formulario de HubSpot ("Ficha y Landing Page - RiO") por venta —
+// exclusivo de administración. Deliberadamente sin acciones de
+// reintentar/descartar (Brenda: "panel complejo de sincronización...
+// descartado") — si un envío falló, se resuelve conversando con el
+// vendedor o reabriendo el Kit, nunca desde acá. El vendedor nunca accede
+// a esta ruta ni ve nada de esto (panel-vendedor.js no la lee).
 
 import { ok, Errors } from '../../../_shared/response.js';
 import { isMethodAllowed } from '../../../_shared/security.js';
@@ -21,16 +20,9 @@ function serialize(row) {
     vendedorEmail: row.venta_vendedor_email,
     ventaCreatedAt: row.venta_created_at,
     estado: row.estado,
-    canal: row.canal,
     intentos: row.intentos,
     ultimoIntentoAt: row.ultimo_intento_at,
-    proximoReintentoAt: row.proximo_reintento_at,
     resumen: row.ultima_respuesta_resumen,
-    hubspotContactId: row.hubspot_contact_id,
-    hubspotDealId: row.hubspot_deal_id,
-    motivoDescarte: row.motivo_descarte,
-    descartadoPor: row.descartado_por,
-    descartadoAt: row.descartado_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

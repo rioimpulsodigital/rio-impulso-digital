@@ -1273,6 +1273,174 @@
     return lines.join('\n');
   }
 
+  // ── RIO-120 (11/09/2026, alcance redefinido por Brenda): restaurado el
+  // mecanismo ORIGINAL que sí entregaba el correo — el formulario de
+  // HubSpot se arma y se envía desde ACÁ (el navegador), con el contexto
+  // real de la página y el tracking de HubSpot, nunca desde el Worker.
+  // portalId/formGuid quedan fijos como constantes acá (nunca
+  // configurables ni aceptados desde otro lado) — ver
+  // enviarFormularioHubSpot() más abajo, que dispara esto DESPUÉS de que
+  // la venta ya quedó guardada en D1.
+  function buildContactBlock(){
+    const clientName = document.getElementById('pclientname').value || '—';
+    const wa         = document.getElementById('pclientwa').value   || '—';
+    const email      = document.getElementById('pclientemail').value || '—';
+    const dir        = !hasFicha ? (document.getElementById('f2').value || '—') : '— (no se pidió, el negocio ya tenía ficha)';
+    let lines = [`Contacto: ${clientName}`, `WhatsApp: ${wa}`, `Email: ${email}`, `Dirección / zona de servicio: ${dir}`];
+    if(currentMarket === 'AR'){
+      lines.push(
+        `Facturación — Nombre/razón social: ${document.getElementById('pclientbillingname').value || '—'}`,
+        `Facturación — CUIT/CUIL/DNI: ${document.getElementById('pclientcuit').value || '—'}`,
+        `Facturación — Domicilio: ${document.getElementById('pclientaddress').value || '—'}`,
+        `Facturación — Condición fiscal: ${document.getElementById('pclientfiscal').value || '—'}`
+      );
+    }
+    return lines;
+  }
+
+  function buildFichaAnswersText(){
+    const name  = document.getElementById('pname').value    || '(sin nombre)';
+    const exec  = document.getElementById('execName').value || '(sin ejecutivo)';
+
+    const fichaFields = [
+      ['f2', "F1. Local físico o área de servicio"],
+      ['f3', "F2. Horario de atención"],
+      ['f4', "F3. Teléfono público / correo"],
+      ['f5', "F4. Métodos de pago / retiro / entrega"]
+    ];
+
+    let lines = [`Respuestas de Ficha de Google — ${name}`, `Ejecutivo: ${exec}`, ''];
+    lines.push(...buildContactBlock());
+    lines.push('');
+    fichaFields.forEach(([id, label]) => { lines.push(`${label}: ${document.getElementById(id).value || '—'}`); });
+
+    const activeProduct = document.querySelector('.domain-choice-card.active');
+    if(activeProduct){ lines.push(''); lines.push(`Producto elegido: ${getProductLabel(activeProduct.dataset.domain, false)}`); }
+
+    return lines.join('\n');
+  }
+
+  function buildLandingAnswersText(){
+    const name  = document.getElementById('pname').value    || '(sin nombre)';
+    const exec  = document.getElementById('execName').value || '(sin ejecutivo)';
+
+    const landingFields = [
+      ['q1',    "1. Qué vende / para quién / rango de precio"],
+      ['q2',    "2. Diferencial"],
+      ['q3',    "3. Objeción más común"],
+      ['q4',    "4. Acción esperada de la página"],
+      ['q5',    "5. Fotos disponibles"],
+      ['q6',    "6. Puede conseguir reseñas"],
+      ['q7',    "7. Color / identidad visual"],
+      ['qCanal',"Canal de contacto"]
+    ];
+
+    let lines = [`Respuestas de Landing Page — ${name}`, `Ejecutivo: ${exec}`, ''];
+    lines.push(...buildContactBlock());
+    lines.push('');
+    landingFields.forEach(([id, label]) => { lines.push(`${label}: ${document.getElementById(id).value || '—'}`); });
+
+    const activeType = document.querySelector('.type-card.active');
+    if(activeType){
+      lines.push('');
+      lines.push(`Tipo de urgencia: ${activeType.dataset.type} — ${activeType.querySelector('.name').textContent}`);
+      lines.push(`Notas urgencia: ${document.getElementById('revealNotes').value || '—'}`);
+    }
+
+    const activeProduct = document.querySelector('.domain-choice-card.active');
+    if(activeProduct){ lines.push(''); lines.push(`Producto elegido: ${getProductLabel(activeProduct.dataset.domain, false)}`); }
+
+    return lines.join('\n');
+  }
+
+  // Campos aprobados por Brenda para HubSpot (11/09/2026) — SOLO estos,
+  // nunca precio, moneda, costos, comisiones ni datos bancarios:
+  // nombre del cliente (empresa + contacto), teléfono/WhatsApp, email,
+  // producto elegido, ejecutivo responsable, respuestas de Landing y de
+  // Ficha. "desafio" (notas de diagnóstico comercial) queda deliberadamente
+  // FUERA — no estaba en la lista aprobada.
+  function buildHubSpotFields(){
+    const activeProduct = document.querySelector('.domain-choice-card.active');
+    const productLabel  = activeProduct ? getProductLabel(activeProduct.dataset.domain, false) : '—';
+    const clientName    = (document.getElementById('pclientname').value || '').trim();
+    const nameParts     = clientName.split(' ');
+    const firstname     = nameParts[0] || '';
+    const lastname      = nameParts.slice(1).join(' ') || '';
+
+    const fields = [
+      { objectTypeId: '0-1', name: 'company',               value: document.getElementById('pname').value    || '—' },
+      { objectTypeId: '0-1', name: 'producto_elegido',      value: productLabel },
+      { objectTypeId: '0-1', name: 'ejecutivo_responsable', value: document.getElementById('execName').value || '—' },
+      { objectTypeId: '0-1', name: 'respuestas_landing',    value: buildLandingAnswersText() }
+    ];
+
+    if(firstname) fields.push({ objectTypeId: '0-1', name: 'firstname', value: firstname });
+    if(lastname)  fields.push({ objectTypeId: '0-1', name: 'lastname',  value: lastname });
+
+    const email    = (document.getElementById('pclientemail').value || '').trim();
+    const whatsapp = (document.getElementById('pclientwa').value    || '').trim();
+    if(email)    fields.push({ objectTypeId: '0-1', name: 'email',                    value: email });
+    if(whatsapp) fields.push({ objectTypeId: '0-1', name: 'hs_whatsapp_phone_number', value: whatsapp.replace(/[^\d+]/g, '') });
+
+    if(!hasFicha){
+      fields.push({ objectTypeId: '0-1', name: 'respuestas_ficha', value: buildFichaAnswersText() });
+    }
+    return fields;
+  }
+
+  // portalId/formGuid FIJOS acá — nunca aceptados desde el backend, desde
+  // un query param ni desde ningún dato configurable. Son los mismos
+  // valores públicos que el Kit ya usaba desde RIO-70 (no son secretos:
+  // siempre viajaron visibles en este mismo HTML).
+  var HUBSPOT_PORTAL_ID = '51671122';
+  var HUBSPOT_FORM_GUID = 'cb4cb2df-ca0f-42ee-bf54-a0830e8ba6a5';
+  var HUBSPOT_FORMS_ENDPOINT = 'https://api.hsforms.com/submissions/v3/integration/submit/' + HUBSPOT_PORTAL_ID + '/' + HUBSPOT_FORM_GUID;
+
+  // RIO-120 (11/09/2026): Preview (*.pages.dev) NUNCA envía el formulario
+  // real — HubSpot ya marcó como spam los 2 envíos de prueba que salieron
+  // de ese dominio temporal. La prueba real del correo se hace después
+  // desde rioimpulsodigital.com, con autorización.
+  function esDominioDePrevioNoComercial(){
+    var host = window.location.hostname;
+    return host.endsWith('.pages.dev') || host === 'localhost' || host === '127.0.0.1';
+  }
+
+  // Se llama SOLO después de que la venta ya quedó guardada en D1 (nunca
+  // antes) y solo si esta solicitud fue una creación real (nunca en un
+  // replay de idempotencia — evita reenviar el formulario por un doble
+  // clic, timeout o recarga). El resultado nunca cambia lo que ve el
+  // vendedor (ya vio "Venta registrada" antes de esto) — solo se reporta
+  // al backend para dejar un registro técnico mínimo.
+  async function enviarFormularioHubSpot(ventaId){
+    if(esDominioDePrevioNoComercial()){
+      reportarResultadoHubSpot(ventaId, 'error', 'preview_bloqueado');
+      return;
+    }
+    try {
+      const fields = buildHubSpotFields();
+      const context = { pageUri: window.location.href, pageName: document.title };
+      const res = await fetch(HUBSPOT_FORMS_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields, context }),
+      });
+      reportarResultadoHubSpot(ventaId, res.ok ? 'enviado' : 'error', res.ok ? 'ok' : ('http_' + res.status));
+    } catch(e) {
+      reportarResultadoHubSpot(ventaId, 'error', 'error_red');
+    }
+  }
+
+  // Best-effort: nunca bloquea ni afecta la experiencia del vendedor,
+  // solo deja el registro mínimo visible en el Panel Administrativo.
+  function reportarResultadoHubSpot(ventaId, estado, resumen){
+    fetch('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/hubspot-form', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estado, resumen }),
+      credentials: 'same-origin',
+    }).catch(function(){ /* no-op — nunca interrumpe al vendedor */ });
+  }
+
   function flashStatus(msg){
     const status = document.getElementById('seqStatus');
     status.textContent = msg;
@@ -1554,6 +1722,16 @@
       cerrarConfirmacionVenta();
       pendingVentaPayload = null;
       clearIdempotencyKey();
+
+      // RIO-120 (11/09/2026): el formulario a HubSpot se envía DESPUÉS de
+      // que la venta ya quedó guardada en D1 — nunca antes, nunca la
+      // bloquea. Solo en una creación real (nunca en un replay de
+      // idempotencia — un doble clic o reintento nunca reenvía el
+      // formulario dos veces). Fire-and-forget: nunca bloquea la UI ni
+      // cambia lo que ve el vendedor.
+      if(!body.data.replay && body.data.venta && body.data.venta.id){
+        enviarFormularioHubSpot(body.data.venta.id);
+      }
 
       closeStep.classList.add('done');
       closeBtn.disabled = true;

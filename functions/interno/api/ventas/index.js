@@ -29,7 +29,7 @@ import {
   resolverSupervisorVigenteDeEquipo, resolverAsignacionVigente, validarDistribucion,
 } from '../../../_shared/comisiones.js';
 import { agregarAntecedente } from '../../../_shared/proyectos.js';
-import { crearRegistroPendiente, sincronizarVentaConHubSpot } from '../../../_shared/hubspot.js';
+import { crearRegistroPendiente } from '../../../_shared/hubspot.js';
 import { crearNotificacionSiCorresponde } from '../../../_shared/notificaciones.js';
 
 const PACK_LANDING_PRODUCT = {
@@ -739,32 +739,20 @@ async function handleCreate(context) {
     }
   }
 
-  // RIO-120 (11/09/2026): D1 ya es la fuente de verdad operativa antes de
-  // este punto — la venta existe sin importar lo que pase acá abajo. La
-  // sincronización con HubSpot ahora se construye ÍNTEGRAMENTE desde lo ya
-  // guardado en D1 (nunca desde un array de campos que mandara el
-  // navegador — ver construirPayloadHubSpot en hubspot.js), vía la Objects
-  // API autenticada (reemplaza la Forms API de RIO-117, que un `200 OK`
-  // nunca garantizaba contacto/negocio real — ver el informe de la
-  // incidencia del 1/09 y 3/09 en RIO-120). Los datos demo y los proyectos
-  // históricos NUNCA se sincronizan ni generan esta notificación (mismo
+  // RIO-120 (11/09/2026, alcance redefinido por Brenda): D1 ya es la
+  // fuente de verdad operativa antes de este punto — la venta existe sin
+  // importar lo que pase con HubSpot. El envío del formulario a HubSpot
+  // ahora lo hace el NAVEGADOR, después de recibir esta respuesta exitosa
+  // (ver kit-venta-ficha-y-landing-page.html) — nunca el Worker. Acá solo
+  // se deja el registro 'pendiente' durable (para que quede rastro aunque
+  // el navegador nunca llegue a confirmarlo) y la notificación
+  // obligatoria de que se registró una venta. Los datos demo y los
+  // proyectos históricos NUNCA generan ninguna de las dos cosas (mismo
   // criterio ya establecido en RIO-117/RIO-119).
   let hubspotSync = null;
   if (!modoHistorico && !esDemo) {
-    await crearRegistroPendiente(db, requestId, { ventaId, actorEmail: roleIdentity.email });
-    const resultado = await sincronizarVentaConHubSpot(db, requestId, env, { ventaId, actorEmail: roleIdentity.email });
-    hubspotSync = resultado;
-    if (resultado.estado === 'error' || resultado.estado === 'reintento_pendiente') {
-      try {
-        await crearNotificacionSiCorresponde(db, requestId, {
-          tipo: 'hubspot_sync_estado_cambiado', claveIdempotencia: `hubspot_sync_estado_cambiado:${ventaId}:${resultado.estado}`,
-          ventaId, mercado, clienteNegocio: cliente?.negocio || null, vendedorEmail: roleIdentity.email,
-          rutaPortal: `/interno/panel-administrativo.html?venta=${ventaId}`,
-        });
-      } catch (e) {
-        console.error(JSON.stringify({ requestId, scope: 'notificaciones', reason: 'creacion_fallida_hubspot' }));
-      }
-    }
+    const hubspotSyncId = await crearRegistroPendiente(db, requestId, { ventaId, actorEmail: roleIdentity.email });
+    hubspotSync = { id: hubspotSyncId, estado: 'pendiente' };
     // Notificación obligatoria a Administración de que se registró una
     // venta (Brenda, sección 8) — nunca bloquea la respuesta si falla.
     try {
