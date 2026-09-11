@@ -63,6 +63,9 @@
     pago_informado: 'Pago informado',
     materiales_informados: 'Materiales informados',
     material_adicional_informado: 'Material adicional (tras "completos")',
+    // RIO-120 (11/09/2026).
+    venta_registrada: 'Venta registrada',
+    hubspot_sync_estado_cambiado: 'HubSpot: requiere atención',
   };
 
   function fmtMoneda(monto, moneda) {
@@ -136,7 +139,7 @@
     await cargarEquiposDisponibles();
   });
 
-  var TABS = ['ventas', 'notif', 'personas', 'planes'];
+  var TABS = ['ventas', 'notif', 'personas', 'planes', 'hubspot'];
 
   function wireTabs() {
     document.getElementById('pvTabVentasBtn').addEventListener('click', function () { activarTab('ventas'); });
@@ -153,9 +156,14 @@
       activarTab('planes');
       cargarPlanesComision();
     });
+    document.getElementById('pvTabHubspotBtn').addEventListener('click', function () {
+      activarTab('hubspot');
+      cargarHubspotSync();
+    });
     document.getElementById('fNotifPendientes').addEventListener('change', cargarNotificaciones);
     document.getElementById('fEquiposInactivos').addEventListener('change', cargarEquiposAdminTab);
     document.getElementById('fPlanesInactivos').addEventListener('change', cargarPlanesComision);
+    document.getElementById('fHubspotConError').addEventListener('change', cargarHubspotSync);
   }
 
   function activarTab(nombre) {
@@ -1581,6 +1589,97 @@
         }
         await cargarNotificaciones();
         await cargarNotificacionesResumen();
+      });
+    });
+  }
+
+  // ── Sincronización HubSpot (RIO-120, 11/09/2026) ─────────────────────
+  // Vista exclusiva de administración — el vendedor nunca ve nada de esto.
+  // Nunca muestra la respuesta cruda de HubSpot, solo el resumen ya
+  // saneado que devuelve la API (ver functions/_shared/hubspot.js).
+  var HUBSPOT_ESTADO_LABEL = {
+    legacy_form_accepted: 'Legacy (Forms API) — sin confirmar', pendiente: 'Pendiente', procesando: 'Procesando',
+    sincronizado: 'Sincronizado', error: 'Error', reintento_pendiente: 'Reintento pendiente', descartado: 'Descartado',
+  };
+  var HUBSPOT_ESTADO_BADGE = {
+    legacy_form_accepted: 'neutral', pendiente: 'neutral', procesando: 'blue', sincronizado: 'green',
+    error: 'red', reintento_pendiente: 'amber', descartado: 'neutral',
+  };
+
+  async function cargarHubspotSync() {
+    var el = document.getElementById('pvHubspotResult');
+    el.innerHTML = '<div class="pv-loading">Cargando sincronizaciones…</div>';
+    var soloConError = document.getElementById('fHubspotConError').checked;
+    var r = await apiFetch('/interno/api/hubspot-sync' + (soloConError ? '?conError=1' : ''));
+    if (!r.ok || !r.body || !r.body.ok) {
+      el.innerHTML = pvErrorHTML('No se pudieron cargar las sincronizaciones con HubSpot.');
+      return;
+    }
+    var lista = r.body.data.sincronizaciones || [];
+    var badge = document.getElementById('pvHubspotBadge');
+    var conProblema = lista.filter(function (s) { return s.estado === 'error' || s.estado === 'reintento_pendiente'; }).length;
+    if (conProblema > 0) { badge.textContent = conProblema > 99 ? '99+' : String(conProblema); badge.style.display = 'inline-flex'; }
+    else { badge.style.display = 'none'; }
+
+    if (lista.length === 0) {
+      el.innerHTML = pvEmptyHTML('🔗', 'No hay sincronizaciones para mostrar con este filtro.');
+      return;
+    }
+    el.innerHTML = lista.map(function (s) {
+      var esLegacy = s.canal === 'forms_api_legacy';
+      var accionesHTML = '';
+      if (!esLegacy && s.estado !== 'descartado') {
+        accionesHTML =
+          '<div class="pv-btn-row" style="margin-top:6px;">' +
+            ((s.estado === 'error' || s.estado === 'reintento_pendiente') ? '<button type="button" class="pv-btn pv-btn--primary" data-reintentar-hubspot="' + escapeHtml(s.ventaId) + '">Reintentar</button>' : '') +
+            '<button type="button" class="pv-btn pv-btn--danger" data-descartar-hubspot="' + escapeHtml(s.ventaId) + '">Descartar</button>' +
+            '<button type="button" class="pv-btn" data-ver-venta-hubspot="' + escapeHtml(s.ventaId) + '">Ver venta (historial)</button>' +
+          '</div>';
+      } else {
+        accionesHTML = '<div class="pv-btn-row" style="margin-top:6px;"><button type="button" class="pv-btn" data-ver-venta-hubspot="' + escapeHtml(s.ventaId) + '">Ver venta (historial)</button></div>';
+      }
+      return (
+        '<div class="pv-notif-card">' +
+          '<div class="pv-notif-head">' +
+            '<span>' + escapeHtml(s.codigoVenta || s.ventaId) + ' — ' + escapeHtml(s.clienteNegocio || '—') + '</span>' +
+            '<span class="pv-badge pv-badge--' + (HUBSPOT_ESTADO_BADGE[s.estado] || 'neutral') + '">' + escapeHtml(HUBSPOT_ESTADO_LABEL[s.estado] || s.estado) + '</span>' +
+          '</div>' +
+          '<div class="pv-notif-meta">Vendedor: ' + escapeHtml(s.vendedorEmail || '—') + ' · Venta: ' + fmtFecha(s.ventaCreatedAt) + '</div>' +
+          '<div style="font-size:.78rem;color:var(--muted);">Intentos: ' + s.intentos + ' · Último intento: ' + fmtFecha(s.ultimoIntentoAt) +
+            (s.proximoReintentoAt ? ' · Próximo reintento: ' + fmtFecha(s.proximoReintentoAt) : '') + '</div>' +
+          (s.resumen ? '<div style="font-size:.78rem;color:var(--muted);">Resultado: ' + escapeHtml(s.resumen) + '</div>' : '') +
+          (s.hubspotContactId ? '<div style="font-size:.78rem;color:var(--muted);">ID contacto: ' + escapeHtml(s.hubspotContactId) + (s.hubspotDealId ? ' · ID negocio: ' + escapeHtml(s.hubspotDealId) : '') + '</div>' : '') +
+          (s.estado === 'descartado' ? '<div style="font-size:.78rem;color:var(--muted);">Descartado por ' + escapeHtml(s.descartadoPor || '—') + ' · ' + escapeHtml(s.motivoDescarte || '') + '</div>' : '') +
+          accionesHTML +
+        '</div>'
+      );
+    }).join('');
+
+    Array.prototype.forEach.call(el.querySelectorAll('[data-ver-venta-hubspot]'), function (btn) {
+      btn.addEventListener('click', function () {
+        var ventaId = btn.getAttribute('data-ver-venta-hubspot');
+        activarTab('ventas');
+        abrirDetalleVenta(ventaId);
+      });
+    });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-reintentar-hubspot]'), function (btn) {
+      btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        var ventaId = btn.getAttribute('data-reintentar-hubspot');
+        var r = await apiPost('/interno/api/hubspot-sync/' + encodeURIComponent(ventaId), { action: 'reintentar' });
+        if (!r.ok || !r.body || !r.body.ok) { alert((r.body && r.body.error && r.body.error.message) || 'No se pudo reintentar.'); btn.disabled = false; return; }
+        await cargarHubspotSync();
+      });
+    });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-descartar-hubspot]'), function (btn) {
+      btn.addEventListener('click', async function () {
+        var motivo = prompt('Motivo para descartar esta sincronización (obligatorio):');
+        if (!motivo || !motivo.trim()) return;
+        btn.disabled = true;
+        var ventaId = btn.getAttribute('data-descartar-hubspot');
+        var r = await apiPost('/interno/api/hubspot-sync/' + encodeURIComponent(ventaId), { action: 'descartar', motivo: motivo.trim() });
+        if (!r.ok || !r.body || !r.body.ok) { alert((r.body && r.body.error && r.body.error.message) || 'No se pudo descartar.'); btn.disabled = false; return; }
+        await cargarHubspotSync();
       });
     });
   }

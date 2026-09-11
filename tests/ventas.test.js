@@ -55,6 +55,13 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
   seed.equipos = seed.equipos || [];
   seed.materiales_informados_detalle = seed.materiales_informados_detalle || [];
   seed.materiales_confirmaciones = seed.materiales_confirmaciones || [];
+  // RIO-120 (11/09/2026): toda venta real (no demo, no histórica) ahora
+  // dispara siempre crearRegistroPendiente + sincronizarVentaConHubSpot +
+  // la notificación 'venta_registrada' — sin token configurado en los
+  // tests, la sincronización se corta temprano en 'error'/'token_ausente',
+  // pero igual necesita estas tablas simuladas.
+  seed.hubspot_sync = seed.hubspot_sync || [];
+  seed.notificaciones = seed.notificaciones || [];
   const state = seed;
 
   function makeStatement(sql) {
@@ -110,6 +117,30 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
       });
     } else if (sql.startsWith('INSERT INTO eventos_historial')) {
       state.eventos_historial.push({ id: p[0], venta_id: p[1], entidad: p[2], entidad_id: p[3], proxima_accion: p[8] || null, responsable_proxima_accion: p[9] || null });
+    } else if (sql.startsWith('INSERT INTO hubspot_sync')) {
+      state.hubspot_sync.push({
+        id: p[0], venta_id: p[1], estado: p[2], canal: p[3], intentos: p[4], ultimo_intento_at: p[5],
+        ultima_respuesta_resumen: p[6] || null, hubspot_contact_id: p[7] || null, hubspot_deal_id: p[8] || null,
+        payload_hash: p[9] || null, proximo_reintento_at: null, created_at: p[10], updated_at: p[11],
+      });
+    } else if (sql.startsWith('UPDATE hubspot_sync SET estado')) {
+      const fila = state.hubspot_sync.find((h) => h.id === p[9]);
+      if (fila) {
+        Object.assign(fila, {
+          estado: p[0], canal: p[1], intentos: p[2], ultimo_intento_at: p[3], ultima_respuesta_resumen: p[4] || null,
+          hubspot_contact_id: p[5] || fila.hubspot_contact_id, hubspot_deal_id: p[6] || fila.hubspot_deal_id,
+          payload_hash: p[7] || fila.payload_hash, updated_at: p[8],
+        });
+      }
+    } else if (sql.startsWith('UPDATE hubspot_sync SET proximo_reintento_at')) {
+      const fila = state.hubspot_sync.find((h) => h.venta_id === p[1]);
+      if (fila) fila.proximo_reintento_at = p[0];
+    } else if (sql.startsWith('INSERT INTO notificaciones')) {
+      state.notificaciones.push({
+        id: p[0], tipo: p[1], clave_idempotencia: p[2], venta_id: p[3] || null, pago_id: p[4] || null,
+        mercado: p[5] || null, cliente_negocio: p[6] || null, vendedor_email: p[7] || null, ruta_portal: p[8],
+        destinatario_rol: 'admin', leida_en: null, atendida_en: null,
+      });
     } else {
       throw new Error('INSERT inesperado en test: ' + sql);
     }
@@ -190,6 +221,18 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
     if (sql.startsWith('SELECT modo_historico FROM ventas WHERE id')) {
       const v = state.ventas.find((x) => x.id === p[0]);
       return v ? [{ modo_historico: v.modo_historico }] : [];
+    }
+    if (sql.startsWith('SELECT id, intentos, estado FROM hubspot_sync WHERE venta_id')) {
+      const fila = state.hubspot_sync.find((h) => h.venta_id === p[0]);
+      return fila ? [{ id: fila.id, intentos: fila.intentos, estado: fila.estado }] : [];
+    }
+    if (sql.startsWith('SELECT id, estado, intentos, canal FROM hubspot_sync WHERE venta_id')) {
+      const fila = state.hubspot_sync.find((h) => h.venta_id === p[0]);
+      return fila ? [{ id: fila.id, estado: fila.estado, intentos: fila.intentos, canal: fila.canal }] : [];
+    }
+    if (sql.startsWith('SELECT id FROM notificaciones WHERE clave_idempotencia')) {
+      const fila = state.notificaciones.find((n) => n.clave_idempotencia === p[0]);
+      return fila ? [{ id: fila.id }] : [];
     }
     if (sql.startsWith('SELECT proxima_accion, responsable_proxima_accion FROM eventos_historial')) {
       const coincidencias = (state.eventos_historial || []).filter((e) => e.venta_id === p[0] && e.proxima_accion);

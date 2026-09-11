@@ -320,6 +320,7 @@
         <button class="pv-tab" id="pvTabNotifBtn" role="tab" aria-selected="false" aria-controls="pvTabNotif">Notificaciones<span class="pv-tab-badge" id="pvNotifBadge" style="display:none;"></span></button>
         <button class="pv-tab" id="pvTabPersonasBtn" role="tab" aria-selected="false" aria-controls="pvTabPersonas">Personas y equipos</button>
         <button class="pv-tab" id="pvTabPlanesBtn" role="tab" aria-selected="false" aria-controls="pvTabPlanes">Planes de comisión</button>
+        <button class="pv-tab" id="pvTabHubspotBtn" role="tab" aria-selected="false" aria-controls="pvTabHubspot">Sincronización HubSpot<span class="pv-tab-badge" id="pvHubspotBadge" style="display:none;"></span></button>
       </div>
 
       <!-- ── VENTAS Y PROYECTOS ── -->
@@ -438,6 +439,19 @@
           </div>
           <div id="pvPlanesResult"><div class="pv-loading">Cargando planes…</div></div>
         </div>
+      </div>
+
+      <!-- ── SINCRONIZACIÓN HUBSPOT ── -->
+      <!-- RIO-120 (11/09/2026): vista exclusiva de administración — el
+           vendedor nunca ve nada de esto (ver kit-venta-ficha-y-landing-
+           page.html y panel-vendedor.js, que nunca leen hubspotSync). -->
+      <div class="pv-panel" id="pvTabHubspot" role="tabpanel">
+        <div class="pv-filters">
+          <div class="pv-filter-field" style="min-width:0;">
+            <label><input type="checkbox" id="fHubspotConError" checked> Solo con error o reintento pendiente</label>
+          </div>
+        </div>
+        <div id="pvHubspotResult"><div class="pv-loading">Cargando sincronizaciones…</div></div>
       </div>
     </div>
 
@@ -848,7 +862,7 @@
 
 <script src="./config/users.js" defer></script>
 <script src="../assets/js/main.js?v=20260627" defer></script>
-<script src="./panel-administrativo.js?v=20260910a" defer></script>
+<script src="./panel-administrativo.js?v=20260911a" defer></script>
 
 </body>
 </html>

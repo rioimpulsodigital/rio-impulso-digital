@@ -29,7 +29,7 @@ function fakeDb() {
     clientes: [], ventas: [], proyectos: [], componentes: [], pagos_esperados: [],
     planes_comision: [], asignaciones_plan_comision: [], costos_directos: [], comisiones: [],
     eventos_historial: [], usuarios: [], asignaciones_rol: [], equipo_miembros: [], equipo_supervisores: [],
-    hubspot_sync: [], incidencias: [],
+    hubspot_sync: [], incidencias: [], notificaciones: [],
   };
 
   function makeStatement(sql) {
@@ -64,11 +64,28 @@ function fakeDb() {
     } else if (sql.startsWith('INSERT INTO eventos_historial')) {
       state.eventos_historial.push({ id: p[0], venta_id: p[1], entidad: p[2], entidad_id: p[3], estado_nuevo: p[5], motivo_nota: p[7] });
     } else if (sql.startsWith('INSERT INTO hubspot_sync')) {
-      // `intentos` va literal (1) en el SQL, no como placeholder — bind real: [id, venta_id, estado, resumen, updated_at].
-      state.hubspot_sync.push({ id: p[0], venta_id: p[1], estado: p[2], intentos: 1, ultima_respuesta_resumen: p[3], updated_at: p[4] });
-    } else if (sql.startsWith('UPDATE hubspot_sync')) {
-      const row = state.hubspot_sync.find((h) => h.id === p[4]);
-      if (row) { row.estado = p[0]; row.intentos = p[1]; row.ultima_respuesta_resumen = p[2]; row.updated_at = p[3]; }
+      state.hubspot_sync.push({
+        id: p[0], venta_id: p[1], estado: p[2], canal: p[3], intentos: p[4], ultimo_intento_at: p[5],
+        ultima_respuesta_resumen: p[6] || null, hubspot_contact_id: p[7] || null, hubspot_deal_id: p[8] || null,
+        payload_hash: p[9] || null, proximo_reintento_at: null, created_at: p[10], updated_at: p[11],
+      });
+    } else if (sql.startsWith('UPDATE hubspot_sync SET estado')) {
+      const fila = state.hubspot_sync.find((h) => h.id === p[9]);
+      if (fila) {
+        Object.assign(fila, {
+          estado: p[0], canal: p[1], intentos: p[2], ultimo_intento_at: p[3], ultima_respuesta_resumen: p[4] || null,
+          hubspot_contact_id: p[5] || fila.hubspot_contact_id, hubspot_deal_id: p[6] || fila.hubspot_deal_id,
+          payload_hash: p[7] || fila.payload_hash, updated_at: p[8],
+        });
+      }
+    } else if (sql.startsWith('UPDATE hubspot_sync SET proximo_reintento_at')) {
+      const fila = state.hubspot_sync.find((h) => h.venta_id === p[1]);
+      if (fila) fila.proximo_reintento_at = p[0];
+    } else if (sql.startsWith('INSERT INTO notificaciones')) {
+      state.notificaciones.push({
+        id: p[0], tipo: p[1], clave_idempotencia: p[2], venta_id: p[3] || null, pago_id: p[4] || null,
+        mercado: p[5] || null, cliente_negocio: p[6] || null, vendedor_email: p[7] || null, ruta_portal: p[8],
+      });
     } else {
       throw new Error('INSERT/UPDATE inesperado en test: ' + sql);
     }
@@ -85,8 +102,34 @@ function fakeDb() {
     if (sql.startsWith('SELECT estado, ultima_respuesta_resumen FROM hubspot_sync WHERE venta_id')) {
       return state.hubspot_sync.filter((h) => h.venta_id === p[0]);
     }
-    if (sql.startsWith('SELECT id, intentos FROM hubspot_sync WHERE venta_id')) {
-      return state.hubspot_sync.filter((h) => h.venta_id === p[0]);
+    if (sql.startsWith('SELECT id, intentos, estado FROM hubspot_sync WHERE venta_id')) {
+      const fila = state.hubspot_sync.find((h) => h.venta_id === p[0]);
+      return fila ? [{ id: fila.id, intentos: fila.intentos, estado: fila.estado }] : [];
+    }
+    if (sql.startsWith('SELECT id, estado, intentos, canal FROM hubspot_sync WHERE venta_id')) {
+      const fila = state.hubspot_sync.find((h) => h.venta_id === p[0]);
+      return fila ? [{ id: fila.id, estado: fila.estado, intentos: fila.intentos, canal: fila.canal }] : [];
+    }
+    if (sql.startsWith('SELECT id FROM notificaciones WHERE clave_idempotencia')) {
+      const fila = state.notificaciones.find((n) => n.clave_idempotencia === p[0]);
+      return fila ? [{ id: fila.id }] : [];
+    }
+    if (sql.startsWith('SELECT modo_historico FROM ventas WHERE id')) {
+      const v = state.ventas.find((x) => x.id === p[0]);
+      return v ? [{ modo_historico: v.modo_historico || null }] : [];
+    }
+    if (sql.includes('SELECT v.id, v.codigo_venta, v.mercado, v.producto, v.moneda, v.precio_pactado, v.vendedor_email')) {
+      const v = state.ventas.find((x) => x.id === p[0]);
+      if (!v) return [];
+      const c = state.clientes.find((x) => x.id === v.cliente_id);
+      const u = state.usuarios.find((x) => x.email === v.vendedor_email);
+      return [{
+        id: v.id, codigo_venta: v.codigo_venta, mercado: v.mercado, producto: v.producto, moneda: v.moneda,
+        precio_pactado: v.precio_pactado, vendedor_email: v.vendedor_email, estado_actual: v.estado_actual,
+        antecedentes_kit_json: v.antecedentes_kit_json || null, nombre_proyecto: v.nombre_proyecto || null,
+        negocio: c?.negocio || null, contacto_nombre: c?.contacto_nombre || null, telefono: c?.telefono || null,
+        cliente_email: c?.email || null, vendedor_nombre: u?.nombre || null, proyecto_estado: null,
+      }];
     }
     if (sql.includes('FROM ventas v JOIN clientes c') && sql.includes('WHERE v.vendedor_email')) {
       return state.ventas.filter((v) => v.vendedor_email === p[0]).map((v) => ({
@@ -114,7 +157,7 @@ function fakeDb() {
   };
 }
 
-function fakeContext({ method = 'POST', body, roleIdentity: ri, db, headers } = {}) {
+function fakeContext({ method = 'POST', body, roleIdentity: ri, db, headers, env } = {}) {
   const init = { method };
   if (body !== undefined) {
     init.body = JSON.stringify(body);
@@ -122,13 +165,44 @@ function fakeContext({ method = 'POST', body, roleIdentity: ri, db, headers } = 
   }
   return {
     request: new Request('https://rioimpulsodigital.com/interno/api/ventas', init),
-    env: { DB: db },
+    env: { DB: db, ...(env || {}) },
     params: {},
     data: { requestId: 'req-cierre-test', identity: { email: ri?.email }, roleIdentity: ri },
   };
 }
 
-const CL_INDIVIDUAL = { mercado: 'CL', cliente: { negocio: 'Ferretería El Tornillo' }, producto: 'ficha', tipoPrecio: 'lanzamiento', precioPactado: 50000 };
+// Simula la Objects API de HubSpot para las pruebas de RIO-120: contacto y
+// negocio "no existen" en la primera búsqueda (fuerza la rama de
+// creación), y registra cada llamada — permite afirmar exactamente cuántas
+// veces se llamó y con qué método/ruta, sin volverse a acoplar a los
+// detalles internos de hubspot.js.
+function mockHubSpotFetch({ contactStatus = 200, dealStatus = 200, associateStatus = 200 } = {}) {
+  const llamadas = [];
+  const fn = async (url, options) => {
+    const path = String(url).replace('https://api.hubapi.com', '');
+    llamadas.push({ path, method: options?.method || 'GET' });
+    if (path === '/crm/v3/objects/contacts/search') {
+      return { ok: true, status: 200, json: async () => ({ results: [] }) };
+    }
+    if (path === '/crm/v3/objects/contacts' && options.method === 'POST') {
+      return { ok: contactStatus < 400, status: contactStatus, json: async () => (contactStatus < 400 ? { id: 'contact-1' } : { message: 'error' }) };
+    }
+    if (path === '/crm/v3/objects/deals/search') {
+      return { ok: true, status: 200, json: async () => ({ results: [] }) };
+    }
+    if (path === '/crm/v3/objects/deals' && options.method === 'POST') {
+      return { ok: dealStatus < 400, status: dealStatus, json: async () => (dealStatus < 400 ? { id: 'deal-1' } : { message: 'error' }) };
+    }
+    if (path.startsWith('/crm/v4/objects/deals/') && options.method === 'PUT') {
+      return { ok: associateStatus < 400, status: associateStatus, json: async () => ({}) };
+    }
+    throw new Error('Llamada HubSpot inesperada en test: ' + path);
+  };
+  fn.llamadas = llamadas;
+  return fn;
+}
+
+const CL_INDIVIDUAL = { mercado: 'CL', cliente: { negocio: 'Ferretería El Tornillo', email: 'contacto@eltornillo.cl' }, producto: 'ficha', tipoPrecio: 'lanzamiento', precioPactado: 50000 };
 
 // ── Idempotencia ──────────────────────────────────────────────────────
 
@@ -285,78 +359,118 @@ test('antecedentesKit ausente: no se registra ningún evento de antecedente ni a
   assert.equal(db._state.ventas[0].antecedentes_kit_json, null);
 });
 
-// ── HubSpot: consecuencia posterior, nunca bloquea ni duplica la venta ──
+// ── HubSpot (RIO-120, 11/09/2026): Objects API autenticada, consecuencia
+// posterior a D1, nunca bloquea ni duplica la venta ──────────────────────
 
-test('HubSpot: si la sincronización fallara, la venta igual queda creada en D1 y el estado queda registrado como fallido', async () => {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => ({ ok: false, status: 500 });
-  try {
-    const db = fakeDb();
-    const ri = roleIdentity();
-    const response = await ventasHandler(fakeContext({
-      body: { ...CL_INDIVIDUAL, hubspot: { fields: [{ objectTypeId: '0-1', name: 'company', value: 'Ferretería El Tornillo' }], context: {} } },
-      roleIdentity: ri, db,
-    }));
-    assert.equal(response.status, 201, 'la venta se crea igual, un fallo de HubSpot nunca la bloquea');
-    const body = await response.json();
-    assert.equal(body.data.hubspotSync.estado, 'fallido');
-    assert.equal(db._state.ventas.length, 1);
-    assert.equal(db._state.hubspot_sync[0].estado, 'fallido');
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test('HubSpot: si la sincronización tiene éxito, queda registrada como exitosa', async () => {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => ({ ok: true, status: 200 });
-  try {
-    const db = fakeDb();
-    const ri = roleIdentity();
-    const response = await ventasHandler(fakeContext({
-      body: { ...CL_INDIVIDUAL, hubspot: { fields: [{ objectTypeId: '0-1', name: 'company', value: 'Ferretería El Tornillo' }], context: {} } },
-      roleIdentity: ri, db,
-    }));
-    const body = await response.json();
-    assert.equal(body.data.hubspotSync.estado, 'exitoso');
-    assert.equal(db._state.hubspot_sync[0].estado, 'exitoso');
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test('HubSpot: los datos demo NUNCA se sincronizan, aunque se envíen campos de HubSpot', async () => {
+test('HubSpot: sin token configurado, la sincronización queda en error SIN intentar ningún fetch (nunca un secreto ausente rompe la venta)', async () => {
   let fetchLlamado = false;
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => { fetchLlamado = true; return { ok: true, status: 200 }; };
+  globalThis.fetch = async () => { fetchLlamado = true; return { ok: true, status: 200, json: async () => ({}) }; };
+  try {
+    const db = fakeDb();
+    const ri = roleIdentity();
+    const response = await ventasHandler(fakeContext({ body: CL_INDIVIDUAL, roleIdentity: ri, db }));
+    assert.equal(response.status, 201, 'la venta se crea igual, sin importar el token');
+    const body = await response.json();
+    assert.equal(body.data.hubspotSync.estado, 'error');
+    assert.equal(body.data.hubspotSync.resumen, 'token_ausente');
+    assert.equal(fetchLlamado, false, 'nunca llega a intentar la llamada real sin token');
+    assert.equal(db._state.hubspot_sync[0].estado, 'error');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('HubSpot: con token y éxito, crea contacto y negocio, los asocia, y guarda los IDs reales devueltos', async () => {
+  const originalFetch = globalThis.fetch;
+  const mock = mockHubSpotFetch();
+  globalThis.fetch = mock;
+  try {
+    const db = fakeDb();
+    const ri = roleIdentity();
+    const response = await ventasHandler(fakeContext({ body: CL_INDIVIDUAL, roleIdentity: ri, db, env: { HUBSPOT_PRIVATE_APP_TOKEN: 'token-de-prueba' } }));
+    assert.equal(response.status, 201);
+    const body = await response.json();
+    assert.equal(body.data.hubspotSync.estado, 'sincronizado');
+    assert.equal(body.data.hubspotSync.contactId, 'contact-1');
+    assert.equal(body.data.hubspotSync.dealId, 'deal-1');
+    assert.equal(db._state.hubspot_sync[0].estado, 'sincronizado');
+    assert.equal(db._state.hubspot_sync[0].hubspot_contact_id, 'contact-1');
+    assert.equal(db._state.hubspot_sync[0].hubspot_deal_id, 'deal-1');
+    assert.equal(db._state.hubspot_sync[0].canal, 'objects_api');
+    // Asocia SOLO cuando el negocio se creó de cero (ver test de idempotencia más abajo).
+    assert.ok(mock.llamadas.some((l) => l.path.includes('/associations/default/contacts/')));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('HubSpot: un error 5xx de la Objects API queda en "reintento_pendiente" (transitorio) — la venta igual queda creada', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = mockHubSpotFetch({ dealStatus: 500 });
+  try {
+    const db = fakeDb();
+    const ri = roleIdentity();
+    const response = await ventasHandler(fakeContext({ body: CL_INDIVIDUAL, roleIdentity: ri, db, env: { HUBSPOT_PRIVATE_APP_TOKEN: 'token-de-prueba' } }));
+    assert.equal(response.status, 201, 'un fallo de HubSpot nunca bloquea la venta');
+    const body = await response.json();
+    assert.equal(body.data.hubspotSync.estado, 'reintento_pendiente');
+    assert.equal(db._state.ventas.length, 1);
+    assert.ok(db._state.hubspot_sync[0].proximo_reintento_at, 'queda programado un próximo reintento');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('HubSpot: un error 4xx (payload/credencial inválida) queda en "error" — nunca se reintenta solo', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = mockHubSpotFetch({ contactStatus: 401 });
+  try {
+    const db = fakeDb();
+    const ri = roleIdentity();
+    const response = await ventasHandler(fakeContext({ body: CL_INDIVIDUAL, roleIdentity: ri, db, env: { HUBSPOT_PRIVATE_APP_TOKEN: 'token-invalido' } }));
+    const body = await response.json();
+    assert.equal(body.data.hubspotSync.estado, 'error');
+    assert.equal(db._state.hubspot_sync[0].proximo_reintento_at, null, 'un 4xx no se programa para reintento automático');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('HubSpot: los datos demo NUNCA se sincronizan — ni se crea el registro pendiente ni se llama a HubSpot', async () => {
+  let fetchLlamado = false;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { fetchLlamado = true; return { ok: true, status: 200, json: async () => ({}) }; };
   try {
     const db = fakeDb();
     const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL', 'AR'], permissions: PERMISSIONS.admin });
     const response = await ventasHandler(fakeContext({
-      body: { ...CL_INDIVIDUAL, esDemo: true, tipoVenta: 'directa_administracion_sin_supervision', hubspot: { fields: [{ objectTypeId: '0-1', name: 'company', value: 'x' }], context: {} } },
-      roleIdentity: admin, db,
+      body: { ...CL_INDIVIDUAL, esDemo: true, tipoVenta: 'directa_administracion_sin_supervision' },
+      roleIdentity: admin, db, env: { HUBSPOT_PRIVATE_APP_TOKEN: 'token-de-prueba' },
     }));
     const body = await response.json();
     assert.equal(fetchLlamado, false, 'nunca se intenta llamar a HubSpot para una venta demo');
     assert.equal(body.data.hubspotSync, null);
-    assert.equal(db._state.hubspot_sync.length, 0);
+    assert.equal(db._state.hubspot_sync.length, 0, 'ni siquiera se crea el registro "pendiente"');
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test('HubSpot: sin campos (Kit no los envió), no se intenta la sincronización — nunca un envío vacío', async () => {
-  let fetchLlamado = false;
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => { fetchLlamado = true; return { ok: true, status: 200 }; };
-  try {
-    const db = fakeDb();
-    const ri = roleIdentity();
-    await ventasHandler(fakeContext({ body: CL_INDIVIDUAL, roleIdentity: ri, db }));
-    assert.equal(fetchLlamado, false);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+test('HubSpot: la notificación interna "venta_registrada" se crea para Administración en toda venta real', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  await ventasHandler(fakeContext({ body: CL_INDIVIDUAL, roleIdentity: ri, db }));
+  const notif = db._state.notificaciones.find((n) => n.tipo === 'venta_registrada');
+  assert.ok(notif, 'se crea la notificación obligatoria de venta registrada');
+  assert.equal(notif.vendedor_email, ri.email);
+});
+
+test('HubSpot: una venta demo NUNCA genera la notificación "venta_registrada"', async () => {
+  const db = fakeDb();
+  const admin = roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL', 'AR'], permissions: PERMISSIONS.admin });
+  await ventasHandler(fakeContext({ body: { ...CL_INDIVIDUAL, esDemo: true, tipoVenta: 'directa_administracion_sin_supervision' }, roleIdentity: admin, db }));
+  assert.equal(db._state.notificaciones.length, 0);
 });
 
 // ── Pack vs individual (ya cubierto en tests/ventas.test.js — se repite acá

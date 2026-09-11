@@ -29,7 +29,8 @@ import {
   resolverSupervisorVigenteDeEquipo, resolverAsignacionVigente, validarDistribucion,
 } from '../../../_shared/comisiones.js';
 import { agregarAntecedente } from '../../../_shared/proyectos.js';
-import { intentarSincronizarHubSpot } from '../../../_shared/hubspot.js';
+import { crearRegistroPendiente, sincronizarVentaConHubSpot } from '../../../_shared/hubspot.js';
+import { crearNotificacionSiCorresponde } from '../../../_shared/notificaciones.js';
 
 const PACK_LANDING_PRODUCT = {
   ficha_generico: 'generico',
@@ -344,7 +345,11 @@ async function handleCreate(context) {
 
   const {
     mercado, cliente, producto, tipoPrecio, precioPactado, precioFichaIndividual, precioLandingIndividual,
-    origen, esDemo, antecedentesKit, hubspot, tipoVenta, equipoId: equipoIdElegido,
+    // RIO-120 (11/09/2026): ya no se recibe `hubspot` en el body — la
+    // sincronización se construye íntegramente desde D1 (ver
+    // construirPayloadHubSpot en _shared/hubspot.js), nunca desde un array
+    // de campos que mandara el navegador.
+    origen, esDemo, antecedentesKit, tipoVenta, equipoId: equipoIdElegido,
     // RIO-119 (ampliación de alcance — proyectos personalizados, 02/09/2026).
     nombreProyecto, descripcionProyecto, notionUrl, fases, pagos: pagosPersonalizados,
     // RIO-119 (tercer bloque, item 5, 02/09/2026): distribución económica
@@ -734,20 +739,43 @@ async function handleCreate(context) {
     }
   }
 
-  // RIO-117 (segundo bloque) / dependencia documentada con RIO-120: D1 ya
-  // es la fuente de verdad operativa antes de este punto — la venta existe
-  // sin importar lo que pase acá abajo. Los datos demo NUNCA se
-  // sincronizan con HubSpot (Brenda, sección "Datos ficticios de
-  // Preview"). Esto reutiliza el mismo endpoint público de Forms API que
-  // el Kit ya llamaba desde el navegador — no es la integración segura
-  // server-to-server de RIO-120 (todavía no iniciada), ver
-  // functions/_shared/hubspot.js para el alcance exacto.
-  // RIO-119 (tercer bloque, item 5, 03/09/2026): "no vuelve a enviarse a
-  // HubSpot" — un proyecto histórico nunca sincroniza, sin importar lo que
-  // el body haya mandado en `hubspot`.
+  // RIO-120 (11/09/2026): D1 ya es la fuente de verdad operativa antes de
+  // este punto — la venta existe sin importar lo que pase acá abajo. La
+  // sincronización con HubSpot ahora se construye ÍNTEGRAMENTE desde lo ya
+  // guardado en D1 (nunca desde un array de campos que mandara el
+  // navegador — ver construirPayloadHubSpot en hubspot.js), vía la Objects
+  // API autenticada (reemplaza la Forms API de RIO-117, que un `200 OK`
+  // nunca garantizaba contacto/negocio real — ver el informe de la
+  // incidencia del 1/09 y 3/09 en RIO-120). Los datos demo y los proyectos
+  // históricos NUNCA se sincronizan ni generan esta notificación (mismo
+  // criterio ya establecido en RIO-117/RIO-119).
   let hubspotSync = null;
-  if (!modoHistorico && !esDemo && hubspot && Array.isArray(hubspot.fields)) {
-    hubspotSync = await intentarSincronizarHubSpot(db, requestId, { ventaId, fields: hubspot.fields, context: hubspot.context });
+  if (!modoHistorico && !esDemo) {
+    await crearRegistroPendiente(db, requestId, { ventaId, actorEmail: roleIdentity.email });
+    const resultado = await sincronizarVentaConHubSpot(db, requestId, env, { ventaId, actorEmail: roleIdentity.email });
+    hubspotSync = resultado;
+    if (resultado.estado === 'error' || resultado.estado === 'reintento_pendiente') {
+      try {
+        await crearNotificacionSiCorresponde(db, requestId, {
+          tipo: 'hubspot_sync_estado_cambiado', claveIdempotencia: `hubspot_sync_estado_cambiado:${ventaId}:${resultado.estado}`,
+          ventaId, mercado, clienteNegocio: cliente?.negocio || null, vendedorEmail: roleIdentity.email,
+          rutaPortal: `/interno/panel-administrativo.html?venta=${ventaId}`,
+        });
+      } catch (e) {
+        console.error(JSON.stringify({ requestId, scope: 'notificaciones', reason: 'creacion_fallida_hubspot' }));
+      }
+    }
+    // Notificación obligatoria a Administración de que se registró una
+    // venta (Brenda, sección 8) — nunca bloquea la respuesta si falla.
+    try {
+      await crearNotificacionSiCorresponde(db, requestId, {
+        tipo: 'venta_registrada', claveIdempotencia: `venta_registrada:${ventaId}`,
+        ventaId, mercado, clienteNegocio: cliente?.negocio || null, vendedorEmail: roleIdentity.email,
+        rutaPortal: `/interno/panel-administrativo.html?venta=${ventaId}`,
+      });
+    } catch (e) {
+      console.error(JSON.stringify({ requestId, scope: 'notificaciones', reason: 'creacion_fallida_venta_registrada' }));
+    }
   }
 
   return ok(

@@ -1166,10 +1166,10 @@
     });
   }
 
-  // RIO-117 (segundo bloque): el envío a HubSpot ya no sale del navegador
-  // — lo hace el backend, después de crear la venta en D1 (ver
-  // buildHubSpotFields()/confirmarYCerrarVenta() más abajo y
-  // functions/_shared/hubspot.js).
+  // RIO-120 (11/09/2026): el envío a HubSpot ya no sale del navegador ni
+  // depende de campos armados acá — el backend construye el contacto y el
+  // negocio íntegramente desde lo que ya quedó guardado en D1 al crear la
+  // venta (ver construirPayloadHubSpot en functions/_shared/hubspot.js).
 
   function normalizePhone(raw){ return raw.replace(/[^\d]/g, ''); }
 
@@ -1273,78 +1273,6 @@
     return lines.join('\n');
   }
 
-  function buildContactBlock(){
-    const clientName = document.getElementById('pclientname').value || '—';
-    const wa         = document.getElementById('pclientwa').value   || '—';
-    const email      = document.getElementById('pclientemail').value || '—';
-    const dir        = !hasFicha ? (document.getElementById('f2').value || '—') : '— (no se pidió, el negocio ya tenía ficha)';
-    let lines = [`Contacto: ${clientName}`, `WhatsApp: ${wa}`, `Email: ${email}`, `Dirección / zona de servicio: ${dir}`];
-    if(currentMarket === 'AR'){
-      lines.push(
-        `Facturación — Nombre/razón social: ${document.getElementById('pclientbillingname').value || '—'}`,
-        `Facturación — CUIT/CUIL/DNI: ${document.getElementById('pclientcuit').value || '—'}`,
-        `Facturación — Domicilio: ${document.getElementById('pclientaddress').value || '—'}`,
-        `Facturación — Condición fiscal: ${document.getElementById('pclientfiscal').value || '—'}`
-      );
-    }
-    return lines;
-  }
-
-  function buildFichaAnswersText(){
-    const name  = document.getElementById('pname').value    || '(sin nombre)';
-    const exec  = document.getElementById('execName').value || '(sin ejecutivo)';
-
-    const fichaFields = [
-      ['f2', "F1. Local físico o área de servicio"],
-      ['f3', "F2. Horario de atención"],
-      ['f4', "F3. Teléfono público / correo"],
-      ['f5', "F4. Métodos de pago / retiro / entrega"]
-    ];
-
-    let lines = [`Respuestas de Ficha de Google — ${name}`, `Ejecutivo: ${exec}`, ''];
-    lines.push(...buildContactBlock());
-    lines.push('');
-    fichaFields.forEach(([id, label]) => { lines.push(`${label}: ${document.getElementById(id).value || '—'}`); });
-
-    const activeProduct = document.querySelector('.domain-choice-card.active');
-    if(activeProduct){ lines.push(''); lines.push(`Producto elegido: ${getProductLabel(activeProduct.dataset.domain, false)}`); }
-
-    return lines.join('\n');
-  }
-
-  function buildLandingAnswersText(){
-    const name  = document.getElementById('pname').value    || '(sin nombre)';
-    const exec  = document.getElementById('execName').value || '(sin ejecutivo)';
-
-    const landingFields = [
-      ['q1',    "1. Qué vende / para quién / rango de precio"],
-      ['q2',    "2. Diferencial"],
-      ['q3',    "3. Objeción más común"],
-      ['q4',    "4. Acción esperada de la página"],
-      ['q5',    "5. Fotos disponibles"],
-      ['q6',    "6. Puede conseguir reseñas"],
-      ['q7',    "7. Color / identidad visual"],
-      ['qCanal',"Canal de contacto"]
-    ];
-
-    let lines = [`Respuestas de Landing Page — ${name}`, `Ejecutivo: ${exec}`, ''];
-    lines.push(...buildContactBlock());
-    lines.push('');
-    landingFields.forEach(([id, label]) => { lines.push(`${label}: ${document.getElementById(id).value || '—'}`); });
-
-    const activeType = document.querySelector('.type-card.active');
-    if(activeType){
-      lines.push('');
-      lines.push(`Tipo de urgencia: ${activeType.dataset.type} — ${activeType.querySelector('.name').textContent}`);
-      lines.push(`Notas urgencia: ${document.getElementById('revealNotes').value || '—'}`);
-    }
-
-    const activeProduct = document.querySelector('.domain-choice-card.active');
-    if(activeProduct){ lines.push(''); lines.push(`Producto elegido: ${getProductLabel(activeProduct.dataset.domain, false)}`); }
-
-    return lines.join('\n');
-  }
-
   function flashStatus(msg){
     const status = document.getElementById('seqStatus');
     status.textContent = msg;
@@ -1385,55 +1313,6 @@
       step.querySelector('.seq-btn').textContent = 'Enviado';
       step.querySelector('.ss-num').textContent = '✓';
     }
-  }
-
-  // ── RIO-117 (segundo bloque, 01/09/2026): "Cerrar venta" ahora registra
-  // la venta real en D1 (fuente de verdad operativa — aparece de inmediato
-  // en el Panel del Vendedor) y, recién si eso tuvo éxito, reintenta lo
-  // mismo que este botón ya hacía: un envío a HubSpot Forms API. Nunca dos
-  // escrituras independientes sin control desde el navegador — una sola
-  // solicitud al backend, que coordina ambas (ver
-  // functions/interno/api/ventas/index.js y functions/_shared/hubspot.js).
-  //
-  // El vendedor se resuelve en el servidor desde la sesión de Cloudflare
-  // Access — el campo "execName" de acá es solo un dato visible para
-  // HubSpot (etiqueta), nunca la fuente de autoridad de quién vendió.
-
-  function buildHubSpotFields(){
-    const activeProduct = document.querySelector('.domain-choice-card.active');
-    const productLabel  = activeProduct ? getProductLabel(activeProduct.dataset.domain, false) : '—';
-    const clientName    = (document.getElementById('pclientname').value || '').trim();
-    const nameParts     = clientName.split(' ');
-    const firstname     = nameParts[0] || '';
-    const lastname      = nameParts.slice(1).join(' ') || '';
-
-    // mercado_comercial NO se envía (decisión de Brenda, 22 ago 2026): no se
-    // confirmó que la propiedad exista en HubSpot. Ídem clave canónica del
-    // producto, snapshot de precio, moneda o plan de pago — HOY siguen sin
-    // enviarse a HubSpot (mismos campos que ya se auditaron funcionando),
-    // hasta que RIO-120 confirme qué propiedades reales existen en el
-    // portal antes de agregar más. Esos datos SÍ quedan guardados,
-    // estructurados, en D1 — ver buildVentaPayload().
-    const fields = [
-      { objectTypeId: '0-1', name: 'company',               value: document.getElementById('pname').value    || '—' },
-      { objectTypeId: '0-1', name: 'producto_elegido',      value: productLabel },
-      { objectTypeId: '0-1', name: 'ejecutivo_responsable', value: document.getElementById('execName').value || '—' },
-      { objectTypeId: '0-1', name: 'desafio',               value: document.getElementById('revealNotes').value || '—' },
-      { objectTypeId: '0-1', name: 'respuestas_landing',    value: buildLandingAnswersText() }
-    ];
-
-    if(firstname) fields.push({ objectTypeId: '0-1', name: 'firstname', value: firstname });
-    if(lastname)  fields.push({ objectTypeId: '0-1', name: 'lastname',  value: lastname });
-
-    const email    = (document.getElementById('pclientemail').value || '').trim();
-    const whatsapp = (document.getElementById('pclientwa').value    || '').trim();
-    if(email)    fields.push({ objectTypeId: '0-1', name: 'email',                    value: email });
-    if(whatsapp) fields.push({ objectTypeId: '0-1', name: 'hs_whatsapp_phone_number', value: whatsapp.replace(/[^\d+]/g, '') });
-
-    if(!hasFicha){
-      fields.push({ objectTypeId: '0-1', name: 'respuestas_ficha', value: buildFichaAnswersText() });
-    }
-    return fields;
   }
 
   // Clave de idempotencia estable — sobrevive a clics repetidos, un
@@ -1547,7 +1426,6 @@
       precioPactado,
       origen: 'kit_comercial',
       antecedentesKit: buildAntecedentesKit(),
-      hubspot: { fields: buildHubSpotFields(), context: { pageUri: window.location.href, pageName: document.title } },
     };
     if(isPack){
       const landingKey = productKey === 'ficha_generico' ? 'generico' : 'personalizado';
@@ -1682,16 +1560,16 @@
       closeBtn.textContent = 'Registrada';
       closeStep.querySelector('.ss-num').textContent = '✓';
 
-      const hubspotEstado = body.data.hubspotSync ? body.data.hubspotSync.estado : null;
-      flashStatus(hubspotEstado === 'fallido' ? '✓ Venta registrada (CRM pendiente de reintentar)' : '✓ Venta registrada');
+      // RIO-120 (11/09/2026, sección 7 — experiencia simple del vendedor):
+      // el vendedor SOLO ve que su venta quedó registrada — nunca el
+      // estado técnico de la sincronización con HubSpot (eso es exclusivo
+      // del Panel Administrativo). Un error de HubSpot nunca cambia lo que
+      // el vendedor ve acá.
+      flashStatus('✓ Venta registrada');
 
       const execName = document.getElementById('execName').value || '';
       document.getElementById('saleSuccessTitle').textContent = execName ? `¡Excelente trabajo, ${execName}!` : '¡Excelente trabajo!';
-      if(hubspotEstado === 'fallido'){
-        document.getElementById('saleSuccessMsg').innerHTML = 'Venta registrada con éxito y ya está en tu <a href="./panel-vendedor.html" target="_blank" rel="noopener">Panel del Vendedor</a> como "En espera de pago". El registro en HubSpot CRM no se pudo completar todavía — la venta NO se pierde, queda pendiente de reintentar automáticamente. No olvides recordarle al cliente que debe enviarnos sus fotos y logo (si tiene).';
-      } else {
-        document.getElementById('saleSuccessMsg').innerHTML = 'Venta realizada con éxito. No olvides recordarle al cliente que debe enviarnos sus fotos y logo (si tiene). Ya podés verla en tu <a href="./panel-vendedor.html" target="_blank" rel="noopener">Panel del Vendedor</a>, como "En espera de pago".';
-      }
+      document.getElementById('saleSuccessMsg').innerHTML = 'Venta realizada con éxito. No olvides recordarle al cliente que debe enviarnos sus fotos y logo (si tiene). Ya podés verla en tu <a href="./panel-vendedor.html" target="_blank" rel="noopener">Panel del Vendedor</a>, como "En espera de pago".';
       document.getElementById('saleSuccess').style.display = 'block';
       document.getElementById('saleSuccess').scrollIntoView({ behavior: 'smooth', block: 'center' });
     } catch(err) {
