@@ -17,8 +17,19 @@
 --
 -- `es_demo`: datos ficticios de Preview para que Brenda valide el panel
 -- con todos los estados posibles, sin que puedan llegar a Producción,
--- sincronizarse con HubSpot ni generar una liquidación real. Ver
--- 0020_datos_demo_preview.sql para la siembra.
+-- sincronizarse con HubSpot ni generar una liquidación real.
+--
+-- Corrección de auditoría (RIO-121, 12/09/2026): esta migración NUNCA
+-- sembró filas es_demo=1 pese a lo que decía el comentario original acá.
+-- No existe ningún archivo "0020_datos_demo_preview.sql" en migrations/
+-- — el 0020 real es 0020_antecedentes_materiales_dominio.sql, con
+-- contenido no relacionado. Las 9 ventas ficticias de Preview (RIO-117,
+-- segundo bloque) se sembraron MANUALMENTE, invocando en su momento
+-- POST /interno/api/ventas con esDemo:true — la misma API real que usa
+-- cualquier venta, nunca una migración SQL. Esa siembra es exclusiva de
+-- Preview y no forma parte de la reconstrucción de Producción: ninguna
+-- migración de este repositorio inserta filas es_demo=1, y no corresponde
+-- agregar una — Producción no debe llevar ventas ficticias.
 ALTER TABLE ventas ADD COLUMN idempotency_key TEXT;
 ALTER TABLE ventas ADD COLUMN origen TEXT;
 ALTER TABLE ventas ADD COLUMN es_demo INTEGER NOT NULL DEFAULT 0 CHECK (es_demo IN (0, 1));
