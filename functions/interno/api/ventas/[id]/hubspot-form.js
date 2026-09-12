@@ -6,12 +6,15 @@
 // backend, nunca solo con una variable del navegador:
 //
 // action: 'reclamar-intento' — "¿puedo intentar enviar ahora?" El
-//   navegador lo llama SIEMPRE que confirma una venta (creación nueva o
-//   replay de idempotencia) — así un intento que falló en una
-//   confirmación anterior se reintenta solo. Nunca autoriza dos intentos
-//   a la vez (dos pestañas) ni reenvía algo ya confirmado 'enviado'. Un
-//   intento abandonado (pestaña cerrada a mitad de camino) vence solo y
-//   vuelve a quedar disponible.
+//   navegador lo llama SOLO al confirmar una venta NUEVA (RIO-121,
+//   12/09/2026: nunca en un replay de idempotencia — la auditoría
+//   confirmó que reintentar automáticamente ahí podía duplicar un envío
+//   ya aceptado por HubSpot). Nunca autoriza dos intentos a la vez (dos
+//   pestañas) ni reenvía algo ya confirmado 'enviado'. Un intento
+//   abandonado (pestaña cerrada a mitad de camino) vence solo y vuelve a
+//   quedar disponible — pero desde RIO-121 solo administración puede
+//   reclamarlo de nuevo (Panel Administrativo, "Reintentar"), nunca el
+//   vendedor con una confirmación posterior.
 // action: 'reportar-resultado' — el navegador reporta qué pasó después
 //   de intentar (o de saltar el envío real en Preview).
 //

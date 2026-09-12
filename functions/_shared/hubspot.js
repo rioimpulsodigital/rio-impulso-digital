@@ -16,11 +16,25 @@
 // DESPUÉS de que la venta ya quedó guardada en D1 (nunca antes, nunca la
 // bloquea).
 //
-// Este archivo ya NO llama a HubSpot — solo guarda el registro técnico
-// mínimo y administrativo del resultado que el navegador reporta
-// (pendiente / enviado / error). La infraestructura de la Objects API
-// (migración 0032: columnas de negocio, canal 'objects_api', etc.) queda
-// intacta pero DEJA DE USARSE — ver migración 0033.
+// Este archivo ya NO llama a HubSpot desde el flujo normal del vendedor
+// — solo guarda el registro técnico mínimo y administrativo del resultado
+// que el navegador reporta (pendiente / procesando / enviado / error). La
+// infraestructura de la Objects API (migración 0032: columnas de negocio,
+// canal 'objects_api', etc.) queda intacta pero DEJA DE USARSE — ver
+// migración 0033.
+//
+// RIO-121 (corrección de auditoría, 12/09/2026): con la Forms API pública
+// de HubSpot no es posible demostrar atomicidad entre "HubSpot aceptó el
+// envío" y "D1 registró ese resultado" — no hay una confirmación de
+// objeto real que se pueda verificar después (a diferencia de la Objects
+// API, descartada en RIO-120 por otros motivos). Este sistema entrega,
+// por diseño, "al menos una vez": un envío real siempre llega si el
+// intento se completa, pero un reintento administrativo posterior a un
+// intento cuyo resultado nunca se reportó puede producir un segundo envío
+// real y, con él, una segunda notificación nativa a Brenda. Por eso desde
+// RIO-121 solo administración puede reintentar (nunca el vendedor vía una
+// confirmación posterior — ver hubspot-form.js) y el Panel Administrativo
+// advierte explícitamente antes de ejecutar esa acción.
 
 import { query, execute } from './db.js';
 import { logEvento } from './historial.js';
@@ -115,14 +129,18 @@ export async function registrarResultadoEnvioFormulario(db, requestId, { ventaId
   return id;
 }
 
-// RIO-120 (11/09/2026, corrección de confiabilidad): autoriza (o no) UN
-// intento de envío — la única puerta real para decidir "¿puedo enviar
-// ahora?", resuelta siempre en el backend contra el registro mínimo de
-// sincronización, NUNCA solo por una variable del navegador (ej. si la
-// creación de la venta fue o no un replay). Se llama SIEMPRE que el Kit
-// confirma una venta (creación nueva o replay) — así un intento que
-// falló en una confirmación anterior se reintenta solo, sin esperar una
-// acción manual.
+// RIO-120 (11/09/2026, corrección de confiabilidad); RIO-121 (12/09/2026,
+// corrección de auditoría): autoriza (o no) UN intento de envío — la
+// única puerta real para decidir "¿puedo enviar ahora?", resuelta siempre
+// en el backend contra el registro mínimo de sincronización. El Kit solo
+// la llama en una creación real de venta (nunca en un replay de
+// idempotencia, desde RIO-121 — la auditoría confirmó que reintentar
+// automáticamente en un replay podía duplicar un envío ya aceptado por
+// HubSpot si el resultado del primer intento nunca llegó a reportarse).
+// El fallback administrativo (`hubspot-sync/[ventaId]`) sigue usando esta
+// misma función para su propio "Reintentar" explícito — por eso la firma
+// no cambia: sigue resolviendo la autorización contra el estado real en
+// D1, nunca contra quién la llama.
 //
 // El UPDATE condicional es la única fuente de atomicidad: SQLite/D1
 // serializa las escrituras a una misma fila, así que dos solicitudes

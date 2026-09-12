@@ -1594,13 +1594,24 @@
   }
 
   // ── Sincronización HubSpot (RIO-120, 11/09/2026 — alcance simplificado
-  // por Brenda, con corrección de confiabilidad el mismo día) ─────────────
+  // por Brenda; corrección de confiabilidad el mismo día; RIO-121,
+  // 12/09/2026 — corrección de auditoría) ─────────────────────────────────
   // Vista exclusiva de administración — el vendedor nunca ve nada de esto.
   // El envío real del formulario lo hace el navegador del vendedor
-  // (kit-venta-ficha-y-landing-page.html), reintentado solo en cada
-  // confirmación futura del Kit — "Reintentar" acá es el fallback
-  // exclusivo de administración para cuando esa sesión real ya no está
-  // disponible (pestaña cerrada, etc.), nunca Objects API ni un negocio.
+  // (kit-venta-ficha-y-landing-page.html) — SOLO en la confirmación de una
+  // venta nueva. Desde RIO-121, el vendedor ya NUNCA reintenta un envío
+  // (ni siquiera en un replay de idempotencia): la auditoría confirmó que
+  // eso podía duplicar un envío ya aceptado por HubSpot si el resultado
+  // del primer intento no llegó a reportarse. "Reintentar" acá es ahora
+  // el ÚNICO camino para recuperar un intento fallido o atascado — nunca
+  // Objects API ni un negocio, sigue siendo la misma Forms API pública.
+  // Por eso el botón también se ofrece sobre 'procesando' (ver
+  // `puedeReintentar` abajo): sin esto, un intento que quedó a mitad de
+  // camino (pestaña cerrada) no tendría ningún camino de recuperación una
+  // vez que el vendedor deja de poder reintentar solo. Reintentar sobre
+  // un intento realmente en curso en otra pestaña devuelve simplemente un
+  // 409 explicado ("Ya hay un intento en curso") — no rompe nada, solo
+  // informa.
   var HUBSPOT_ESTADO_LABEL = { pendiente: 'Pendiente', procesando: 'Intento en curso', enviado: 'Enviado', error: 'Error' };
   var HUBSPOT_ESTADO_BADGE = { pendiente: 'neutral', procesando: 'blue', enviado: 'green', error: 'red' };
 
@@ -1624,7 +1635,12 @@
       return;
     }
     el.innerHTML = lista.map(function (s) {
-      var puedeReintentar = s.estado === 'error' || s.estado === 'pendiente';
+      // RIO-121: incluye 'procesando' — es el único camino de recuperación
+      // de un intento atascado ahora que el vendedor ya no reintenta solo
+      // (ver comentario de sección arriba). El backend (reclamarIntentoEnvio)
+      // sigue respetando el lease de 2 minutos: si el intento sigue
+      // realmente en curso, devuelve un 409 explicado en vez de duplicar nada.
+      var puedeReintentar = s.estado === 'error' || s.estado === 'pendiente' || s.estado === 'procesando';
       return (
         '<div class="pv-notif-card">' +
           '<div class="pv-notif-head">' +
@@ -1651,6 +1667,14 @@
     });
     Array.prototype.forEach.call(el.querySelectorAll('[data-reintentar-hubspot]'), function (btn) {
       btn.addEventListener('click', async function () {
+        // RIO-121 (corrección de auditoría, 12/09/2026): con HubSpot Forms
+        // API no podemos demostrar atomicidad entre la aceptación externa y
+        // el registro en D1 — un intento anterior puede haber llegado a
+        // HubSpot igual sin que quede registrado acá. Reintentar es
+        // "al menos una vez", nunca "exactamente una vez": se avisa
+        // explícitamente antes de ejecutar la acción real.
+        var confirmado = window.confirm('HubSpot podría haber recibido el envío anterior aunque no tengamos confirmación. Reintentar puede generar una notificación duplicada.');
+        if (!confirmado) return;
         btn.disabled = true;
         var ventaId = btn.getAttribute('data-reintentar-hubspot');
         var r = await apiPost('/interno/api/hubspot-sync/' + encodeURIComponent(ventaId), { action: 'reintentar' });

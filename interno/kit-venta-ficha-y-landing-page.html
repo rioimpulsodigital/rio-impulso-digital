@@ -1405,27 +1405,35 @@
     return host.endsWith('.pages.dev') || host === 'localhost' || host === '127.0.0.1';
   }
 
-  // Se llama SIEMPRE después de que la venta ya quedó guardada en D1
-  // (nunca antes) — en una creación nueva Y en un replay de idempotencia
-  // (doble clic, timeout, recarga). La autorización real de "¿corresponde
-  // un intento ahora?" la resuelve el BACKEND (reclamarIntentoEnvio,
-  // contra el registro mínimo de sincronización) — nunca esta variable
-  // del navegador sola. Esto es lo que permite que un envío fallido en
-  // una confirmación anterior se reintente solo en la siguiente, sin
-  // reenviar nunca uno ya confirmado 'enviado' ni duplicar un intento que
-  // ya está en curso en otra pestaña. El resultado nunca cambia lo que ve
-  // el vendedor (ya vio "Venta registrada" antes de esto).
+  // RIO-121 (corrección de auditoría — confiabilidad de HubSpot,
+  // 12/09/2026): se llama ÚNICAMENTE tras una creación real de venta —
+  // NUNCA en un replay de idempotencia (ver el único punto de llamada,
+  // más abajo, que ahora exige `!body.data.replay`). Antes (RIO-120,
+  // 11/09/2026) se llamaba también en cada replay para poder reintentar
+  // solo un envío fallido sin acción manual — la auditoría de RIO-121
+  // confirmó que eso abría una ventana real de reenvío duplicado: si
+  // HubSpot ya había aceptado el formulario pero el reporte del resultado
+  // nunca llegó a completarse (pestaña cerrada a mitad de camino), un
+  // replay posterior podía autorizar un segundo envío real. La corrección
+  // traslada esa recuperación exclusivamente a una acción explícita de
+  // administración (Panel Administrativo, "Reintentar") — el vendedor ya
+  // nunca puede disparar un segundo intento real, ni siquiera sin
+  // saberlo. `keepalive: true` en los tres `fetch` de este flujo: mejora
+  // la probabilidad de que el intento y su resultado se completen aunque
+  // la pestaña se cierre justo después de confirmar — nunca cambia la
+  // autorización ni la lógica de reintento, que sigue resolviendo el
+  // backend (reclamarIntentoEnvio, con su lease de 2 minutos).
   async function intentarEnviarFormularioHubSpot(ventaId){
     var claim;
     try {
       var r = await fetch('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/hubspot-form', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', keepalive: true,
         body: JSON.stringify({ action: 'reclamar-intento' }),
       });
       var respBody = await r.json().catch(function(){ return null; });
       claim = respBody && respBody.data;
     } catch(e) {
-      return; // sin red: ni reclamar ni reportar es posible — se reintenta en la próxima confirmación.
+      return; // sin red: ni reclamar ni reportar es posible — solo administración podrá reintentar después.
     }
     if(!claim || !claim.autorizado) return; // ya enviado, o un intento en curso en otra pestaña — nunca un segundo envío.
 
@@ -1440,6 +1448,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields, context }),
+        keepalive: true,
       });
       reportarResultadoHubSpot(ventaId, res.ok ? 'enviado' : 'error', res.ok ? 'ok' : ('http_' + res.status));
     } catch(e) {
@@ -1449,12 +1458,16 @@
 
   // Best-effort: nunca bloquea ni afecta la experiencia del vendedor,
   // solo deja el registro mínimo visible en el Panel Administrativo.
+  // `keepalive: true` (RIO-121): esta llamada es la que confirma que un
+  // envío real ya fue aceptado por HubSpot — sin ella, la fila queda en
+  // 'procesando' y solo administración puede destrabarla más tarde.
   function reportarResultadoHubSpot(ventaId, estado, resumen){
     fetch('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/hubspot-form', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ estado, resumen }),
       credentials: 'same-origin',
+      keepalive: true,
     }).catch(function(){ /* no-op — nunca interrumpe al vendedor */ });
   }
 
@@ -1740,15 +1753,19 @@
       pendingVentaPayload = null;
       clearIdempotencyKey();
 
-      // RIO-120 (11/09/2026, corrección de confiabilidad): el formulario a
+      // RIO-121 (corrección de auditoría, 12/09/2026): el formulario a
       // HubSpot se intenta SIEMPRE después de que la venta ya quedó
-      // guardada en D1 — nunca antes, nunca la bloquea — tanto en una
-      // creación real como en un replay de idempotencia (esto es
-      // justamente lo que permite reintentar solo un envío que falló en
-      // una confirmación anterior). El backend decide si corresponde un
-      // intento real (nunca duplica uno ya confirmado ni uno en curso).
-      // Fire-and-forget: nunca bloquea la UI ni cambia lo que ve el vendedor.
-      if(body.data.venta && body.data.venta.id){
+      // guardada en D1 — nunca antes, nunca la bloquea — pero SOLO en una
+      // creación real, NUNCA en un replay de idempotencia (`body.data.replay
+      // === true`). Antes (RIO-120) se intentaba también en cada replay
+      // para reintentar solo un envío fallido sin acción manual — la
+      // auditoría confirmó que eso permitía un reenvío real duplicado si
+      // el resultado del primer intento nunca llegó a reportarse. Un
+      // envío fallido o interrumpido ahora solo se recupera con una
+      // acción explícita de administración (Panel Administrativo,
+      // "Reintentar"). Fire-and-forget: nunca bloquea la UI ni cambia lo
+      // que ve el vendedor.
+      if(body.data.venta && body.data.venta.id && !body.data.replay){
         intentarEnviarFormularioHubSpot(body.data.venta.id);
       }
 
