@@ -213,6 +213,28 @@ export function assertCanAccessOwner(roleIdentity, ownerEmail, ownerMarket) {
   throw new AuthzError('resource_not_owned');
 }
 
+// RIO-121 (corrección de auditoría — hallazgo Alto confirmado por Claudy,
+// 12/09/2026): el replay de idempotencia de POST /ventas recupera una
+// TRANSACCIÓN ya realizada, no una vista de la venta — la Idempotency-Key
+// nunca es, por sí sola, una prueba de autorización (antes de esta
+// corrección, cualquier identidad con `canSell` que conociera/adivinara
+// una clave ajena recibía la venta completa, sin ningún chequeo de
+// propiedad). Ser supervisor de la venta o de su propio mercado NUNCA
+// alcanza acá, aunque sí alcance para el detalle de solo lectura
+// (assertCanViewVentaDetalle) — la clave representa "yo hice esta
+// operación", no "puedo ver esta venta". Solo quien realizó la venta
+// (dueño real, sin importar su rol — incluye un supervisor que vendió su
+// propia venta), o un admin dentro de su propio mercado autorizado, puede
+// recuperarla por este camino. La excepción de admin es explícita y se
+// prueba en tests/ventas.test.js — nunca un bypass implícito para
+// cualquier capacidad de "ver datos ajenos" (por eso no reutiliza
+// `assertCanAccessOwner`, que sí le da paso a un supervisor por mercado).
+export function assertCanReplayVenta(roleIdentity, venta) {
+  if (venta.vendedor_email === roleIdentity.email) return; // dueño real de la transacción, cualquier rol.
+  if (roleIdentity.role === 'admin' && roleIdentity.allowedMarkets.includes(venta.mercado)) return;
+  throw new AuthzError('resource_not_owned');
+}
+
 // RIO-118 (corrección — decisiones de Brenda sobre equipos, 01/09/2026):
 // "no asumir que mercado equivale a equipo" también aplica al DETALLE de
 // una venta (y su historial), no solo al listado — un supervisor nunca

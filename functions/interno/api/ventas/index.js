@@ -21,7 +21,7 @@
 
 import { ok, Errors } from '../../../_shared/response.js';
 import { query, transaction } from '../../../_shared/db.js';
-import { assertMarketAllowed, AuthzError } from '../../../_shared/authz.js';
+import { assertMarketAllowed, assertCanReplayVenta, AuthzError } from '../../../_shared/authz.js';
 import { isMethodAllowed, hasExpectedContentType, isBodyTooLarge } from '../../../_shared/security.js';
 import { isValidPrice, splitPackPrice, CURRENCY_BY_MARKET } from '../../../_shared/pricing.js';
 import {
@@ -64,6 +64,19 @@ function shortCode(prefix) {
 // acreditado + si existe una cancelación) — la única regla nueva acá es
 // de PRESENTACIÓN, no de negocio: cuál de esos hechos ya conocidos se
 // muestra como una sola etiqueta.
+// RIO-121 (corrección de auditoría, 12/09/2026): única puerta de redacción
+// de `distribucionSnapshot` para las DOS formas de respuesta de POST
+// /ventas (creación real y replay de idempotencia) — antes cada una
+// aplicaba su propio criterio por separado y una de las dos (el replay)
+// no aplicaba ninguno. Mismo campo, misma regla, en un solo lugar: nunca
+// se vuelven a desalinear. Un no-admin nunca recibe distribución económica
+// ni siquiera de su propia venta — es información de administración, no
+// del vendedor (mismo criterio ya vigente en GET /ventas y GET /ventas/:id).
+function distribucionSnapshotParaRespuesta(rawJson, roleIdentity) {
+  if (roleIdentity.role !== 'admin' || !rawJson) return null;
+  return JSON.parse(rawJson);
+}
+
 function calcularEstadoOperativo(row) {
   if ((row.cancelacion_count || 0) > 0) return 'cancelada';
   if (row.proyecto_estado === 'registrado' && (row.pagos_acreditados_count || 0) === 0) return 'en_espera_pago';
@@ -149,8 +162,11 @@ function serializeVenta(row, esAdmin) {
 // exitosa, a partir de una venta que ya existe — usado exclusivamente
 // para el replay de idempotencia (RIO-117, segundo bloque): un reintento
 // con la misma clave nunca vuelve a crear nada, solo devuelve lo que ya
-// se creó la primera vez.
-async function serializarVentaCompletaExistente(db, requestId, ventaId) {
+// se creó la primera vez. RIO-121: el LLAMADOR ya verificó autorización
+// con `assertCanReplayVenta` antes de invocar esta función — acá solo se
+// aplica la redacción de campos según el rol de quien pregunta, igual que
+// cualquier otra respuesta de venta.
+async function serializarVentaCompletaExistente(db, requestId, ventaId, roleIdentity) {
   const ventaRows = await query(db, requestId, 'SELECT * FROM ventas WHERE id = ?', [ventaId]);
   const venta = ventaRows[0];
   if (!venta) return null;
@@ -181,7 +197,11 @@ async function serializarVentaCompletaExistente(db, requestId, ventaId) {
       nombreProyecto: venta.nombre_proyecto || null,
       descripcionProyecto: venta.descripcion_proyecto || null,
       notionUrl: venta.notion_url || null,
-      distribucionSnapshot: venta.distribucion_snapshot ? JSON.parse(venta.distribucion_snapshot) : null,
+      distribucionSnapshot: distribucionSnapshotParaRespuesta(venta.distribucion_snapshot, roleIdentity),
+      // RIO-121: faltaba acá — la creación normal sí lo devuelve (línea de
+      // respuesta de handleCreate). Mismo campo, mismo valor en las dos
+      // formas de respuesta, sin excepción.
+      modoHistorico: venta.modo_historico || null,
     },
     proyecto: { id: proyecto.id, codigoProyecto: proyecto.codigo_proyecto },
     componentes: componentes.map((c) => ({ id: c.id, tipo: c.tipo, nombre: c.nombre || null, descripcion: c.descripcion || null, precioAtribuido: c.precio_atribuido, estadoActual: c.estado_actual })),
@@ -333,9 +353,27 @@ async function handleCreate(context) {
   // sin repetir ninguna escritura (ni D1 ni HubSpot).
   const idempotencyKey = request.headers.get('Idempotency-Key') || (body && body.idempotencyKey) || null;
   if (idempotencyKey) {
-    const existentes = await query(env.DB, requestId, 'SELECT id FROM ventas WHERE idempotency_key = ?', [idempotencyKey]);
+    const existentes = await query(env.DB, requestId, 'SELECT id, vendedor_email, mercado FROM ventas WHERE idempotency_key = ?', [idempotencyKey]);
     if (existentes[0]) {
-      const replay = await serializarVentaCompletaExistente(env.DB, requestId, existentes[0].id);
+      // RIO-121 (corrección de auditoría — hallazgo Alto, 12/09/2026): la
+      // Idempotency-Key identifica una transacción, nunca autoriza por sí
+      // sola a quien la presente. Antes de reconstruir y devolver la venta,
+      // se repite exactamente la misma verificación server-side que
+      // protege cualquier otro acceso a un recurso ajeno — nunca solo
+      // "existe una fila con esta clave". Una clave válida perteneciente a
+      // otra persona (u otro mercado, para un no-admin) recibe 403, igual
+      // que si no existiera. `roleIdentity` ya viene resuelto por
+      // `requireRoleIdentity` (identidad autenticada, usuario activo,
+      // asignación vigente) antes de llegar acá — y `canSell` ya se validó
+      // arriba — así que este chequeo cubre específicamente la relación
+      // con ESTA venta, no la identidad en general.
+      try {
+        assertCanReplayVenta(roleIdentity, existentes[0]);
+      } catch (e) {
+        if (e instanceof AuthzError) return Errors.forbidden(requestId);
+        throw e;
+      }
+      const replay = await serializarVentaCompletaExistente(env.DB, requestId, existentes[0].id, roleIdentity);
       if (replay) return ok(replay, requestId, 200);
       // La fila existe pero no se pudo reconstruir la respuesta completa
       // (inconsistencia real) — nunca se finge éxito ni se reintenta crear.
@@ -787,7 +825,7 @@ async function handleCreate(context) {
         nombreProyecto: esProyectoPersonalizado ? nombreProyecto.trim() : null,
         descripcionProyecto: esProyectoPersonalizado ? ((descripcionProyecto && descripcionProyecto.trim()) || null) : null,
         notionUrl: esProyectoPersonalizado ? ((notionUrl && notionUrl.trim()) || null) : null,
-        distribucionSnapshot: distribucionSnapshot ? JSON.parse(distribucionSnapshot) : null,
+        distribucionSnapshot: distribucionSnapshotParaRespuesta(distribucionSnapshot, roleIdentity),
         modoHistorico: modoHistorico || null,
       },
       proyecto: { id: proyectoId, codigoProyecto },
