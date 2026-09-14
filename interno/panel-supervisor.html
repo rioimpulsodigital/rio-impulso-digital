@@ -323,6 +323,18 @@
             </select>
           </div>
           <div class="pv-filter-field">
+            <!-- RIO-122: filtro independiente del subestado real del pago —
+                 nunca se mezcla con "Avance operativo" (arriba). -->
+            <label for="fPago">Estado de pago</label>
+            <select id="fPago">
+              <option value="">Todos</option>
+              <option value="pendiente">En espera de pago</option>
+              <option value="informado">Pago informado — pendiente de validación</option>
+              <option value="rechazado">Pago rechazado — requiere corrección</option>
+              <option value="acreditado">Acreditado</option>
+            </select>
+          </div>
+          <div class="pv-filter-field">
             <label for="fDesde">Desde</label>
             <input type="date" id="fDesde">
           </div>

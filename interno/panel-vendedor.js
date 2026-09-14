@@ -69,6 +69,31 @@
     en_espera_pago: 'amber', registrado: 'neutral',
     en_produccion: 'blue', completado: 'green', cancelada: 'red',
   };
+  // RIO-122 (corrección de presentación, 13/09/2026, UAT — caso Peluquería
+  // Canina): el estado operativo interno sigue siendo 'en_espera_pago'
+  // hasta la validación administrativa (sin cambios de regla de negocio),
+  // pero acá ya existía un filtro "Estado de pago" (fPago, más abajo) que
+  // el listado nunca reflejaba en su propia etiqueta — se corrige para
+  // que la fila muestre siempre el subestado real, derivado de
+  // `estadoPagoResumen`, nunca un texto fijo.
+  var ESTADO_PAGO_EN_ESPERA_LABEL = {
+    pendiente: 'En espera de pago',
+    informado: 'Pago informado — pendiente de validación',
+    rechazado: 'Pago rechazado — requiere corrección',
+  };
+  var ESTADO_PAGO_EN_ESPERA_BADGE = { pendiente: 'amber', informado: 'blue', rechazado: 'red' };
+  function estadoVentaVisibleLabel(v) {
+    if (v.estadoOperativo === 'en_espera_pago') {
+      return ESTADO_PAGO_EN_ESPERA_LABEL[v.estadoPagoResumen] || ESTADO_OPERATIVO_LABEL.en_espera_pago;
+    }
+    return ESTADO_OPERATIVO_LABEL[v.estadoOperativo] || v.estadoOperativo || '—';
+  }
+  function estadoVentaVisibleBadge(v) {
+    if (v.estadoOperativo === 'en_espera_pago') {
+      return ESTADO_PAGO_EN_ESPERA_BADGE[v.estadoPagoResumen] || 'amber';
+    }
+    return ESTADO_OPERATIVO_BADGE[v.estadoOperativo] || 'neutral';
+  }
   var COMISION_ESTADO_LABEL = {
     calculada_provisional: 'Estimada', retenida: 'Retenida', habilitada: 'Habilitada',
     programada: 'Programada', pagada: 'Pagada',
@@ -311,7 +336,7 @@
             '<span class="pv-mono">' + escapeHtml(v.codigoVenta) + '</span></td>' +
           '<td>' + escapeHtml(PRODUCTO_LABEL[v.producto] || v.producto) + '<br><span class="pv-badge pv-badge--neutral">' + escapeHtml(v.mercado) + '</span></td>' +
           '<td>' + fmtMoneda(v.precioPactado, v.moneda) + '</td>' +
-          '<td><span class="pv-badge pv-badge--' + (ESTADO_OPERATIVO_BADGE[v.estadoOperativo] || 'neutral') + '">' + escapeHtml(ESTADO_OPERATIVO_LABEL[v.estadoOperativo] || v.estadoOperativo || '—') + '</span></td>' +
+          '<td><span class="pv-badge pv-badge--' + estadoVentaVisibleBadge(v) + '">' + escapeHtml(estadoVentaVisibleLabel(v)) + '</span></td>' +
           '<td>' + fmtFecha(v.createdAt) + '</td>' +
         '</tr>'
       );
@@ -576,11 +601,33 @@
   }
 
   async function renderPagoHTML(ventaId, pago, moneda) {
-    var badgeClass = pago.estado === 'acreditado' ? 'green' : (pago.estado === 'informado' ? 'blue' : 'neutral');
+    // RIO-122 (corrección de presentación, 13/09/2026, UAT — caso
+    // Peluquería Canina): `pago.estado === 'pendiente'` es ambiguo —
+    // puede ser "nunca informado" o "rechazado, esperando corrección"
+    // (rechazarPago vuelve el pago a 'pendiente' sin dejar ninguna marca
+    // en pagos_esperados.estado). Antes de esta corrección, un pago
+    // rechazado mostraba exactamente el mismo formulario "Informar pago"
+    // que uno nunca tocado — SIN mostrar el motivo del rechazo, que el
+    // vendedor necesita para corregir el comprobante. `pago.fueRechazado`
+    // (RIO-122, resuelto server-side contra el historial de este pago)
+    // distingue los dos casos.
+    var esRechazado = pago.estado === 'pendiente' && pago.fueRechazado;
+    var badgeClass = pago.estado === 'acreditado' ? 'green' : (pago.estado === 'informado' ? 'blue' : (esRechazado ? 'red' : 'neutral'));
     var comprobanteHTML = '';
     var accionesHTML = '';
 
     if (pago.estado === 'pendiente') {
+      if (esRechazado) {
+        // El comprobante rechazado sigue siendo el "vigente" hasta que se
+        // informe y suba uno nuevo — la misma ruta que ya usa el caso
+        // "informado" de abajo, consultada acá para mostrar el motivo.
+        var rRechazo = await apiFetch('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/pagos/' + encodeURIComponent(pago.id) + '/comprobante');
+        var comprobanteRechazado = (rRechazo.ok && rRechazo.body && rRechazo.body.ok) ? rRechazo.body.data.comprobante : null;
+        if (comprobanteRechazado && comprobanteRechazado.rechazadoEn) {
+          comprobanteHTML = '<div class="pv-motivo-box"><strong>Comprobante rechazado.</strong> Motivo: ' + escapeHtml(comprobanteRechazado.motivoRechazo) +
+            '<br>Informá el pago de nuevo y subí un comprobante corregido.</div>';
+        }
+      }
       accionesHTML =
         '<form class="pv-informar-form" data-informar-pago="' + escapeHtml(pago.id) + '">' +
           '<input type="number" min="1" step="1" placeholder="Monto informado" required aria-label="Monto informado para este pago">' +
@@ -609,7 +656,7 @@
       '<div class="pv-pago-card">' +
         '<div class="pv-pago-head">' +
           '<span class="pv-pago-titulo">' + escapeHtml(pago.tipo) + ' — ' + fmtMoneda(pago.monto, moneda) + '</span>' +
-          '<span class="pv-badge pv-badge--' + badgeClass + '">' + escapeHtml(PAGO_ESTADO_LABEL[pago.estado] || pago.estado) + '</span>' +
+          '<span class="pv-badge pv-badge--' + badgeClass + '">' + escapeHtml(esRechazado ? 'Rechazado — corregí el comprobante' : (PAGO_ESTADO_LABEL[pago.estado] || pago.estado)) + '</span>' +
         '</div>' +
         comprobanteHTML + accionesHTML +
       '</div>'

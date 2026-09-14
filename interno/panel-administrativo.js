@@ -46,6 +46,39 @@
     en_espera_pago: 'amber', registrado: 'neutral',
     en_produccion: 'blue', completado: 'green', cancelada: 'red',
   };
+  // RIO-122 (corrección de presentación, 13/09/2026): mismo criterio que
+  // panel-supervisor.js/panel-vendedor.js — el estado operativo interno
+  // sigue siendo 'en_espera_pago' hasta la validación administrativa
+  // (sin cambios de regla de negocio), pero la etiqueta visible se deriva
+  // de `estadoPagoResumen` para distinguir sus 3 subestados reales.
+  var ESTADO_PAGO_EN_ESPERA_LABEL = {
+    pendiente: 'En espera de pago',
+    informado: 'Pago informado — pendiente de validación',
+    rechazado: 'Pago rechazado — requiere corrección',
+  };
+  var ESTADO_PAGO_EN_ESPERA_BADGE = { pendiente: 'amber', informado: 'blue', rechazado: 'red' };
+  function estadoVentaVisibleLabel(v) {
+    if (v.estadoOperativo === 'en_espera_pago') {
+      return ESTADO_PAGO_EN_ESPERA_LABEL[v.estadoPagoResumen] || ESTADO_OPERATIVO_LABEL.en_espera_pago;
+    }
+    return ESTADO_OPERATIVO_LABEL[v.estadoOperativo] || v.estadoOperativo || '—';
+  }
+  function estadoVentaVisibleBadge(v) {
+    if (v.estadoOperativo === 'en_espera_pago') {
+      return ESTADO_PAGO_EN_ESPERA_BADGE[v.estadoPagoResumen] || 'amber';
+    }
+    return ESTADO_OPERATIVO_BADGE[v.estadoOperativo] || 'neutral';
+  }
+  function clavePipeline(v) {
+    return v.estadoOperativo === 'en_espera_pago' ? ('pago__' + (v.estadoPagoResumen || 'pendiente')) : v.estadoOperativo;
+  }
+  var PIPELINE_LABEL = {
+    pago__pendiente: 'En espera de pago',
+    pago__informado: 'Pago informado — pendiente de validación',
+    pago__rechazado: 'Pago rechazado — requiere corrección',
+    registrado: 'Registrado', en_produccion: 'En producción', completado: 'Completado', cancelada: 'Cancelada',
+  };
+  var ORDEN_PIPELINE = ['pago__pendiente', 'pago__informado', 'pago__rechazado', 'registrado', 'en_produccion', 'completado', 'cancelada'];
   var ESTADO_REVISION_LABEL = {
     informada: 'Informada', en_revision: 'En revisión', aceptada: 'Aceptada',
     requiere_material_adicional: 'Requiere material adicional', descartada_con_motivo: 'Descartada',
@@ -245,22 +278,21 @@
 
   function renderPipeline() {
     var counts = {};
-    todasVentas.forEach(function (v) { counts[v.estadoOperativo] = (counts[v.estadoOperativo] || 0) + 1; });
-    var orden = ['en_espera_pago', 'registrado', 'en_produccion', 'completado', 'cancelada'];
-    document.getElementById('pvPipeline').innerHTML = orden
-      .filter(function (e) { return counts[e]; })
-      .map(function (e) {
-        return '<span class="pv-pipeline-chip">' + escapeHtml(ESTADO_OPERATIVO_LABEL[e]) + ': <strong>' + counts[e] + '</strong></span>';
+    todasVentas.forEach(function (v) { var k = clavePipeline(v); counts[k] = (counts[k] || 0) + 1; });
+    document.getElementById('pvPipeline').innerHTML = ORDEN_PIPELINE
+      .filter(function (k) { return counts[k]; })
+      .map(function (k) {
+        return '<span class="pv-pipeline-chip">' + escapeHtml(PIPELINE_LABEL[k]) + ': <strong>' + counts[k] + '</strong></span>';
       }).join('') || '<span class="pv-pipeline-chip">Sin ventas todavía en tus mercados.</span>';
   }
 
   function wireFilters() {
-    ['fCliente', 'fVendedor', 'fEquipo', 'fSupervisor', 'fMercado', 'fProducto', 'fEstado', 'fDesde', 'fHasta'].forEach(function (id) {
+    ['fCliente', 'fVendedor', 'fEquipo', 'fSupervisor', 'fMercado', 'fProducto', 'fEstado', 'fPago', 'fDesde', 'fHasta'].forEach(function (id) {
       document.getElementById(id).addEventListener('input', renderVentas);
       document.getElementById(id).addEventListener('change', renderVentas);
     });
     document.getElementById('pvClearFilters').addEventListener('click', function () {
-      ['fCliente', 'fVendedor', 'fEquipo', 'fSupervisor', 'fMercado', 'fProducto', 'fEstado', 'fDesde', 'fHasta'].forEach(function (id) { document.getElementById(id).value = ''; });
+      ['fCliente', 'fVendedor', 'fEquipo', 'fSupervisor', 'fMercado', 'fProducto', 'fEstado', 'fPago', 'fDesde', 'fHasta'].forEach(function (id) { document.getElementById(id).value = ''; });
       renderVentas();
     });
   }
@@ -273,6 +305,7 @@
     var mercado = document.getElementById('fMercado').value;
     var producto = document.getElementById('fProducto').value;
     var estado = document.getElementById('fEstado').value;
+    var pago = document.getElementById('fPago').value;
     var desde = document.getElementById('fDesde').value;
     var hasta = document.getElementById('fHasta').value;
     return todasVentas.filter(function (v) {
@@ -285,6 +318,8 @@
       if (mercado && v.mercado !== mercado) return false;
       if (producto && v.producto !== producto) return false;
       if (estado && v.estadoOperativo !== estado) return false;
+      // RIO-122: filtro independiente del subestado real del pago.
+      if (pago && v.estadoPagoResumen !== pago) return false;
       var fechaVenta = (v.createdAt || '').slice(0, 10);
       if (desde && fechaVenta < desde) return false;
       if (hasta && fechaVenta > hasta) return false;
@@ -318,7 +353,7 @@
           '<td>' + equipoSupervisorCelda(v) + '</td>' +
           '<td>' + escapeHtml(v.producto === 'proyecto_personalizado' ? (v.nombreProyecto || 'Proyecto personalizado') : (PRODUCTO_LABEL[v.producto] || v.producto)) + '<br><span class="pv-badge pv-badge--neutral">' + escapeHtml(v.mercado) + '</span></td>' +
           '<td>' + fmtMoneda(v.precioPactado, v.moneda) + '</td>' +
-          '<td><span class="pv-badge pv-badge--' + (ESTADO_OPERATIVO_BADGE[v.estadoOperativo] || 'neutral') + '">' + escapeHtml(ESTADO_OPERATIVO_LABEL[v.estadoOperativo] || v.estadoOperativo || '—') + '</span></td>' +
+          '<td><span class="pv-badge pv-badge--' + estadoVentaVisibleBadge(v) + '">' + escapeHtml(estadoVentaVisibleLabel(v)) + '</span></td>' +
           '<td>' + fmtFecha(v.createdAt) + '</td>' +
         '</tr>'
       );
@@ -1232,7 +1267,15 @@
   }
 
   function renderPagoAdminHTML(ventaId, pago, moneda, esProyectoPersonalizado) {
-    var badgeClass = pago.estado === 'acreditado' ? 'green' : (pago.estado === 'informado' ? 'blue' : 'neutral');
+    // RIO-122 (corrección de presentación, 13/09/2026): `pago.estado ===
+    // 'pendiente'` es ambiguo — puede ser "nunca informado" o "rechazado,
+    // esperando que el vendedor lo corrija" (rechazarPago vuelve el pago
+    // a 'pendiente', sin dejar ninguna marca en pagos_esperados.estado).
+    // `pago.fueRechazado` (RIO-122, resuelto server-side contra el
+    // historial de este pago específico) distingue los dos casos —
+    // administración necesita saber si ya rechazó este comprobante antes.
+    var esRechazado = pago.estado === 'pendiente' && pago.fueRechazado;
+    var badgeClass = pago.estado === 'acreditado' ? 'green' : (pago.estado === 'informado' ? 'blue' : (esRechazado ? 'red' : 'neutral'));
     var hitoHTML = '';
     if (esProyectoPersonalizado) {
       hitoHTML = pago.hitoValidado
@@ -1246,7 +1289,9 @@
     }
     var accionesHTML = '';
     if (pago.estado === 'pendiente') {
-      accionesHTML = '<p class="pv-componente-meta">Pendiente de que el vendedor lo informe.</p>';
+      accionesHTML = '<p class="pv-componente-meta">' +
+        (esRechazado ? 'Comprobante rechazado — esperando que el vendedor suba uno corregido.' : 'Pendiente de que el vendedor lo informe.') +
+        '</p>';
     } else {
       accionesHTML =
         '<div class="pv-comprobante-link" data-comprobante-slot="' + escapeHtml(pago.id) + '">Consultando comprobante…</div>' +
@@ -1271,7 +1316,7 @@
       '<div class="pv-pago-card">' +
         '<div class="pv-pago-head">' +
           '<span class="pv-pago-titulo">' + escapeHtml(pago.etiqueta || pago.tipo) + ' — ' + fmtMoneda(pago.monto, moneda) + '</span>' +
-          '<span class="pv-badge pv-badge--' + badgeClass + '">' + escapeHtml(PAGO_ESTADO_LABEL[pago.estado] || pago.estado) + '</span>' +
+          '<span class="pv-badge pv-badge--' + badgeClass + '">' + escapeHtml(esRechazado ? 'Rechazado — esperando corrección' : (PAGO_ESTADO_LABEL[pago.estado] || pago.estado)) + '</span>' +
         '</div>' +
         hitoHTML +
         accionesHTML +
