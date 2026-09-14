@@ -138,6 +138,21 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
   // en el detalle) — mismo LEFT JOIN a equipos/usuarios que la consulta
   // real, para que el panel administrativo pueda filtrar sin una consulta
   // extra por fila.
+  // RIO-122 (corrección de presentación, 13/09/2026): replica en el mock
+  // la misma lógica de la subconsulta real `estado_pago_resumen` en
+  // functions/interno/api/ventas/index.js — incluida la rama nueva
+  // 'rechazado' (un pago que volvió a 'pendiente' tras un rechazo
+  // administrativo, distinguible de "nunca informado" solo por tener
+  // historial previo para ese pago específico).
+  function calcularEstadoPagoResumenMock(ventaId) {
+    const pagos = state.pagos_esperados.filter((p) => p.venta_id === ventaId);
+    if (pagos.length === 0) return 'pendiente';
+    if (pagos.every((p) => p.estado === 'acreditado')) return 'acreditado';
+    if (pagos.some((p) => p.estado === 'informado' || p.estado === 'acreditado')) return 'informado';
+    const rechazado = pagos.some((p) => p.estado === 'pendiente' && (state.eventos_historial || []).some((e) => e.entidad === 'pago' && e.entidad_id === p.id));
+    return rechazado ? 'rechazado' : 'pendiente';
+  }
+
   function enrichVenta(v) {
     return {
       ...v,
@@ -146,6 +161,11 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
       proyecto_estado: state.proyectos.find((pr) => pr.venta_id === v.id)?.estado_actual,
       equipo_nombre: state.equipos.find((e) => e.id === v.equipo_id)?.nombre || null,
       supervisor_nombre: state.usuarios.find((u) => u.email === v.supervisor_snapshot_email)?.nombre || null,
+      estado_pago_resumen: calcularEstadoPagoResumenMock(v.id),
+      // RIO-122: sin esto, calcularEstadoOperativo() (functions/interno/api/
+      // ventas/index.js) siempre trataba este mock como "0 acreditados",
+      // mostrando en_espera_pago incluso con el pago ya acreditado.
+      pagos_acreditados_count: state.pagos_esperados.filter((p) => p.venta_id === v.id && p.estado === 'acreditado').length,
     };
   }
 
@@ -195,6 +215,18 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
     }
     if (sql.startsWith('SELECT * FROM pagos_esperados WHERE venta_id')) {
       return state.pagos_esperados.filter((pg) => pg.venta_id === p[0]);
+    }
+    // RIO-122: usada por GET /ventas/:id para distinguir "pago rechazado,
+    // esperando corrección" de "nunca informado" — ambos comparten
+    // pagos_esperados.estado = 'pendiente'.
+    if (sql.startsWith("SELECT DISTINCT entidad_id FROM eventos_historial WHERE entidad = 'pago'")) {
+      const idsConsultados = new Set(p);
+      const matches = new Set(
+        (state.eventos_historial || [])
+          .filter((e) => e.entidad === 'pago' && idsConsultados.has(e.entidad_id))
+          .map((e) => e.entidad_id)
+      );
+      return [...matches].map((entidad_id) => ({ entidad_id }));
     }
     if (sql.startsWith('SELECT monto FROM costos_directos WHERE componente_id')) {
       return state.costos_directos.filter((c) => c.componente_id === p[0]);
@@ -1216,4 +1248,122 @@ test('la suma efectiva de porcentajes (supervisión + empresa) siempre es 30, co
   }));
   const ventaSinSupervision = (await sinSupervision.json()).data.venta;
   assert.equal(db._state.ventas.find((v) => v.id === ventaSinSupervision.id).porcentaje_supervision_aplicado + db._state.ventas.find((v) => v.id === ventaSinSupervision.id).porcentaje_final_empresa, 30);
+});
+
+// ── estadoPagoResumen / fueRechazado (RIO-122, corrección de presentación,
+// 13/09/2026 — UAT RIO-122, caso Peluquería Canina) ─────────────────────
+// La regla de negocio no cambia: `estadoOperativo` sigue siendo
+// 'en_espera_pago' hasta que Administración acredita el pago (RIO-117,
+// sin tocar). Lo que se corrige es que, dentro de ese único estado
+// operativo, el pago puede estar en 3 situaciones reales muy distintas
+// (nunca informado / informado, pendiente de validación / rechazado,
+// esperando corrección) — antes indistinguibles en la interfaz porque
+// todas colapsaban al mismo texto. Estas pruebas verifican el CONTRATO
+// de la API que consume esa interfaz (`estadoPagoResumen` en el listado,
+// `fueRechazado` en el detalle) — no hay suite de UI en este repositorio
+// (ver evidencia de RIO-121, sección 10).
+//
+// Estas pruebas seedean `pagos_esperados`/`eventos_historial`
+// directamente (mismo patrón ya usado en
+// tests/ventas-cierre-kit.test.js para simular una acreditación) en vez
+// de ejecutar los endpoints reales de informar/rechazar pago — esos
+// endpoints tienen su propia cobertura en otro archivo; acá se prueba
+// exclusivamente la lectura (listado y detalle), que es lo que RIO-122
+// reportó como incorrecto.
+
+test('estadoPagoResumen: una venta recién creada, sin ningún pago informado, aparece como "pendiente" (nunca informado) — sigue en_espera_pago', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  const creada = (await (await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }))).json()).data.venta;
+
+  const listado = await ventasHandler(fakeContext({ method: 'GET', roleIdentity: ri, db }));
+  const fila = (await listado.json()).data.ventas.find((v) => v.id === creada.id);
+  assert.equal(fila.estadoOperativo, 'en_espera_pago', 'la regla de negocio no cambia — sigue en_espera_pago hasta la validación administrativa');
+  assert.equal(fila.estadoPagoResumen, 'pendiente');
+
+  const detalle = (await (await ventaDetailHandler(fakeContext({ roleIdentity: ri, db, params: { id: creada.id } }))).json()).data;
+  assert.equal(detalle.pagosEsperados[0].estado, 'pendiente');
+  assert.equal(detalle.pagosEsperados[0].fueRechazado, false, 'un pago nunca tocado nunca es "rechazado"');
+});
+
+test('estadoPagoResumen: el caso reportado en UAT (Peluquería Canina) — pago informado con comprobante subido aparece como "informado", nunca como "en espera de pago" sin matices', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  const creada = (await (await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }))).json()).data.venta;
+  db._state.pagos_esperados.find((p) => p.venta_id === creada.id).estado = 'informado';
+
+  const listado = await ventasHandler(fakeContext({ method: 'GET', roleIdentity: ri, db }));
+  const fila = (await listado.json()).data.ventas.find((v) => v.id === creada.id);
+  assert.equal(fila.estadoOperativo, 'en_espera_pago', 'el estado operativo interno no cambia — la corrección es solo de presentación');
+  assert.equal(fila.estadoPagoResumen, 'informado');
+
+  const detalle = (await (await ventaDetailHandler(fakeContext({ roleIdentity: ri, db, params: { id: creada.id } }))).json()).data;
+  assert.equal(detalle.pagosEsperados[0].fueRechazado, false, 'informado no es lo mismo que rechazado');
+});
+
+test('estadoPagoResumen: un pago rechazado (vuelve a pendiente) se distingue de "nunca informado" — listado y detalle', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  const creada = (await (await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }))).json()).data.venta;
+  const pago = db._state.pagos_esperados.find((p) => p.venta_id === creada.id);
+  // Simula la secuencia real: informarPago (evento pendiente→informado),
+  // rechazarPago (evento informado→pendiente) — el pago vuelve a
+  // 'pendiente' en D1, exactamente igual que uno nunca tocado.
+  db._state.eventos_historial.push({ id: 'ev-1', venta_id: creada.id, entidad: 'pago', entidad_id: pago.id, estado_nuevo: 'informado' });
+  db._state.eventos_historial.push({ id: 'ev-2', venta_id: creada.id, entidad: 'pago', entidad_id: pago.id, estado_nuevo: 'pendiente' });
+  pago.estado = 'pendiente';
+
+  const listado = await ventasHandler(fakeContext({ method: 'GET', roleIdentity: ri, db }));
+  const fila = (await listado.json()).data.ventas.find((v) => v.id === creada.id);
+  assert.equal(fila.estadoOperativo, 'en_espera_pago');
+  assert.equal(fila.estadoPagoResumen, 'rechazado', 'un pago con historial previo que volvió a pendiente es "rechazado", no "nunca informado"');
+
+  const detalle = (await (await ventaDetailHandler(fakeContext({ roleIdentity: ri, db, params: { id: creada.id } }))).json()).data;
+  assert.equal(detalle.pagosEsperados[0].estado, 'pendiente');
+  assert.equal(detalle.pagosEsperados[0].fueRechazado, true);
+});
+
+test('estadoPagoResumen: si el vendedor vuelve a informar un pago rechazado, el resumen vuelve a "informado" sin ningún flag manual', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  const creada = (await (await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }))).json()).data.venta;
+  const pago = db._state.pagos_esperados.find((p) => p.venta_id === creada.id);
+  db._state.eventos_historial.push({ id: 'ev-1', venta_id: creada.id, entidad: 'pago', entidad_id: pago.id, estado_nuevo: 'informado' });
+  db._state.eventos_historial.push({ id: 'ev-2', venta_id: creada.id, entidad: 'pago', entidad_id: pago.id, estado_nuevo: 'pendiente' });
+  // Re-informado — mismo pago, nuevo evento, estado vuelve a 'informado'.
+  db._state.eventos_historial.push({ id: 'ev-3', venta_id: creada.id, entidad: 'pago', entidad_id: pago.id, estado_nuevo: 'informado' });
+  pago.estado = 'informado';
+
+  const listado = await ventasHandler(fakeContext({ method: 'GET', roleIdentity: ri, db }));
+  const fila = (await listado.json()).data.ventas.find((v) => v.id === creada.id);
+  assert.equal(fila.estadoPagoResumen, 'informado', 'un pago ya vuelto a informar deja de mostrarse como rechazado, sin ningún flag extra que mantener');
+
+  const detalle = (await (await ventaDetailHandler(fakeContext({ roleIdentity: ri, db, params: { id: creada.id } }))).json()).data;
+  assert.equal(detalle.pagosEsperados[0].fueRechazado, false, 'fueRechazado exige estado actual = pendiente; con informado vuelve a false');
+});
+
+test('estadoPagoResumen: con todos los pagos acreditados, el resumen es "acreditado" y el estado operativo ya no es en_espera_pago', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  const creada = (await (await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }))).json()).data.venta;
+  db._state.pagos_esperados.find((p) => p.venta_id === creada.id).estado = 'acreditado';
+
+  const listado = await ventasHandler(fakeContext({ method: 'GET', roleIdentity: ri, db }));
+  const fila = (await listado.json()).data.ventas.find((v) => v.id === creada.id);
+  assert.equal(fila.estadoPagoResumen, 'acreditado');
+  assert.notEqual(fila.estadoOperativo, 'en_espera_pago', 'una vez acreditado, el avance real del proyecto deja de mostrarse como "en espera de pago"');
+});
+
+test('estadoPagoResumen: un pack con un pago informado y el otro nunca tocado se resume como "informado" (nunca "pendiente" ni "rechazado")', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  const PACK = { mercado: 'CL', cliente: { negocio: 'Pack Test' }, producto: 'ficha_generico', tipoPrecio: 'lanzamiento', precioPactado: 90000, precioFichaIndividual: 50000, precioLandingIndividual: 50000 };
+  const creada = (await (await ventasHandler(fakeContext({ method: 'POST', body: PACK, roleIdentity: ri, db }))).json()).data.venta;
+  const pagos = db._state.pagos_esperados.filter((p) => p.venta_id === creada.id);
+  assert.equal(pagos.length, 2);
+  pagos.find((p) => p.tipo === 'inicial').estado = 'informado';
+
+  const listado = await ventasHandler(fakeContext({ method: 'GET', roleIdentity: ri, db }));
+  const fila = (await listado.json()).data.ventas.find((v) => v.id === creada.id);
+  assert.equal(fila.estadoPagoResumen, 'informado');
 });

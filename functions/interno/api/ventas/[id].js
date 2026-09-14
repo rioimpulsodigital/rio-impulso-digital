@@ -57,6 +57,22 @@ export async function onRequest(context) {
     ? await query(env.DB, requestId, 'SELECT * FROM componentes WHERE proyecto_id = ? ORDER BY orden IS NULL, orden ASC, tipo ASC', [proyecto.id])
     : [];
   const pagos = await query(env.DB, requestId, 'SELECT * FROM pagos_esperados WHERE venta_id = ? ORDER BY tipo', [venta.id]);
+  // RIO-122 (corrección de presentación, 13/09/2026): un pago rechazado
+  // vuelve a estado 'pendiente' (rechazarPago) — indistinguible de "nunca
+  // informado" mirando solo `pagos_esperados.estado`. La única señal real
+  // es que ya existe historial para ese pago (informarPago/rechazarPago
+  // ya escribieron un evento); si el vendedor lo vuelve a informar, el
+  // pago pasa a 'informado' y esto deja de aplicar solo, sin ningún flag
+  // extra que mantener sincronizado.
+  const pagosConHistorial = pagos.length
+    ? new Set(
+        (await query(
+          env.DB, requestId,
+          `SELECT DISTINCT entidad_id FROM eventos_historial WHERE entidad = 'pago' AND entidad_id IN (${pagos.map(() => '?').join(',')})`,
+          pagos.map((p) => p.id)
+        )).map((r) => r.entidad_id)
+      )
+    : new Set();
   // RIO-119 (tercer bloque, item 5, 03/09/2026): "próxima acción y
   // responsable" ya se registra por evento (historial.js) — se expone acá
   // la más reciente en vez de duplicar el dato en la venta.
@@ -238,6 +254,9 @@ export async function onRequest(context) {
         hitoValidadoPor: p.hito_validado_por || null,
         hitoValidadoAt: p.hito_validado_at || null,
         hitoNota: p.hito_nota || null,
+        // RIO-122: distingue "rechazado, esperando corrección" de "nunca
+        // informado" — ambos comparten estado 'pendiente' en D1.
+        fueRechazado: p.estado === 'pendiente' && pagosConHistorial.has(p.id),
       })),
     },
     requestId

@@ -136,7 +136,12 @@ function serializeVenta(row, esAdmin) {
     // "completos" solo si TODOS los componentes lo están; con más de un
     // pago/componente, cualquier estado intermedio se muestra como
     // "informado"/"informados" (nunca se promedia ni se inventa un
-    // tercer valor).
+    // tercer valor). RIO-122 (corrección de presentación, 13/09/2026):
+    // agrega 'rechazado' — un pago que volvió a 'pendiente' tras un
+    // rechazo administrativo (nunca indistinguible de "nunca informado"
+    // en la interfaz, aunque en D1 ambos casos comparten el mismo
+    // pagos_esperados.estado). Valores posibles: pendiente | informado |
+    // rechazado | acreditado.
     estadoPagoResumen: row.estado_pago_resumen || 'pendiente',
     estadoMaterialesResumen: row.estado_materiales_resumen || 'pendiente',
     origen: row.origen || null,
@@ -233,6 +238,18 @@ async function handleList(context) {
          (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
             WHEN SUM(CASE WHEN pe.estado = 'acreditado' THEN 1 ELSE 0 END) = COUNT(*) THEN 'acreditado'
             WHEN SUM(CASE WHEN pe.estado IN ('informado', 'acreditado') THEN 1 ELSE 0 END) > 0 THEN 'informado'
+            -- RIO-122 (corrección de presentación, 13/09/2026): un pago
+            -- rechazado vuelve a 'pendiente' (rechazarPago), indistinguible
+            -- de "nunca informado" solo mirando el estado actual. La única
+            -- diferencia real es que existe historial previo para ESE pago
+            -- (informarPago/rechazarPago ya escribieron un evento) — si el
+            -- vendedor vuelve a informarlo, el pago pasa a 'informado' de
+            -- nuevo y esta rama deja de aplicar sola, sin ningún flag extra.
+            WHEN EXISTS (
+              SELECT 1 FROM pagos_esperados pe3
+              WHERE pe3.venta_id = v.id AND pe3.estado = 'pendiente'
+                AND EXISTS (SELECT 1 FROM eventos_historial eh WHERE eh.entidad = 'pago' AND eh.entidad_id = pe3.id)
+            ) THEN 'rechazado'
             ELSE 'pendiente' END FROM pagos_esperados pe WHERE pe.venta_id = v.id) AS estado_pago_resumen,
          (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
             WHEN SUM(CASE WHEN co.materiales_estado = 'completos' THEN 1 ELSE 0 END) = COUNT(*) THEN 'completos'
@@ -266,6 +283,18 @@ async function handleList(context) {
          (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
             WHEN SUM(CASE WHEN pe.estado = 'acreditado' THEN 1 ELSE 0 END) = COUNT(*) THEN 'acreditado'
             WHEN SUM(CASE WHEN pe.estado IN ('informado', 'acreditado') THEN 1 ELSE 0 END) > 0 THEN 'informado'
+            -- RIO-122 (corrección de presentación, 13/09/2026): un pago
+            -- rechazado vuelve a 'pendiente' (rechazarPago), indistinguible
+            -- de "nunca informado" solo mirando el estado actual. La única
+            -- diferencia real es que existe historial previo para ESE pago
+            -- (informarPago/rechazarPago ya escribieron un evento) — si el
+            -- vendedor vuelve a informarlo, el pago pasa a 'informado' de
+            -- nuevo y esta rama deja de aplicar sola, sin ningún flag extra.
+            WHEN EXISTS (
+              SELECT 1 FROM pagos_esperados pe3
+              WHERE pe3.venta_id = v.id AND pe3.estado = 'pendiente'
+                AND EXISTS (SELECT 1 FROM eventos_historial eh WHERE eh.entidad = 'pago' AND eh.entidad_id = pe3.id)
+            ) THEN 'rechazado'
             ELSE 'pendiente' END FROM pagos_esperados pe WHERE pe.venta_id = v.id) AS estado_pago_resumen,
          (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
             WHEN SUM(CASE WHEN co.materiales_estado = 'completos' THEN 1 ELSE 0 END) = COUNT(*) THEN 'completos'
@@ -300,6 +329,18 @@ async function handleList(context) {
          (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
             WHEN SUM(CASE WHEN pe.estado = 'acreditado' THEN 1 ELSE 0 END) = COUNT(*) THEN 'acreditado'
             WHEN SUM(CASE WHEN pe.estado IN ('informado', 'acreditado') THEN 1 ELSE 0 END) > 0 THEN 'informado'
+            -- RIO-122 (corrección de presentación, 13/09/2026): un pago
+            -- rechazado vuelve a 'pendiente' (rechazarPago), indistinguible
+            -- de "nunca informado" solo mirando el estado actual. La única
+            -- diferencia real es que existe historial previo para ESE pago
+            -- (informarPago/rechazarPago ya escribieron un evento) — si el
+            -- vendedor vuelve a informarlo, el pago pasa a 'informado' de
+            -- nuevo y esta rama deja de aplicar sola, sin ningún flag extra.
+            WHEN EXISTS (
+              SELECT 1 FROM pagos_esperados pe3
+              WHERE pe3.venta_id = v.id AND pe3.estado = 'pendiente'
+                AND EXISTS (SELECT 1 FROM eventos_historial eh WHERE eh.entidad = 'pago' AND eh.entidad_id = pe3.id)
+            ) THEN 'rechazado'
             ELSE 'pendiente' END FROM pagos_esperados pe WHERE pe.venta_id = v.id) AS estado_pago_resumen,
          (SELECT CASE WHEN COUNT(*) = 0 THEN 'pendiente'
             WHEN SUM(CASE WHEN co.materiales_estado = 'completos' THEN 1 ELSE 0 END) = COUNT(*) THEN 'completos'
