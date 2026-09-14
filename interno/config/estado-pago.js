@@ -37,10 +37,17 @@ var ESTADO_OPERATIVO_BADGE_BASE = {
   en_espera_pago: 'amber', registrado: 'neutral',
   en_produccion: 'blue', completado: 'green', cancelada: 'red',
 };
+// RIO-122 (ajuste de UAT, 14/09/2026): Brenda confirmó que el texto largo
+// ("... — pendiente de validación" / "... — requiere corrección") se sale
+// de la columna de la tabla — la celda no tiene el ancho de un chip de
+// pipeline. Acá va SOLO el texto corto que entra en la tabla; el detalle
+// de cada pago (panel-*.js, tarjeta de pago) sigue mostrando el contexto
+// completo (motivo del rechazo incluido) — nunca se perdió información,
+// solo se acortó lo que tiene que entrar en una celda angosta.
 var ESTADO_PAGO_EN_ESPERA_LABEL = {
   pendiente: 'En espera de pago',
-  informado: 'Pago informado — pendiente de validación',
-  rechazado: 'Pago rechazado — requiere corrección',
+  informado: 'Pago informado',
+  rechazado: 'Pago rechazado',
 };
 var ESTADO_PAGO_EN_ESPERA_BADGE = { pendiente: 'amber', informado: 'blue', rechazado: 'red' };
 

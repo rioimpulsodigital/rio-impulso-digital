@@ -10,6 +10,13 @@
 // real de cada panel en jsdom, ejecutan su JS real (sin mockear la
 // función de etiqueta) y leen el texto efectivamente renderizado en la
 // fila de la tabla — lo mismo que vería Brenda en el navegador.
+//
+// Ajuste 14/09/2026: Brenda confirmó que el texto largo ("... —
+// pendiente de validación" / "... — requiere corrección") se salía de
+// la columna de la tabla — se acortó a "Pago informado"/"Pago
+// rechazado" en interno/config/estado-pago.js. El detalle de cada pago
+// sigue mostrando el contexto completo (motivo del rechazo incluido);
+// estas pruebas se actualizaron para reflejar el texto corto vigente.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -115,20 +122,20 @@ for (const panel of PANELES) {
     assert.ok(!texto.includes('rechazado'), 'un pago nunca informado nunca debe leerse como rechazado');
   });
 
-  test(`Panel ${panel.nombre} — tabla: pago informado se muestra como "Pago informado — pendiente de validación" (caso UAT Peluquería Canina)`, async () => {
+  test(`Panel ${panel.nombre} — tabla: pago informado se muestra como "Pago informado" (caso UAT Peluquería Canina; texto acortado a pedido de Brenda — el largo se salía de la columna)`, async () => {
     const venta = ventaBase({ codigoVenta: 'V-20260903-967F6E', cliente: { negocio: 'Peluquería Canina' }, estadoPagoResumen: 'informado' });
     const dom = await bootPanel({ ...panel, ventas: [venta] });
     const texto = filaTexto(dom, 'V-20260903-967F6E');
     assert.ok(texto, 'la fila debe existir en la tabla');
-    assert.ok(texto.includes('Pago informado — pendiente de validación'), 'texto real de la fila: ' + texto);
+    assert.ok(texto.includes('Pago informado'), 'texto real de la fila: ' + texto);
     assert.ok(!texto.includes('En espera de pago'), 'la tabla no debe contradecir el detalle (que ya muestra informado)');
   });
 
-  test(`Panel ${panel.nombre} — tabla: pago rechazado se muestra como "Pago rechazado — requiere corrección"`, async () => {
+  test(`Panel ${panel.nombre} — tabla: pago rechazado se muestra como "Pago rechazado"`, async () => {
     const venta = ventaBase({ codigoVenta: 'V-RECHAZADO', estadoPagoResumen: 'rechazado' });
     const dom = await bootPanel({ ...panel, ventas: [venta] });
     const texto = filaTexto(dom, 'V-RECHAZADO');
-    assert.ok(texto.includes('Pago rechazado — requiere corrección'), 'texto real de la fila: ' + texto);
+    assert.ok(texto.includes('Pago rechazado'), 'texto real de la fila: ' + texto);
     assert.ok(!texto.includes('Pago informado'));
     assert.ok(!texto.includes('En espera de pago'));
   });
@@ -176,7 +183,7 @@ for (const panel of PANELES) {
 
     // 1) Tabla — texto real que ve el usuario.
     const textoTabla = filaTexto(dom, 'V-20260903-967F6E');
-    assert.ok(textoTabla.includes('Pago informado — pendiente de validación'), 'tabla real: ' + textoTabla);
+    assert.ok(textoTabla.includes('Pago informado'), 'tabla real: ' + textoTabla);
     assert.ok(!textoTabla.includes('En espera de pago'), 'la tabla no debe quedar pegada en un estado anterior al rechazo');
 
     // 2) Detalle — mismo criterio que ya prueba tests/ventas.test.js a
@@ -220,7 +227,7 @@ for (const panel of PANELES) {
     ];
     const dom = await bootPanel({ ...panel, ventas });
     assert.ok(filaTexto(dom, 'V-1').includes('En espera de pago'));
-    assert.ok(filaTexto(dom, 'V-2').includes('Pago informado — pendiente de validación'));
-    assert.ok(filaTexto(dom, 'V-3').includes('Pago rechazado — requiere corrección'));
+    assert.ok(filaTexto(dom, 'V-2').includes('Pago informado'));
+    assert.ok(filaTexto(dom, 'V-3').includes('Pago rechazado'));
   });
 }
