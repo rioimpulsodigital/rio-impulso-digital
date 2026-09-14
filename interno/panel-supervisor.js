@@ -40,55 +40,13 @@
   var PAGO_ESTADO_LABEL = { pendiente: 'Pendiente', informado: 'Informado', acreditado: 'Acreditado' };
   var MATERIALES_ESTADO_LABEL = { pendiente: 'Pendiente', informados: 'Informados (sin confirmar)', completos: 'Completos' };
   var MATERIALES_ESTADO_BADGE = { pendiente: 'neutral', informados: 'amber', completos: 'green' };
-  var ESTADO_OPERATIVO_LABEL = {
-    en_espera_pago: 'En espera de pago', registrado: 'Registrado',
-    en_produccion: 'En producción', completado: 'Completado', cancelada: 'Cancelada',
-  };
-  var ESTADO_OPERATIVO_BADGE = {
-    en_espera_pago: 'amber', registrado: 'neutral',
-    en_produccion: 'blue', completado: 'green', cancelada: 'red',
-  };
-  // RIO-122 (corrección de presentación, 13/09/2026): el estado operativo
-  // interno sigue siendo 'en_espera_pago' hasta que Administración valida
-  // el comprobante (regla de negocio vigente, sin cambios) — pero dentro
-  // de ese único estado interno hay 3 situaciones reales y muy distintas
-  // para el pago, que antes se mostraban todas como el mismo texto
-  // genérico "En espera de pago" (UAT RIO-122, caso Peluquería Canina:
-  // pago ya informado con comprobante subido, aparecía igual que una
-  // venta sin ningún comprobante). La etiqueta visible ahora se deriva
-  // siempre de `estadoPagoResumen` — nunca una sustitución fija de texto.
-  var ESTADO_PAGO_EN_ESPERA_LABEL = {
-    pendiente: 'En espera de pago',
-    informado: 'Pago informado — pendiente de validación',
-    rechazado: 'Pago rechazado — requiere corrección',
-  };
-  var ESTADO_PAGO_EN_ESPERA_BADGE = { pendiente: 'amber', informado: 'blue', rechazado: 'red' };
-  function estadoVentaVisibleLabel(v) {
-    if (v.estadoOperativo === 'en_espera_pago') {
-      return ESTADO_PAGO_EN_ESPERA_LABEL[v.estadoPagoResumen] || ESTADO_OPERATIVO_LABEL.en_espera_pago;
-    }
-    return ESTADO_OPERATIVO_LABEL[v.estadoOperativo] || v.estadoOperativo || '—';
-  }
-  function estadoVentaVisibleBadge(v) {
-    if (v.estadoOperativo === 'en_espera_pago') {
-      return ESTADO_PAGO_EN_ESPERA_BADGE[v.estadoPagoResumen] || 'amber';
-    }
-    return ESTADO_OPERATIVO_BADGE[v.estadoOperativo] || 'neutral';
-  }
-  // Clave de agrupación para los chips del pipeline — separa el balde
-  // "en_espera_pago" en sus 3 subestados reales, sin inventar un estado
-  // operativo nuevo (la regla de negocio de cuándo transiciona el
-  // proyecto no cambia, solo cómo se cuenta/agrupa para mostrar).
-  function clavePipeline(v) {
-    return v.estadoOperativo === 'en_espera_pago' ? ('pago__' + (v.estadoPagoResumen || 'pendiente')) : v.estadoOperativo;
-  }
-  var PIPELINE_LABEL = {
-    pago__pendiente: 'En espera de pago',
-    pago__informado: 'Pago informado — pendiente de validación',
-    pago__rechazado: 'Pago rechazado — requiere corrección',
-    registrado: 'Registrado', en_produccion: 'En producción', completado: 'Completado', cancelada: 'Cancelada',
-  };
-  var ORDEN_PIPELINE = ['pago__pendiente', 'pago__informado', 'pago__rechazado', 'registrado', 'en_produccion', 'completado', 'cancelada'];
+  // RIO-122 (segunda corrección de UAT, 13/09/2026): `estadoVentaVisibleLabel`,
+  // `estadoVentaVisibleBadge`, `clavePipeline`, `PIPELINE_LABEL` y
+  // `ORDEN_PIPELINE` ahora viven en interno/config/estado-pago.js — ÚNICA
+  // fuente compartida entre los 3 paneles (Vendedor/Supervisor/
+  // Administrativo). Antes cada panel tenía su propia copia idéntica de
+  // esta lógica; se unifica acá para que no puedan volver a divergir.
+  // Cargado antes que este script en panel-supervisor.html.
   var COMISION_ESTADO_LABEL = {
     calculada_provisional: 'Estimada', retenida: 'Retenida', habilitada: 'Habilitada',
     programada: 'Programada', pagada: 'Pagada',

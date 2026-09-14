@@ -57,43 +57,12 @@
   var ELEMENTOS_MATERIALES = [
     ['logo', 'Logo'], ['fotos', 'Fotos'], ['textos', 'Textos'], ['otros', 'Otros'],
   ];
-  // RIO-117 (segundo bloque): "estado operativo" es el que ya calcula el
-  // backend a partir de hechos reales (pago acreditado, cancelación) —
-  // nunca una transición nueva. Incluye los dos casos que proyectoEstado
-  // solo no puede distinguir: recién cerrada sin pago, y cancelada.
-  var ESTADO_OPERATIVO_LABEL = {
-    en_espera_pago: 'En espera de pago', registrado: 'Registrado',
-    en_produccion: 'En producción', completado: 'Completado', cancelada: 'Cancelada',
-  };
-  var ESTADO_OPERATIVO_BADGE = {
-    en_espera_pago: 'amber', registrado: 'neutral',
-    en_produccion: 'blue', completado: 'green', cancelada: 'red',
-  };
-  // RIO-122 (corrección de presentación, 13/09/2026, UAT — caso Peluquería
-  // Canina): el estado operativo interno sigue siendo 'en_espera_pago'
-  // hasta la validación administrativa (sin cambios de regla de negocio),
-  // pero acá ya existía un filtro "Estado de pago" (fPago, más abajo) que
-  // el listado nunca reflejaba en su propia etiqueta — se corrige para
-  // que la fila muestre siempre el subestado real, derivado de
-  // `estadoPagoResumen`, nunca un texto fijo.
-  var ESTADO_PAGO_EN_ESPERA_LABEL = {
-    pendiente: 'En espera de pago',
-    informado: 'Pago informado — pendiente de validación',
-    rechazado: 'Pago rechazado — requiere corrección',
-  };
-  var ESTADO_PAGO_EN_ESPERA_BADGE = { pendiente: 'amber', informado: 'blue', rechazado: 'red' };
-  function estadoVentaVisibleLabel(v) {
-    if (v.estadoOperativo === 'en_espera_pago') {
-      return ESTADO_PAGO_EN_ESPERA_LABEL[v.estadoPagoResumen] || ESTADO_OPERATIVO_LABEL.en_espera_pago;
-    }
-    return ESTADO_OPERATIVO_LABEL[v.estadoOperativo] || v.estadoOperativo || '—';
-  }
-  function estadoVentaVisibleBadge(v) {
-    if (v.estadoOperativo === 'en_espera_pago') {
-      return ESTADO_PAGO_EN_ESPERA_BADGE[v.estadoPagoResumen] || 'amber';
-    }
-    return ESTADO_OPERATIVO_BADGE[v.estadoOperativo] || 'neutral';
-  }
+  // RIO-122 (segunda corrección de UAT, 13/09/2026): `estadoVentaVisibleLabel`
+  // y `estadoVentaVisibleBadge` ahora viven en interno/config/estado-pago.js
+  // — ÚNICA fuente compartida entre los 3 paneles (Vendedor/Supervisor/
+  // Administrativo). Antes cada panel tenía su propia copia idéntica de
+  // esta lógica; se unifica acá para que no puedan volver a divergir.
+  // Cargado antes que este script en panel-vendedor.html.
   var COMISION_ESTADO_LABEL = {
     calculada_provisional: 'Estimada', retenida: 'Retenida', habilitada: 'Habilitada',
     programada: 'Programada', pagada: 'Pagada',
