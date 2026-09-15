@@ -1,0 +1,29 @@
+# Worker independiente — RIO-122 (15/09/2026). Ver README.md de esta
+# carpeta para el procedimiento completo de activación (pensado para
+# RIO-123 — NO desplegado como parte de esta corrección).
+#
+# Reevalúa periódicamente las comisiones que todavía pueden habilitarse
+# (plazo de resguardo cumplido + demás condiciones) sin depender de que
+# ocurra otro evento sobre la venta. Se conecta a la MISMA base D1 que el
+# proyecto Pages (mismo database_id que wrangler.toml de la raíz) — nunca
+# una copia ni una segunda fuente de datos.
+
+name = "rio-comisiones-cron-preview"
+main = "index.js"
+compatibility_date = "2026-07-14"
+
+# Diario, 12:00 UTC (~08:00-09:00 CL/AR según horario de verano) — el
+# plazo de resguardo se mide en días completos, no hace falta más
+# frecuencia. Ajustable sin tocar ninguna lógica de negocio.
+[triggers]
+crons = ["0 12 * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "rio-ventas-preview"
+database_id = "1aed8e43-6e47-40c9-9770-1c50f6586d20"
+
+# Secretos requeridos (nombres únicamente — nunca el valor acá):
+#   MANUAL_TRIGGER_SECRET → wrangler secret put MANUAL_TRIGGER_SECRET
+#     (solo protege el POST manual de verificación — el disparo
+#     programado por cron no lo necesita).

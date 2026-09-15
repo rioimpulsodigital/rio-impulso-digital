@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   generarComisionesParaVenta, generarComisionesRealizacionSiCorresponde, evaluateComisionGate,
-  reevaluarComisionesDeVenta, retenerComisionesPorDisputa, procesarPagoAcreditadoParaComisiones,
+  reevaluarComisionesDeVenta, reevaluarComisionesVencidasDelSistema, retenerComisionesPorDisputa, procesarPagoAcreditadoParaComisiones,
   marcarComisionPagada, registrarCostoDirecto, registrarCostoMedioPago, calcularFechaProgramada, ComisionError,
 } from '../functions/_shared/comisiones.js';
 
@@ -39,6 +39,10 @@ function fakeDb() {
       return state.comisiones.filter((c) => c.venta_id === p[0] && ['habilitada', 'programada'].includes(c.estado));
     }
     if (sql.startsWith('SELECT id FROM comisiones WHERE venta_id')) return state.comisiones.filter((c) => c.venta_id === p[0]);
+    // RIO-122 (reevaluación automática por vencimiento del resguardo).
+    if (sql.startsWith("SELECT id FROM comisiones WHERE estado IN")) {
+      return state.comisiones.filter((c) => ['calculada_provisional', 'retenida'].includes(c.estado)).map((c) => ({ id: c.id }));
+    }
     if (sql.includes('FROM usuarios u') && sql.includes('JOIN asignaciones_plan_comision ap') && sql.includes('JOIN planes_comision pl')) {
       const usuario = state.usuarios.find((u) => u.email === p[0]);
       if (!usuario) return [];
@@ -177,6 +181,18 @@ test('calcularFechaProgramada() — habilitada el 26 o después programa el 25 d
   const db = fakeDb();
   assert.equal(await calcularFechaProgramada(db, 'req', '2026-01-26 10:00:00', 'CL'), '2026-02-25');
   assert.equal(await calcularFechaProgramada(db, 'req', '2026-01-31 10:00:00', 'CL'), '2026-02-25');
+});
+
+// RIO-122 (hallazgo del barrido automático, 15/09/2026): transición de
+// año calendario — diciembre no es un caso especial, la regla es la misma.
+test('calcularFechaProgramada() — transición de año: habilitada a fin de diciembre programa el 25 de enero del año siguiente', async () => {
+  const db = fakeDb();
+  assert.equal(await calcularFechaProgramada(db, 'req', '2026-12-30 10:00:00', 'CL'), '2027-01-25');
+});
+
+test('calcularFechaProgramada() — transición de año: habilitada entre el 11 y el 25 de diciembre programa el 10 de enero del año siguiente (ajustado al viernes anterior — el 10/01/2027 cae domingo)', async () => {
+  const db = fakeDb();
+  assert.equal(await calcularFechaProgramada(db, 'req', '2026-12-15 10:00:00', 'CL'), '2027-01-08');
 });
 
 test('calcularFechaProgramada() — habilitada del 1 al 10 programa el 25 del mismo mes', async () => {
@@ -341,6 +357,102 @@ test('llegar a la fecha del calendario NO habilita nada por sí sola — solo la
   assert.equal(gate.habilitada, false);
   assert.equal(db._state.comisiones.find((c) => c.id === 'c1').estado, 'calculada_provisional');
 });
+
+// ── reevaluarComisionesVencidasDelSistema() — RIO-122 (15/09/2026,
+// reevaluación automática por vencimiento del plazo de resguardo). Antes,
+// evaluateComisionGate() solo se volvía a ejecutar por un evento sobre la
+// venta (pago acreditado, disputa resuelta) — si el plazo de resguardo se
+// cumplía y no pasaba nada más, la comisión quedaba en
+// 'calculada_provisional' para siempre. Esta función barre TODO el
+// sistema y reutiliza evaluateComisionGate() sin reimplementarlo — estas
+// pruebas verifican el barrido en sí, no las condiciones del gate (ya
+// cubiertas arriba).
+
+test('reevaluarComisionesVencidasDelSistema() — una comisión antes de cumplir el resguardo sigue "calculada_provisional" (estimada)', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'v1', mercado: 'CL' });
+  db._state.comisiones.push({ id: 'c1', venta_id: 'v1', estado: 'calculada_provisional', fecha_inicio_plazo: isoDaysAgo(2), fecha_pago_total_acreditado: isoDaysAgo(0), fecha_cumplimiento_plazo: null });
+  const resultado = await reevaluarComisionesVencidasDelSistema(db, 'req-sweep-1');
+  assert.equal(resultado.evaluadas, 1);
+  assert.equal(resultado.habilitadas, 0);
+  assert.equal(db._state.comisiones.find((c) => c.id === 'c1').estado, 'calculada_provisional');
+});
+
+test('reevaluarComisionesVencidasDelSistema() — al cumplirse el resguardo y las demás condiciones, se habilita y programa sin ninguna acción manual', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'v1', mercado: 'CL' });
+  db._state.comisiones.push({ id: 'c1', venta_id: 'v1', estado: 'calculada_provisional', fecha_inicio_plazo: isoDaysAgo(11), fecha_pago_total_acreditado: isoDaysAgo(1), fecha_cumplimiento_plazo: null });
+  const resultado = await reevaluarComisionesVencidasDelSistema(db, 'req-sweep-2');
+  assert.equal(resultado.evaluadas, 1);
+  assert.equal(resultado.habilitadas, 1);
+  const c1 = db._state.comisiones.find((c) => c.id === 'c1');
+  assert.equal(c1.estado, 'programada');
+  assert.ok(c1.fecha_programada_original, 'la fecha programada se calcula con calcularFechaProgramada(), sin reimplementar nada');
+  assert.ok(
+    db._state.eventos_historial.some((e) => e.entidad_id === 'c1' && e.estado_nuevo === 'programada'),
+    'la transición queda en el historial, igual que cualquier otro cambio de estado'
+  );
+});
+
+test('reevaluarComisionesVencidasDelSistema() — una disputa activa impide la habilitación aunque el plazo ya venció; al resolverse, puede habilitarse', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'v1', mercado: 'CL' });
+  db._state.comisiones.push({ id: 'c1', venta_id: 'v1', estado: 'calculada_provisional', fecha_inicio_plazo: isoDaysAgo(11), fecha_pago_total_acreditado: isoDaysAgo(1), fecha_cumplimiento_plazo: null });
+  db._state.incidencias.push({ venta_id: 'v1', estado: 'abierta' });
+
+  let resultado = await reevaluarComisionesVencidasDelSistema(db, 'req-sweep-3a');
+  assert.equal(resultado.habilitadas, 0);
+  assert.equal(db._state.comisiones.find((c) => c.id === 'c1').estado, 'calculada_provisional', 'la disputa abierta bloquea aunque el resguardo ya venció');
+
+  db._state.incidencias.find((i) => i.venta_id === 'v1').estado = 'resuelta';
+  resultado = await reevaluarComisionesVencidasDelSistema(db, 'req-sweep-3b');
+  assert.equal(resultado.habilitadas, 1);
+  assert.equal(db._state.comisiones.find((c) => c.id === 'c1').estado, 'programada', 'resuelta la disputa, el barrido la habilita solo, sin depender de otro evento');
+});
+
+test('reevaluarComisionesVencidasDelSistema() — es idempotente: correrlo varias veces seguidas no duplica eventos ni reprograma una fecha ya establecida', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'v1', mercado: 'CL' });
+  db._state.comisiones.push({ id: 'c1', venta_id: 'v1', estado: 'calculada_provisional', fecha_inicio_plazo: isoDaysAgo(11), fecha_pago_total_acreditado: isoDaysAgo(1), fecha_cumplimiento_plazo: null });
+
+  await reevaluarComisionesVencidasDelSistema(db, 'req-sweep-4a');
+  const fechaTrasPrimeraCorrida = db._state.comisiones.find((c) => c.id === 'c1').fecha_programada_efectiva;
+  const eventosTrasPrimeraCorrida = db._state.eventos_historial.length;
+
+  const segundaCorrida = await reevaluarComisionesVencidasDelSistema(db, 'req-sweep-4b');
+  assert.equal(segundaCorrida.evaluadas, 0, 'ya no está en calculada_provisional/retenida — el barrido siguiente ni siquiera la toca');
+  assert.equal(db._state.comisiones.find((c) => c.id === 'c1').fecha_programada_efectiva, fechaTrasPrimeraCorrida, 'la fecha programada no cambia arbitrariamente una vez establecida');
+  assert.equal(db._state.eventos_historial.length, eventosTrasPrimeraCorrida, 'correr el barrido de nuevo no duplica ningún evento de historial');
+
+  const terceraCorrida = await reevaluarComisionesVencidasDelSistema(db, 'req-sweep-4c');
+  assert.equal(terceraCorrida.evaluadas, 0);
+  assert.equal(db._state.eventos_historial.length, eventosTrasPrimeraCorrida, 'ni siquiera una tercera corrida agrega nada nuevo');
+});
+
+test('reevaluarComisionesVencidasDelSistema() — barre varias comisiones de varias ventas distintas en una sola corrida, sin mezclar sus condiciones', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'v1', mercado: 'CL' }, { id: 'v2', mercado: 'AR' });
+  // v1: lista para habilitarse.
+  db._state.comisiones.push({ id: 'c1', venta_id: 'v1', estado: 'calculada_provisional', fecha_inicio_plazo: isoDaysAgo(11), fecha_pago_total_acreditado: isoDaysAgo(1), fecha_cumplimiento_plazo: null });
+  // v2: todavía no cumple el plazo — no debe verse afectada por lo que le pasa a v1.
+  db._state.comisiones.push({ id: 'c2', venta_id: 'v2', estado: 'calculada_provisional', fecha_inicio_plazo: isoDaysAgo(2), fecha_pago_total_acreditado: isoDaysAgo(0), fecha_cumplimiento_plazo: null });
+  // Una comisión ya pagada — el barrido nunca debe tocarla (fuera del filtro por estado).
+  db._state.comisiones.push({ id: 'c3', venta_id: 'v1', estado: 'pagada', fecha_pago_real: isoDaysAgo(5) });
+
+  const resultado = await reevaluarComisionesVencidasDelSistema(db, 'req-sweep-5');
+  assert.equal(resultado.evaluadas, 2, 'solo las 2 en calculada_provisional/retenida — la pagada queda fuera');
+  assert.equal(db._state.comisiones.find((c) => c.id === 'c1').estado, 'programada');
+  assert.equal(db._state.comisiones.find((c) => c.id === 'c2').estado, 'calculada_provisional', 'v2 todavía no cumple su propio plazo');
+  assert.equal(db._state.comisiones.find((c) => c.id === 'c3').estado, 'pagada', 'nunca se toca una comisión ya pagada');
+});
+
+// La transición de mes/año del CALENDARIO se prueba de forma determinística
+// más arriba (calcularFechaProgramada(), con fecha explícita — diciembre
+// → enero) — evaluateComisionGate() calcula la fecha de habilitación
+// siempre a partir del momento real en que se ejecuta (nowSql()), así que
+// no tiene sentido fijar una fecha "de habilitación" arbitraria acá: el
+// barrido del sistema simplemente reutiliza la misma calcularFechaProgramada()
+// ya probada, sin ningún caso especial propio para fin de año.
 
 // --- Retención por disputa (nunca desaparece, queda con historial) ---
 

@@ -487,6 +487,48 @@ export async function reevaluarComisionesDeVenta(db, requestId, ventaId, actorEm
   }
 }
 
+// RIO-122 (hallazgo de arquitectura, 15/09/2026 — reevaluación automática
+// por vencimiento del plazo de resguardo): antes, `evaluateComisionGate()`
+// solo se volvía a ejecutar cuando ocurría un evento sobre LA VENTA (un
+// pago se acredita, una disputa se resuelve) — si el plazo de resguardo se
+// cumplía y después no pasaba nada más, la comisión podía quedar en
+// 'calculada_provisional' indefinidamente, aunque las 3 condiciones ya
+// estuvieran cumplidas. Esta función barre TODAS las comisiones del
+// sistema que todavía podrían habilitarse ('calculada_provisional' o
+// 'retenida') y reevalúa cada una con la MISMA función de siempre — nunca
+// una segunda implementación del gate, ni un cálculo de fecha propio.
+// Pensada para invocarse periódicamente (ver workers/comisiones-cron/),
+// nunca desde un endpoint de lectura del Panel.
+//
+// Idempotente por construcción: `evaluateComisionGate()` ya sale
+// temprano (`habilitada: true, faltantes: []`, sin tocar nada) para
+// cualquier comisión que no esté en 'calculada_provisional'/'retenida' —
+// ejecutar este barrido muchas veces seguidas nunca duplica un evento de
+// historial ni reprograma una fecha ya establecida (solo se escribe
+// cuando el estado efectivamente cambia).
+export async function reevaluarComisionesVencidasDelSistema(db, requestId) {
+  const pendientes = await query(
+    db, requestId,
+    "SELECT id FROM comisiones WHERE estado IN ('calculada_provisional', 'retenida')",
+    []
+  );
+  let evaluadas = 0;
+  let habilitadas = 0;
+  for (const c of pendientes) {
+    // Sin actorEmail: evaluateComisionGate() ya registra 'sistema' como
+    // usuario del evento cuando no se pasa ninguno — mismo criterio que
+    // ya usa el resto del código para acciones no disparadas por una
+    // persona autenticada. Como el filtro de arriba ya excluye cualquier
+    // comisión que no esté en 'calculada_provisional'/'retenida',
+    // `habilitada: true` acá significa siempre una transición real recién
+    // ocurrida — nunca el "ya estaba" del retorno temprano de la función.
+    const resultado = await evaluateComisionGate(db, requestId, c.id);
+    evaluadas += 1;
+    if (resultado.habilitada) habilitadas += 1;
+  }
+  return { evaluadas, habilitadas };
+}
+
 // Se llama desde proyectos.js justo después de que un pago quedó
 // 'acreditado' — registra las dos fechas que dependen de pagos (inicio del
 // plazo de resguardo, pago total acreditado) y reevalúa el gate de cada
