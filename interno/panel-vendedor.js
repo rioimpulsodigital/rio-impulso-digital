@@ -552,6 +552,13 @@
           '<dt>Mercado</dt><dd>' + escapeHtml(detalle.venta.mercado) + '</dd>' +
           '<dt>Precio pactado</dt><dd>' + fmtMoneda(detalle.venta.precioPactado, detalle.venta.moneda) + '</dd>' +
           '<dt>Fecha</dt><dd>' + fmtFecha(detalle.venta.createdAt) + '</dd>' +
+          // RIO-122 (corrección de causa raíz, 15/09/2026): estado
+          // operativo/producción real de la venta — misma fuente única
+          // (interno/config/estado-pago.js) que ya usa la columna "Estado"
+          // de la tabla, nunca un texto propio de la ficha. Separado del
+          // estado de cada pago, que se sigue mostrando en la sección
+          // "Pagos" más abajo.
+          '<dt>Estado operativo / producción</dt><dd><span class="pv-badge pv-badge--' + estadoVentaVisibleBadge(detalle.venta) + '">' + escapeHtml(estadoVentaVisibleLabel(detalle.venta)) + '</span></dd>' +
           renderTipoVentaSupervisionHTML(detalle.venta) +
         '</dl>' +
       '</div>' +

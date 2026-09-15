@@ -8,6 +8,7 @@ import { ok, Errors } from '../../../_shared/response.js';
 import { query } from '../../../_shared/db.js';
 import { assertCanViewVentaDetalle, AuthzError } from '../../../_shared/authz.js';
 import { isMethodAllowed } from '../../../_shared/security.js';
+import { calcularEstadoOperativo } from './index.js';
 
 export async function onRequest(context) {
   const { request, env, params, data } = context;
@@ -73,6 +74,38 @@ export async function onRequest(context) {
         )).map((r) => r.entidad_id)
       )
     : new Set();
+  // RIO-122 (corrección de causa raíz, 15/09/2026): la ficha no exponía
+  // ningún estado operativo propio — mostraba directamente
+  // `proyecto.estado_actual` en crudo (ver más abajo, campo `proyecto`),
+  // que solo se recalcula en algunas transiciones (ver proyectos.js).
+  // Acá se calcula el mismo `estadoOperativo` que ya usa la tabla
+  // (GET /ventas), reutilizando la MISMA función — nunca una segunda
+  // implementación — a partir de los mismos tres hechos: avance real del
+  // proyecto, si algún pago está acreditado, si existe una cancelación.
+  const cancelacionRows = await query(
+    env.DB, requestId,
+    "SELECT COUNT(*) AS total FROM incidencias WHERE venta_id = ? AND tipo = 'cancelacion'",
+    [venta.id]
+  );
+  const pagosAcreditadosCount = pagos.filter((p) => p.estado === 'acreditado').length;
+  const estadoOperativo = proyecto
+    ? calcularEstadoOperativo({
+        proyecto_estado: proyecto.estado_actual,
+        pagos_acreditados_count: pagosAcreditadosCount,
+        cancelacion_count: cancelacionRows[0]?.total || 0,
+      })
+    : null;
+  // RIO-122: mismo resumen de pago que ya calcula GET /ventas por SQL
+  // (pendiente | informado | rechazado | acreditado) — acá se deriva en
+  // JS a partir de `pagos`/`pagosConHistorial`, que este endpoint ya tenía
+  // en memoria; misma regla exacta, nunca una tercera fuente.
+  const estadoPagoResumen = (() => {
+    if (pagos.length === 0) return 'pendiente';
+    if (pagos.every((p) => p.estado === 'acreditado')) return 'acreditado';
+    if (pagos.some((p) => p.estado === 'informado' || p.estado === 'acreditado')) return 'informado';
+    if (pagos.some((p) => p.estado === 'pendiente' && pagosConHistorial.has(p.id))) return 'rechazado';
+    return 'pendiente';
+  })();
   // RIO-119 (tercer bloque, item 5, 03/09/2026): "próxima acción y
   // responsable" ya se registra por evento (historial.js) — se expone acá
   // la más reciente en vez de duplicar el dato en la venta.
@@ -166,6 +199,13 @@ export async function onRequest(context) {
         vendedorEmail: venta.vendedor_email,
         vendedorNombre: venta.vendedor_nombre || null,
         estadoActual: venta.estado_actual,
+        // RIO-122 (corrección de causa raíz, 15/09/2026): mismos campos y
+        // mismo cálculo que ya expone GET /ventas — permite que la ficha
+        // muestre "Estado operativo/producción" con la fuente única
+        // compartida (interno/config/estado-pago.js), nunca desalineada
+        // de lo que ya muestra la tabla para esta misma venta.
+        estadoOperativo,
+        estadoPagoResumen,
         createdAt: venta.created_at,
         // RIO-118 (corrección — ventas administrativas y comisión de
         // supervisión, 01/09/2026): snapshot inmutable tomado al cerrar

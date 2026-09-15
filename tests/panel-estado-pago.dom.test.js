@@ -216,6 +216,98 @@ for (const panel of PANELES) {
     assert.ok(filaTexto(dom, 'V-20260903-967F6E'), 'sin filtro, vuelve a aparecer');
   });
 
+  // ── RIO-122 (corrección de causa raíz, 15/09/2026): la ficha no
+  // exponía ningún "Estado operativo/producción" propio — un venta con el
+  // componente ya en producción y el pago ya acreditado mostraba
+  // "Registrado" al abrir el detalle mientras la tabla, para la MISMA
+  // venta, ya mostraba "En producción". Estas pruebas abren la ficha real
+  // (click en la fila, igual que un usuario) y leen el texto
+  // efectivamente renderizado — no alcanza con probar la respuesta de la
+  // API (ver mismo criterio ya aplicado arriba para la tabla). ──────────
+  test(`Panel ${panel.nombre} — ficha: caso de referencia (operativo EN PRODUCCIÓN + pago ACREDITADO) muestra "Estado operativo / producción: En producción", coherente con la tabla`, async () => {
+    const venta = ventaBase({
+      id: 'venta-1', codigoVenta: 'V-20260903-967F6E', cliente: { negocio: 'Peluquería Canina' },
+      estadoOperativo: 'en_produccion', estadoPagoResumen: 'acreditado',
+    });
+    const detalle = {
+      venta: {
+        id: 'venta-1', codigoVenta: venta.codigoVenta, mercado: 'CL', producto: 'ficha', moneda: 'CLP',
+        precioPactado: 60000, vendedorEmail: venta.vendedorEmail, vendedorNombre: venta.vendedorNombre,
+        estadoActual: 'registrada', estadoOperativo: 'en_produccion', estadoPagoResumen: 'acreditado',
+        createdAt: '2026-09-13 00:00:00', tipoVenta: 'equipo', equipoId: null, equipoNombre: null,
+        supervisorEmail: null, supervisorNombre: null, supervisionAplica: false, motivoSinSupervision: null,
+        porcentajeSupervisionAplicado: 0, nombreProyecto: null, descripcionProyecto: null, notionUrl: null,
+        distribucionSnapshot: null, modoHistorico: null, proximaAccion: null, responsableProximaAccion: null,
+        antecedentesKit: null,
+      },
+      cliente: { id: 'cliente-1', negocio: 'Peluquería Canina', contactoNombre: null, telefono: null, email: null, datosFacturacionAr: null },
+      proyecto: { id: 'proyecto-1', codigoProyecto: 'P-20260903-C6AC87', estadoActual: 'en_produccion' },
+      componentes: [],
+      pagosEsperados: [{ id: 'pago-1', tipo: 'total', etiqueta: null, monto: 60000, moneda: 'CLP', estado: 'acreditado', hitoValidado: false, hitoValidadoPor: null, hitoValidadoAt: null, hitoNota: null, fueRechazado: false }],
+    };
+    const dom = await bootPanel({
+      ...panel, ventas: [venta],
+      extraRoutes: {
+        '/interno/api/ventas/venta-1': () => ({ ok: true, data: detalle }),
+        '/interno/api/ventas/venta-1/pagos/pago-1/comprobante': () => ({ ok: true, data: { comprobante: null } }),
+        '/interno/api/ventas/venta-1/historial': () => ({ ok: true, data: { eventos: [] } }),
+      },
+    });
+
+    // 1) Tabla — mismo criterio que ya prueban las pruebas de arriba.
+    const textoTabla = filaTexto(dom, 'V-20260903-967F6E');
+    assert.ok(textoTabla.includes('En producción'), 'tabla real: ' + textoTabla);
+
+    // 2) Ficha — abrir el detalle con un click real en la fila, como haría
+    // Brenda, y leer el texto efectivamente renderizado.
+    const tr = [...dom.window.document.querySelectorAll('#pvVentasResult tbody tr')].find((r) => r.getAttribute('data-venta-id') === 'venta-1');
+    assert.ok(tr, 'la fila de la venta de referencia debe existir');
+    tr.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+    await flush();
+    const textoFicha = dom.window.document.getElementById('pvDetailBody').textContent;
+    assert.ok(textoFicha.includes('Estado operativo / producción'), 'la ficha debe exponer el campo, separado del estado de pago: ' + textoFicha);
+    assert.ok(textoFicha.includes('En producción'), 'ficha real: ' + textoFicha);
+    assert.ok(!textoFicha.includes('Registrado'), 'antes de esta corrección, la ficha quedaba mostrando "Registrado" pese a que la tabla ya avanzó');
+
+    // 3) Estado de pago sigue visible, SEPARADO, en la sección de Pagos
+    // (por-pago, ya existente) — nunca fusionado en el mismo campo.
+    assert.ok(textoFicha.includes('Acreditado'), 'el estado de pago debe seguir visible en su propia sección: ' + textoFicha);
+  });
+
+  test(`Panel ${panel.nombre} — ficha: una venta recién registrada (sin pago acreditado) muestra "En espera de pago", igual que la tabla`, async () => {
+    const venta = ventaBase({ id: 'venta-2', codigoVenta: 'V-NUEVA', estadoOperativo: 'en_espera_pago', estadoPagoResumen: 'pendiente' });
+    const detalle = {
+      venta: {
+        id: 'venta-2', codigoVenta: 'V-NUEVA', mercado: 'CL', producto: 'ficha', moneda: 'CLP',
+        precioPactado: 60000, vendedorEmail: venta.vendedorEmail, vendedorNombre: venta.vendedorNombre,
+        estadoActual: 'registrada', estadoOperativo: 'en_espera_pago', estadoPagoResumen: 'pendiente',
+        createdAt: '2026-09-13 00:00:00', tipoVenta: 'equipo', equipoId: null, equipoNombre: null,
+        supervisorEmail: null, supervisorNombre: null, supervisionAplica: false, motivoSinSupervision: null,
+        porcentajeSupervisionAplicado: 0, nombreProyecto: null, descripcionProyecto: null, notionUrl: null,
+        distribucionSnapshot: null, modoHistorico: null, proximaAccion: null, responsableProximaAccion: null,
+        antecedentesKit: null,
+      },
+      cliente: { id: 'cliente-2', negocio: 'Peluquería Canina', contactoNombre: null, telefono: null, email: null, datosFacturacionAr: null },
+      proyecto: { id: 'proyecto-2', codigoProyecto: 'P-2', estadoActual: 'registrado' },
+      componentes: [],
+      pagosEsperados: [{ id: 'pago-2', tipo: 'total', etiqueta: null, monto: 60000, moneda: 'CLP', estado: 'pendiente', hitoValidado: false, hitoValidadoPor: null, hitoValidadoAt: null, hitoNota: null, fueRechazado: false }],
+    };
+    const dom = await bootPanel({
+      ...panel, ventas: [venta],
+      extraRoutes: {
+        '/interno/api/ventas/venta-2': () => ({ ok: true, data: detalle }),
+        '/interno/api/ventas/venta-2/historial': () => ({ ok: true, data: { eventos: [] } }),
+      },
+    });
+
+    const tr = [...dom.window.document.querySelectorAll('#pvVentasResult tbody tr')].find((r) => r.getAttribute('data-venta-id') === 'venta-2');
+    tr.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+    await flush();
+    const textoFicha = dom.window.document.getElementById('pvDetailBody').textContent;
+    assert.ok(textoFicha.includes('En espera de pago'), 'una venta sin comprobante debe seguir mostrando "En espera de pago" en la ficha: ' + textoFicha);
+    assert.ok(!textoFicha.includes('En producción'), 'sin avance real, nunca debe mostrarse un estado operativo más avanzado');
+  });
+
   test(`Panel ${panel.nombre} — la columna Estado nunca contradice el detalle: mismo criterio (estadoPagoResumen) para ambos`, async () => {
     // Prueba de coherencia general con varias ventas a la vez — ninguna
     // combinación produce una etiqueta de tabla que no corresponda a

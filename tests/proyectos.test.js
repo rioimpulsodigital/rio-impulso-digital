@@ -353,6 +353,62 @@ test('proyecto pasa a completado solo cuando TODOS sus componentes están aproba
   assert.equal(db._state.proyectos.find((p) => p.id === proyectoId).estado_actual, 'completado');
 });
 
+// --- RIO-122 (corrección de causa raíz, 15/09/2026): el rollup del
+// proyecto debe reflejar avance real apenas arranca producción, sin
+// esperar la aprobación final — antes `proyectos.estado_actual` quedaba
+// en 'registrado' hasta aprobarComponente(), aunque el componente ya
+// llevara tiempo en producción o entregado (con el pago ya acreditado).
+// Caso real detectado en UAT: la ficha (que expone este campo) mostraba
+// "Registrado" mientras la tabla, calculada a partir del mismo campo, ya
+// debía reflejar avance — ambas fuentes SON el mismo campo, por eso hay
+// que mantenerlo sincronizado en cada transición, no solo en la última.
+
+test('iniciarProduccion() — el proyecto pasa a "en_produccion" de inmediato, sin esperar la aprobación final del componente', async () => {
+  const db = fakeDb();
+  const { ventaId, proyectoId } = seedIndividual(db);
+  const comp = db._state.componentes.find((c) => c.id === 'comp-solo');
+  comp.materiales_estado = 'completos';
+  db._state.pagos_esperados.find((p) => p.id === 'pago-total').estado = 'acreditado';
+
+  assert.equal(db._state.proyectos.find((p) => p.id === proyectoId).estado_actual, 'registrado');
+  await iniciarProduccion(db, 'req-12a', { ventaId, componenteId: 'comp-solo', actorEmail: 'a@example.com' });
+  assert.equal(
+    db._state.proyectos.find((p) => p.id === proyectoId).estado_actual,
+    'en_produccion',
+    'antes de esta corrección quedaba en "registrado" hasta aprobarComponente()'
+  );
+  assert.ok(
+    db._state.eventos_historial.some((e) => e.entidad === 'proyecto' && e.entidad_id === proyectoId && e.estado_nuevo === 'en_produccion'),
+    'el avance del proyecto queda auditado en el historial, igual que cualquier otro cambio de estado'
+  );
+});
+
+test('marcarEntregada() — el proyecto permanece "en_produccion" (no retrocede ni se inventa un tercer valor) mientras falte aprobar', async () => {
+  const db = fakeDb();
+  const { ventaId, proyectoId } = seedIndividual(db);
+  const comp = db._state.componentes.find((c) => c.id === 'comp-solo');
+  comp.materiales_estado = 'completos';
+  db._state.pagos_esperados.find((p) => p.id === 'pago-total').estado = 'acreditado';
+
+  await iniciarProduccion(db, 'req-13a', { ventaId, componenteId: 'comp-solo', actorEmail: 'a@example.com' });
+  await marcarEntregada(db, 'req-13b', { ventaId, componenteId: 'comp-solo', actorEmail: 'a@example.com' });
+  assert.equal(db._state.proyectos.find((p) => p.id === proyectoId).estado_actual, 'en_produccion');
+});
+
+test('un pack con un componente en producción y el otro todavía bloqueado: el proyecto ya refleja "en_produccion" (nunca "registrado")', async () => {
+  const db = fakeDb();
+  const { ventaId, proyectoId } = seedPack(db);
+  const ficha = db._state.componentes.find((c) => c.id === 'comp-ficha');
+  ficha.materiales_estado = 'completos';
+  db._state.pagos_esperados.find((p) => p.id === 'pago-inicial').estado = 'acreditado';
+
+  await iniciarProduccion(db, 'req-14a', { ventaId, componenteId: 'comp-ficha', actorEmail: 'a@example.com' });
+  // Landing sigue bloqueada — el rollup igual avanza, porque se calcula
+  // sobre el conjunto de componentes, no exige que todos hayan arrancado.
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-landing').estado_actual, 'bloqueada');
+  assert.equal(db._state.proyectos.find((p) => p.id === proyectoId).estado_actual, 'en_produccion');
+});
+
 // --- Pagos: informado ≠ acreditado ---
 
 test('acreditarPago() — rechaza acreditar un pago que nunca fue informado', async () => {

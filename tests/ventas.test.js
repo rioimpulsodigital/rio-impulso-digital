@@ -62,6 +62,11 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
   // pero igual necesita estas tablas simuladas.
   seed.hubspot_sync = seed.hubspot_sync || [];
   seed.notificaciones = seed.notificaciones || [];
+  // RIO-122 (corrección de causa raíz, 15/09/2026): GET /ventas/:id ahora
+  // consulta cancelaciones para calcular estadoOperativo con la misma
+  // función que ya usa el listado — ninguna prueba de este archivo siembra
+  // cancelaciones, por eso el default es siempre vacío.
+  seed.incidencias = seed.incidencias || [];
   const state = seed;
 
   function makeStatement(sql) {
@@ -303,6 +308,11 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
     }
     if (sql.startsWith('SELECT usuario_email, rol FROM asignaciones_realizacion WHERE componente_id')) {
       return state.asignaciones_realizacion.filter((a) => a.componente_id === p[0]);
+    }
+    // RIO-122 (corrección de causa raíz, 15/09/2026): GET /ventas/:id.
+    if (sql.startsWith("SELECT COUNT(*) AS total FROM incidencias WHERE venta_id")) {
+      const total = state.incidencias.filter((i) => i.venta_id === p[0] && i.tipo === 'cancelacion').length;
+      return [{ total }];
     }
     throw new Error('SELECT inesperado en test: ' + sql);
   }
@@ -1366,4 +1376,70 @@ test('estadoPagoResumen: un pack con un pago informado y el otro nunca tocado se
   const listado = await ventasHandler(fakeContext({ method: 'GET', roleIdentity: ri, db }));
   const fila = (await listado.json()).data.ventas.find((v) => v.id === creada.id);
   assert.equal(fila.estadoPagoResumen, 'informado');
+});
+
+// ── estadoOperativo: tabla vs. ficha (RIO-122, corrección de causa raíz,
+// 15/09/2026) ────────────────────────────────────────────────────────────
+// Hallazgo de UAT: una venta con el componente ya en producción y el pago
+// ya acreditado mostraba "En producción" en la tabla (GET /ventas) pero
+// "Registrado" al abrir la ficha (GET /ventas/:id) — porque la ficha no
+// exponía ningún estado operativo propio y `proyectos.estado_actual` solo
+// se recalculaba al aprobar el ÚLTIMO componente (ver
+// functions/_shared/proyectos.js). Estas pruebas fijan el contrato: para
+// la MISMA venta, en el mismo instante, ambos endpoints deben devolver
+// exactamente el mismo `estadoOperativo` — nunca dos fuentes que puedan
+// divergir.
+
+test('GET /ventas/:id expone estadoOperativo y estadoPagoResumen — idéntico al que ya calcula GET /ventas para la misma venta', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  const creada = (await (await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }))).json()).data.venta;
+
+  // Reproduce el caso exacto reportado en UAT: el componente ya avanzó a
+  // producción y el pago ya está acreditado, pero `proyectos.estado_actual`
+  // en D1 sigue en 'registrado' (RIO-122: antes solo se recalculaba al
+  // aprobar el componente) — el escenario más adverso para la consistencia.
+  db._state.componentes.find((c) => c.proyecto_id === db._state.proyectos[0].id).estado_actual = 'en_produccion';
+  db._state.pagos_esperados.find((p) => p.venta_id === creada.id).estado = 'acreditado';
+
+  const listado = await ventasHandler(fakeContext({ method: 'GET', roleIdentity: ri, db }));
+  const fila = (await listado.json()).data.ventas.find((v) => v.id === creada.id);
+  const detalle = (await (await ventaDetailHandler(fakeContext({ roleIdentity: ri, db, params: { id: creada.id } }))).json()).data;
+
+  assert.equal(fila.estadoOperativo, detalle.venta.estadoOperativo, 'tabla y ficha deben mostrar exactamente el mismo estado operativo');
+  assert.equal(fila.estadoPagoResumen, detalle.venta.estadoPagoResumen);
+  assert.equal(detalle.venta.estadoOperativo, 'registrado', 'con proyectos.estado_actual todavía en "registrado" en D1, HOY la ficha refleja eso mismo — nunca un valor inventado ni desalineado de la tabla');
+});
+
+test('GET /ventas/:id — una vez que proyectos.estado_actual avanza a en_produccion, la ficha lo refleja igual que la tabla (caso ya corregido por recomputeProyectoEstado)', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  const creada = (await (await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }))).json()).data.venta;
+  db._state.pagos_esperados.find((p) => p.venta_id === creada.id).estado = 'acreditado';
+  // Simula el efecto de la corrección en proyectos.js: iniciarProduccion()
+  // ahora recalcula el rollup del proyecto de inmediato (ver
+  // tests/proyectos.test.js), en vez de esperar a aprobarComponente().
+  db._state.proyectos[0].estado_actual = 'en_produccion';
+
+  const listado = await ventasHandler(fakeContext({ method: 'GET', roleIdentity: ri, db }));
+  const fila = (await listado.json()).data.ventas.find((v) => v.id === creada.id);
+  const detalle = (await (await ventaDetailHandler(fakeContext({ roleIdentity: ri, db, params: { id: creada.id } }))).json()).data;
+
+  assert.equal(fila.estadoOperativo, 'en_produccion');
+  assert.equal(detalle.venta.estadoOperativo, 'en_produccion', 'la ficha ya no queda en "Registrado" mientras la tabla avanza');
+  assert.equal(fila.estadoOperativo, detalle.venta.estadoOperativo);
+});
+
+test('GET /ventas/:id expone estadoOperativo "en_espera_pago" — coherente con la tabla — mientras ningún pago esté acreditado, aunque el proyecto siga "registrado"', async () => {
+  const db = fakeDb();
+  const ri = roleIdentity();
+  const creada = (await (await ventasHandler(fakeContext({ method: 'POST', body: CL_INDIVIDUAL, roleIdentity: ri, db }))).json()).data.venta;
+
+  const listado = await ventasHandler(fakeContext({ method: 'GET', roleIdentity: ri, db }));
+  const fila = (await listado.json()).data.ventas.find((v) => v.id === creada.id);
+  const detalle = (await (await ventaDetailHandler(fakeContext({ roleIdentity: ri, db, params: { id: creada.id } }))).json()).data;
+
+  assert.equal(fila.estadoOperativo, 'en_espera_pago');
+  assert.equal(detalle.venta.estadoOperativo, 'en_espera_pago');
+  assert.equal(detalle.venta.estadoPagoResumen, 'pendiente');
 });

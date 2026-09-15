@@ -77,7 +77,12 @@ function distribucionSnapshotParaRespuesta(rawJson, roleIdentity) {
   return JSON.parse(rawJson);
 }
 
-function calcularEstadoOperativo(row) {
+// RIO-122 (corrección de causa raíz, 15/09/2026): exportada para que
+// GET /ventas/:id (ficha) reutilice EXACTAMENTE este mismo cálculo — antes
+// la ficha no exponía ningún estado operativo propio y hacía falta evitar
+// una segunda implementación divergente (mismo motivo que ya llevó a
+// unificar la etiqueta visible en interno/config/estado-pago.js).
+export function calcularEstadoOperativo(row) {
   if ((row.cancelacion_count || 0) > 0) return 'cancelada';
   if (row.proyecto_estado === 'registrado' && (row.pagos_acreditados_count || 0) === 0) return 'en_espera_pago';
   return row.proyecto_estado || null;

@@ -465,6 +465,10 @@
           '<dt>Mercado</dt><dd>' + escapeHtml(detalle.venta.mercado) + '</dd>' +
           '<dt>Precio pactado</dt><dd>' + fmtMoneda(detalle.venta.precioPactado, detalle.venta.moneda) + '</dd>' +
           '<dt>Fecha</dt><dd>' + fmtFecha(detalle.venta.createdAt) + '</dd>' +
+          // RIO-122 (corrección de causa raíz, 15/09/2026): ver misma nota
+          // en panel-vendedor.js — fuente única compartida, nunca un
+          // texto propio de la ficha.
+          '<dt>Estado operativo / producción</dt><dd><span class="pv-badge pv-badge--' + estadoVentaVisibleBadge(detalle.venta) + '">' + escapeHtml(estadoVentaVisibleLabel(detalle.venta)) + '</span></dd>' +
           renderTipoVentaSupervisionHTML(detalle.venta) +
         '</dl>' +
       '</div>' +

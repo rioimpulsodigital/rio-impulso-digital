@@ -122,6 +122,16 @@ export async function iniciarProduccion(db, requestId, { ventaId, componenteId, 
     estadoAnterior: componente.estado_actual, estadoNuevo: 'en_produccion', usuarioEmail: actorEmail,
     proximaAccion: 'Entregar primera versión', responsableProximaAccion: actorEmail,
   });
+  // RIO-122 (corrección de causa raíz, 15/09/2026): antes, esta función no
+  // recalculaba el rollup del proyecto — `proyectos.estado_actual` quedaba
+  // en 'registrado' hasta la aprobación final del último componente
+  // (recomputeProyectoEstado solo se invocaba desde aprobarComponente),
+  // aunque la producción ya hubiera arrancado. La ficha (que expone ese
+  // campo tal cual) mostraba "Registrado" mientras la tabla, que calcula
+  // el mismo estado a partir de este mismo campo, ya debería reflejar
+  // avance real. Se recalcula acá también para que el campo nunca quede
+  // desactualizado respecto del avance real de los componentes.
+  await recomputeProyectoEstado(db, requestId, ventaId, actorEmail);
 }
 
 // Transición en_produccion -> entregada.
@@ -143,6 +153,10 @@ export async function marcarEntregada(db, requestId, { ventaId, componenteId, ac
     motivoNota: notaSegundoPago,
     proximaAccion: 'Esperar aprobación del cliente (o corregir si pide cambios)', responsableProximaAccion: actorEmail,
   });
+  // RIO-122 (corrección de causa raíz, 15/09/2026): mismo motivo que en
+  // iniciarProduccion — el rollup del proyecto nunca debe depender
+  // exclusivamente de la aprobación final para reflejar avance real.
+  await recomputeProyectoEstado(db, requestId, ventaId, actorEmail);
 }
 
 // Transición entregada -> aprobada. Si es el componente Ficha de un pack,
