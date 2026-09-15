@@ -68,7 +68,17 @@
   }
   function fmtFecha(iso) {
     if (!iso) return '—';
-    var d = new Date(iso.replace(' ', 'T') + (iso.indexOf('T') === -1 && iso.length <= 10 ? '' : 'Z'));
+    // RIO-122 (hallazgo 15, 15/09/2026): ver misma corrección en
+    // panel-vendedor.js — una fecha solo-calendario nunca debe parsearse
+    // como UTC (se corría un día en husos horarios negativos como Chile).
+    var esSoloFecha = iso.indexOf('T') === -1 && iso.length <= 10;
+    var d;
+    if (esSoloFecha) {
+      var partes = iso.split('-');
+      d = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
+    } else {
+      d = new Date(iso.replace(' ', 'T') + (iso.indexOf('T') === -1 ? 'Z' : ''));
+    }
     if (isNaN(d.getTime())) return iso;
     return d.toLocaleDateString('es-CL', { year: 'numeric', month: 'short', day: 'numeric' });
   }

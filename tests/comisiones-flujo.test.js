@@ -130,6 +130,34 @@ test('comisiones: el motivo de retención/reprogramación se expone al vendedor 
   assert.equal(body.data.comisiones[0].motivoRetencionOReprogramacion, 'Disputa abierta por el cliente.');
 });
 
+// RIO-122 (hallazgo 15, 15/09/2026): confirma que las fechas que
+// calcularFechaProgramada() ya calcula (sin tocar esa regla) efectivamente
+// llegan hasta la respuesta de esta ruta — el Panel del Vendedor no puede
+// mostrarlas si el endpoint no las expone.
+test('comisiones: el listado expone fechaProgramadaOriginal/Efectiva y fechaPagoReal cuando existen', async () => {
+  const db = fakeDb();
+  Object.assign(db._state.comisiones.find((c) => c.id === 'com-comercial'), {
+    estado: 'programada',
+    fecha_programada_original: '2026-10-10',
+    fecha_programada_efectiva: '2026-10-10',
+  });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: roleIdentity(), db }));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const com = body.data.comisiones.find((c) => c.id === 'com-comercial');
+  assert.equal(com.fechaProgramadaOriginal, '2026-10-10');
+  assert.equal(com.fechaProgramadaEfectiva, '2026-10-10');
+  assert.ok(!com.fechaPagoReal, 'todavía no está pagada — no debe inventar una fecha de pago real');
+});
+
+test('comisiones: una comisión sin fecha programada todavía (solo estimación) expone los campos como null, nunca un valor inventado', async () => {
+  const db = fakeDb();
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: roleIdentity(), db }));
+  const body = await response.json();
+  const com = body.data.comisiones.find((c) => c.id === 'com-comercial');
+  assert.ok(!com.fechaProgramadaOriginal, 'sin fecha programada todavía, nunca debe aparecer un valor');
+});
+
 test('comisiones: el vendedor ve su propia comisión comercial, no la de supervisión de otro', async () => {
   const db = fakeDb();
   const response = await comisionesListHandler(fakeContext({ roleIdentity: roleIdentity(), db }));

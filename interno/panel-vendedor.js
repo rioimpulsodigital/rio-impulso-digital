@@ -84,7 +84,20 @@
   }
   function fmtFecha(iso) {
     if (!iso) return '—';
-    var d = new Date(iso.replace(' ', 'T') + (iso.indexOf('T') === -1 && iso.length <= 10 ? '' : 'Z'));
+    // RIO-122 (hallazgo 15, 15/09/2026): una fecha SOLO calendario
+    // ("2026-10-10", sin hora — ej. fecha_programada_*) nunca debe pasar
+    // por un parseo UTC: `new Date('2026-10-10')` es medianoche UTC, y en
+    // cualquier huso horario negativo (Chile, Argentina) toLocaleDateString
+    // la muestra un día antes ("9 oct" en vez de "10 oct"). Se arma la
+    // fecha con los componentes locales exactos en vez de parsear el string.
+    var esSoloFecha = iso.indexOf('T') === -1 && iso.length <= 10;
+    var d;
+    if (esSoloFecha) {
+      var partes = iso.split('-');
+      d = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
+    } else {
+      d = new Date(iso.replace(' ', 'T') + (iso.indexOf('T') === -1 ? 'Z' : ''));
+    }
     if (isNaN(d.getTime())) return iso;
     return d.toLocaleDateString('es-CL', { year: 'numeric', month: 'short', day: 'numeric' });
   }
@@ -863,9 +876,14 @@
     var dominioHTML = (c.costoDominioPendiente && c.estado === 'calculada_provisional')
       ? '<div class="pv-comision-row-detail" style="color:var(--pv-amber);">Costo de dominio propio todavía sin confirmar por administración.</div>'
       : '';
+    // RIO-122 (hallazgo 15, 15/09/2026): mismo formato de fecha que ya usa
+    // el resto del Portal (fmtFecha) — antes se mostraba la fecha SQL cruda
+    // ("2026-10-10") en vez de un formato legible. Nunca se calcula una
+    // fecha nueva acá — solo se formatea la que ya llegó calculada por el
+    // backend (calcularFechaProgramada, RIO-97 v2 sección 8, sin tocar).
     var fechasHTML =
-      (c.fechaProgramadaOriginal ? 'Programada (original): ' + escapeHtml(c.fechaProgramadaOriginal) + '<br>' : '') +
-      (c.fechaProgramadaEfectiva && c.fechaProgramadaEfectiva !== c.fechaProgramadaOriginal ? 'Programada (efectiva): ' + escapeHtml(c.fechaProgramadaEfectiva) + '<br>' : '') +
+      (c.fechaProgramadaOriginal ? 'Programada (original): ' + fmtFecha(c.fechaProgramadaOriginal) + '<br>' : '') +
+      (c.fechaProgramadaEfectiva && c.fechaProgramadaEfectiva !== c.fechaProgramadaOriginal ? 'Programada (efectiva): ' + fmtFecha(c.fechaProgramadaEfectiva) + '<br>' : '') +
       (c.fechaPagoReal ? 'Pago real: ' + fmtFecha(c.fechaPagoReal) : '');
     var liqBtn = c.estado === 'pagada'
       ? '<button type="button" class="pv-comision-liq-btn" data-ver-liquidacion="' + escapeHtml(c.id) + '">Ver liquidación</button><div class="pv-liq-info" data-liq-info="' + escapeHtml(c.id) + '"></div>'
