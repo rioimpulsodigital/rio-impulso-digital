@@ -150,6 +150,22 @@ test('comisiones: el listado expone fechaProgramadaOriginal/Efectiva y fechaPago
   assert.ok(!com.fechaPagoReal, 'todavía no está pagada — no debe inventar una fecha de pago real');
 });
 
+test('comisiones: el listado expone fechaPrevistaPago cuando la comisión sigue ESTIMADA pero solo falta el tiempo (RIO-122, hallazgo 15 — segunda vuelta)', async () => {
+  const db = fakeDb();
+  Object.assign(db._state.comisiones.find((c) => c.id === 'com-comercial'), {
+    estado: 'calculada_provisional',
+    fecha_inicio_plazo: '2026-08-20 06:21:15',
+    fecha_pago_total_acreditado: '2026-08-20 06:21:15',
+  });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: roleIdentity(), db }));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const com = body.data.comisiones.find((c) => c.id === 'com-comercial');
+  assert.equal(com.estado, 'calculada_provisional', 'sigue Estimada — la fecha prevista nunca la habilita antes de tiempo');
+  assert.ok(com.fechaPrevistaPago, 'debe exponer una fecha prevista aunque la comisión siga Estimada, para que el Panel del Vendedor nunca muestre "—" sin explicación');
+  assert.ok(!com.fechaProgramadaOriginal, 'la fecha prevista nunca se confunde con una fecha programada real');
+});
+
 test('comisiones: una comisión sin fecha programada todavía (solo estimación) expone los campos como null, nunca un valor inventado', async () => {
   const db = fakeDb();
   const response = await comisionesListHandler(fakeContext({ roleIdentity: roleIdentity(), db }));

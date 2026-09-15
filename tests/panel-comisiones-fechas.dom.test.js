@@ -91,21 +91,49 @@ function comisionBase(overrides) {
     estado: 'calculada_provisional',
     fechaInicioPlazo: null, fechaCumplimientoPlazo: null, fechaPagoTotalAcreditado: null, fechaHabilitacion: null,
     fechaProgramadaOriginal: null, fechaProgramadaEfectiva: null, fechaPagoReal: null,
+    // RIO-122 (hallazgo 15, segunda vuelta, 15/09/2026): fecha prevista
+    // (calcularFechaPrevistaComision) — exclusivamente informativa, nunca
+    // la fecha programada real. null por defecto en este fixture.
+    fechaPrevistaPago: null,
     motivoRetencionOReprogramacion: null, costoDominioPendiente: false,
   }, overrides);
 }
 
-test('Panel Vendedor — Mis comisiones: sin fecha programada todavía (solo estimación), la columna Fechas muestra "—"', async () => {
+test('Panel Vendedor — Mis comisiones: ninguna fecha determinable todavía (falta alguna condición real, más allá del tiempo) muestra "Pendiente de habilitación", nunca "—" sin explicación', async () => {
   const venta = ventaBase({});
   const dom = await bootPanel({
     identity: IDENTIDAD, ventas: [venta],
-    comisionesPorVenta: { 'venta-1': [comisionBase({})] },
+    comisionesPorVenta: { 'venta-1': [comisionBase({})] }, // sin fechaPrevistaPago: backend determinó que falta algo más que el tiempo.
   });
   await abrirMisComisiones(dom);
   const texto = dom.window.document.getElementById('pvComisionesResult').textContent;
   assert.ok(texto.includes('Negocio Test 14B'), 'la fila de la comisión debe estar visible: ' + texto);
-  assert.ok(texto.includes('—'), 'sin fecha programada todavía, debe mostrar "—": ' + texto);
-  assert.ok(!texto.includes('Programada'), 'nunca debe inventar una fecha cuando el backend no envió ninguna');
+  assert.ok(texto.includes('Pendiente de habilitación'), 'texto real: ' + texto);
+  assert.ok(!texto.includes('Programada'), 'nunca debe inventar una fecha programada cuando el backend no envió ninguna');
+  assert.ok(!texto.includes('Prevista'), 'sin fechaPrevistaPago del backend, nunca debe mostrarse "Prevista" tampoco');
+});
+
+test('Panel Vendedor — Mis comisiones: caso Negocio Test 14B (ESTIMADA, solo falta el plazo de resguardo) muestra "Prevista: 10 oct 2026", nunca "—"', async () => {
+  const venta = ventaBase({});
+  const dom = await bootPanel({
+    identity: IDENTIDAD, ventas: [venta],
+    comisionesPorVenta: {
+      'venta-1': [comisionBase({
+        estado: 'calculada_provisional', // sigue ESTIMADA — no se habilita antes de tiempo.
+        fechaInicioPlazo: '2026-09-15 06:21:15',
+        fechaPagoTotalAcreditado: '2026-09-15 06:21:15',
+        fechaPrevistaPago: '2026-10-10', // calculado por el backend (calcularFechaPrevistaComision), nunca en el frontend.
+      })],
+    },
+  });
+  await abrirMisComisiones(dom);
+  const texto = dom.window.document.getElementById('pvComisionesResult').textContent;
+  assert.ok(texto.includes('Estimada') || texto.includes('ESTIMADA'), 'el estado sigue siendo Estimada — la fecha prevista nunca lo adelanta: ' + texto);
+  assert.ok(texto.includes('Prevista'), 'texto real: ' + texto);
+  assert.ok(/10\s*(de\s*)?oct/i.test(texto), 'la fecha prevista debe mostrarse con el mismo formato legible del resto del Portal: ' + texto);
+  assert.ok(!texto.includes('2026-10-10'), 'nunca la fecha SQL cruda sin formatear');
+  assert.ok(!texto.includes('Programada'), 'una fecha PREVISTA nunca debe confundirse con una fecha PROGRAMADA real — son conceptos distintos');
+  assert.ok(!texto.includes('Pendiente de habilitación'), 'si ya hay una fecha prevista, no corresponde el texto genérico de "pendiente"');
 });
 
 test('Panel Vendedor — Mis comisiones: caso Negocio Test 14B con fecha programada real (10 oct 2026, tramo 11-25 -> 10 del mes siguiente) se muestra en la columna Fechas', async () => {
@@ -164,5 +192,7 @@ test('Panel Vendedor — Mis comisiones: una comisión ya pagada muestra la fech
   await abrirMisComisiones(dom);
   const texto = dom.window.document.getElementById('pvComisionesResult').textContent;
   assert.ok(texto.includes('Programada (original)'), 'la fecha programada sigue visible incluso ya pagada: ' + texto);
-  assert.ok(texto.includes('Pago real'), 'la fecha real de pago debe mostrarse separada de la programada: ' + texto);
+  // RIO-122 (hallazgo 15, segunda vuelta): "Pagada: [fecha]" — mismo
+  // wording pedido explícitamente, para no confundirse con "Programada".
+  assert.ok(texto.includes('Pagada:'), 'la fecha real de pago debe mostrarse separada de la programada, con la etiqueta "Pagada": ' + texto);
 });

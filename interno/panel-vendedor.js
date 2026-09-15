@@ -881,10 +881,27 @@
     // ("2026-10-10") en vez de un formato legible. Nunca se calcula una
     // fecha nueva acá — solo se formatea la que ya llegó calculada por el
     // backend (calcularFechaProgramada, RIO-97 v2 sección 8, sin tocar).
-    var fechasHTML =
-      (c.fechaProgramadaOriginal ? 'Programada (original): ' + fmtFecha(c.fechaProgramadaOriginal) + '<br>' : '') +
-      (c.fechaProgramadaEfectiva && c.fechaProgramadaEfectiva !== c.fechaProgramadaOriginal ? 'Programada (efectiva): ' + fmtFecha(c.fechaProgramadaEfectiva) + '<br>' : '') +
-      (c.fechaPagoReal ? 'Pago real: ' + fmtFecha(c.fechaPagoReal) : '');
+    //
+    // RIO-122 (hallazgo 15, segunda vuelta — "Mis comisiones" seguía
+    // mostrando "—" mientras la comisión era solo ESTIMADA): se agrega
+    // `fechaPrevistaPago` (backend, calcularFechaPrevistaComision — nunca
+    // calculada acá) para el caso intermedio: todavía no hay una fecha
+    // PROGRAMADA real (la comisión no se habilitó), pero ya se puede
+    // prever cuál sería — nunca se confunde con la fecha real ni la
+    // adelanta. Si ni siquiera eso existe (falta alguna condición además
+    // del simple paso del tiempo — pago sin acreditar, disputa abierta),
+    // nunca queda "—" sin explicación: se muestra "Pendiente de
+    // habilitación".
+    var fechasHTML = '';
+    if (c.fechaProgramadaOriginal) fechasHTML += 'Programada (original): ' + fmtFecha(c.fechaProgramadaOriginal) + '<br>';
+    if (c.fechaProgramadaEfectiva && c.fechaProgramadaEfectiva !== c.fechaProgramadaOriginal) {
+      fechasHTML += 'Programada (efectiva): ' + fmtFecha(c.fechaProgramadaEfectiva) + '<br>';
+    }
+    if (c.fechaPagoReal) {
+      fechasHTML += 'Pagada: ' + fmtFecha(c.fechaPagoReal);
+    } else if (!fechasHTML && c.fechaPrevistaPago) {
+      fechasHTML = 'Prevista: ' + fmtFecha(c.fechaPrevistaPago);
+    }
     var liqBtn = c.estado === 'pagada'
       ? '<button type="button" class="pv-comision-liq-btn" data-ver-liquidacion="' + escapeHtml(c.id) + '">Ver liquidación</button><div class="pv-liq-info" data-liq-info="' + escapeHtml(c.id) + '"></div>'
       : '';
@@ -899,7 +916,7 @@
         '<td>' + (c.porcentaje != null ? c.porcentaje + '% de ' + fmtMoneda(c.montoBase, c.moneda) : '—') + '</td>' +
         '<td>' + fmtMoneda(c.montoComision, c.moneda) + '</td>' +
         '<td><span class="pv-badge pv-badge--' + badge + '">' + escapeHtml(COMISION_ESTADO_LABEL[c.estado] || c.estado) + '</span>' + motivoHTML + dominioHTML + liqBtn + '</td>' +
-        '<td class="pv-comision-row-detail">' + (fechasHTML || '—') + '</td>' +
+        '<td class="pv-comision-row-detail">' + (fechasHTML || 'Pendiente de habilitación') + '</td>' +
       '</tr>'
     );
   }

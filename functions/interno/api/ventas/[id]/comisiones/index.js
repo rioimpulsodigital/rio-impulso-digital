@@ -25,7 +25,7 @@
 import { ok, Errors } from '../../../../../_shared/response.js';
 import { query } from '../../../../../_shared/db.js';
 import { isMethodAllowed } from '../../../../../_shared/security.js';
-import { costoDominioPendienteParaComision } from '../../../../../_shared/comisiones.js';
+import { costoDominioPendienteParaComision, calcularFechaPrevistaComision } from '../../../../../_shared/comisiones.js';
 
 async function serialize(db, requestId, c) {
   // RIO-118 (corrección — identidad visible, 01/09/2026): nombre para
@@ -52,6 +52,14 @@ async function serialize(db, requestId, c) {
     fechaProgramadaOriginal: c.fecha_programada_original,
     fechaProgramadaEfectiva: c.fecha_programada_efectiva,
     fechaPagoReal: c.fecha_pago_real,
+    // RIO-122 (hallazgo 15, 15/09/2026): fecha prevista, exclusivamente
+    // informativa — null si todavía falta alguna condición real (nunca
+    // una fecha inventada). Nunca escribe nada ni habilita la comisión —
+    // ver calcularFechaPrevistaComision(). Solo tiene sentido mientras la
+    // comisión sigue en calculada_provisional/retenida; para cualquier
+    // otro estado ya existe fechaProgramadaEfectiva, así que esta función
+    // devuelve null sola, sin que haga falta filtrar acá.
+    fechaPrevistaPago: await calcularFechaPrevistaComision(db, requestId, c.id),
     motivoRetencionOReprogramacion: c.motivo_retencion_o_reprogramacion,
     // RIO-117 (corrección tras validación real, 01/09/2026): solo puede
     // ser true para una comisión asociada a una Landing Premium sin costo

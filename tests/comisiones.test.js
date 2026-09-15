@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {
   generarComisionesParaVenta, generarComisionesRealizacionSiCorresponde, evaluateComisionGate,
   reevaluarComisionesDeVenta, reevaluarComisionesVencidasDelSistema, retenerComisionesPorDisputa, procesarPagoAcreditadoParaComisiones,
-  marcarComisionPagada, registrarCostoDirecto, registrarCostoMedioPago, calcularFechaProgramada, ComisionError,
+  marcarComisionPagada, registrarCostoDirecto, registrarCostoMedioPago, calcularFechaProgramada, calcularFechaPrevistaComision, ComisionError,
 } from '../functions/_shared/comisiones.js';
 
 function fakeDb() {
@@ -453,6 +453,101 @@ test('reevaluarComisionesVencidasDelSistema() — barre varias comisiones de var
 // no tiene sentido fijar una fecha "de habilitación" arbitraria acá: el
 // barrido del sistema simplemente reutiliza la misma calcularFechaProgramada()
 // ya probada, sin ningún caso especial propio para fin de año.
+
+// ── calcularFechaPrevistaComision() — RIO-122 (hallazgo 15, segunda
+// vuelta, 15/09/2026). "Mis comisiones" seguía mostrando "—" mientras la
+// comisión era solo ESTIMADA — el vendedor necesita saber cuándo está
+// prevista su liquidación, sin que eso habilite ni pague nada antes de
+// tiempo. Exclusivamente informativa: nunca escribe, nunca cambia
+// `estado`, reutiliza calcularFechaProgramada() sin tocarlo.
+
+test('calcularFechaPrevistaComision() — caso Negocio Test 14B: solo falta el tiempo (resguardo sin cumplir, resto OK) — devuelve la fecha prevista sin habilitar nada', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'v1', mercado: 'CL' });
+  db._state.comisiones.push({
+    id: 'c1', venta_id: 'v1', estado: 'calculada_provisional',
+    fecha_inicio_plazo: isoDaysAgo(2), fecha_pago_total_acreditado: isoDaysAgo(2), fecha_cumplimiento_plazo: null,
+  });
+  const prevista = await calcularFechaPrevistaComision(db, 'req-prev-1', 'c1');
+  assert.ok(prevista, 'debe poder calcular una fecha prevista');
+  assert.equal(db._state.comisiones.find((c) => c.id === 'c1').estado, 'calculada_provisional', 'la comisión sigue Estimada — nunca se habilita por consultar la fecha prevista');
+  assert.ok(!db._state.comisiones.find((c) => c.id === 'c1').fecha_programada_original, 'tampoco se le asigna una fecha programada real todavía');
+});
+
+test('calcularFechaPrevistaComision() — sin pago total acreditado (falta algo más que el tiempo) devuelve null', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'v1', mercado: 'CL' });
+  db._state.comisiones.push({ id: 'c1', venta_id: 'v1', estado: 'calculada_provisional', fecha_inicio_plazo: isoDaysAgo(2), fecha_pago_total_acreditado: null, fecha_cumplimiento_plazo: null });
+  const prevista = await calcularFechaPrevistaComision(db, 'req-prev-2', 'c1');
+  assert.equal(prevista, null, 'sin pago acreditado no hay ninguna fecha que se pueda prever todavía');
+});
+
+test('calcularFechaPrevistaComision() — una disputa abierta impide cualquier fecha prevista, aunque el resguardo ya haya vencido', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'v1', mercado: 'CL' });
+  db._state.comisiones.push({ id: 'c1', venta_id: 'v1', estado: 'calculada_provisional', fecha_inicio_plazo: isoDaysAgo(11), fecha_pago_total_acreditado: isoDaysAgo(1), fecha_cumplimiento_plazo: null });
+  db._state.incidencias.push({ venta_id: 'v1', estado: 'abierta' });
+  const prevista = await calcularFechaPrevistaComision(db, 'req-prev-3', 'c1');
+  assert.equal(prevista, null, 'una disputa abierta bloquea la previsión, igual que bloquea la habilitación real');
+});
+
+test('calcularFechaPrevistaComision() — Landing Premium sin costo de dominio confirmado: sin fecha prevista, aunque el resto ya esté listo', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'v1', mercado: 'CL', producto: 'personalizado' });
+  db._state.proyectos.push({ id: 'p1', venta_id: 'v1' });
+  db._state.componentes.push({ id: 'comp-landing', proyecto_id: 'p1', tipo: 'landing' });
+  db._state.comisiones.push({
+    id: 'c1', venta_id: 'v1', componente_id: null, estado: 'calculada_provisional',
+    fecha_inicio_plazo: isoDaysAgo(2), fecha_pago_total_acreditado: isoDaysAgo(2), fecha_cumplimiento_plazo: null,
+  });
+  const prevista = await calcularFechaPrevistaComision(db, 'req-prev-4', 'c1');
+  assert.equal(prevista, null, 'mismo criterio que evaluateComisionGate: el costo de dominio pendiente también bloquea la previsión');
+});
+
+test('calcularFechaPrevistaComision() — una comisión de proyecto personalizado (distribucion_id) nunca tiene fecha prevista', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'v1', mercado: 'CL' });
+  db._state.comisiones.push({ id: 'c1', venta_id: 'v1', estado: 'calculada_provisional', distribucion_id: 'dist-1', fecha_inicio_plazo: isoDaysAgo(2), fecha_pago_total_acreditado: isoDaysAgo(2) });
+  const prevista = await calcularFechaPrevistaComision(db, 'req-prev-5', 'c1');
+  assert.equal(prevista, null);
+});
+
+test('calcularFechaPrevistaComision() — una comisión ya programada/pagada no expone fecha prevista (ya tiene una fecha real, nunca dos fuentes a la vez)', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'v1', mercado: 'CL' });
+  db._state.comisiones.push({ id: 'c1', venta_id: 'v1', estado: 'programada', fecha_programada_original: '2026-10-10', fecha_programada_efectiva: '2026-10-10' });
+  db._state.comisiones.push({ id: 'c2', venta_id: 'v1', estado: 'pagada', fecha_pago_real: isoDaysAgo(1) });
+  assert.equal(await calcularFechaPrevistaComision(db, 'req-prev-6a', 'c1'), null);
+  assert.equal(await calcularFechaPrevistaComision(db, 'req-prev-6b', 'c2'), null);
+});
+
+test('calcularFechaPrevistaComision() — comisión inexistente devuelve null, nunca lanza', async () => {
+  const db = fakeDb();
+  assert.equal(await calcularFechaPrevistaComision(db, 'req-prev-7', 'no-existe'), null);
+});
+
+test('calcularFechaPrevistaComision() — justo al cumplirse el resguardo, coincide con lo que evaluateComisionGate() calcula al habilitar de verdad (misma calcularFechaProgramada, nunca una segunda regla)', async () => {
+  // Mismo fecha_inicio_plazo (exactamente 10 días atrás, el límite del
+  // plazo) en ambas bases — la fecha de cumplimiento del resguardo y el
+  // momento real de habilitación caen el mismo día, que es exactamente el
+  // caso que importa: el barrido diario (workers/comisiones-cron/) evalúa
+  // una comisión vencida el mismo día en que se cumple el plazo, así que
+  // la fecha prevista que vio el vendedor antes debe coincidir con la
+  // fecha programada real que termina quedando.
+  const dbPreview = fakeDb();
+  dbPreview._state.ventas.push({ id: 'v1', mercado: 'CL' });
+  dbPreview._state.comisiones.push({ id: 'c1', venta_id: 'v1', estado: 'calculada_provisional', fecha_inicio_plazo: isoDaysAgo(10), fecha_pago_total_acreditado: isoDaysAgo(10), fecha_cumplimiento_plazo: null });
+  const prevista = await calcularFechaPrevistaComision(dbPreview, 'req-prev-8a', 'c1');
+  assert.ok(prevista, 'debe poder calcular una fecha prevista en el límite exacto del plazo');
+
+  const dbReal = fakeDb();
+  dbReal._state.ventas.push({ id: 'v1', mercado: 'CL' });
+  dbReal._state.comisiones.push({ id: 'c1', venta_id: 'v1', estado: 'calculada_provisional', fecha_inicio_plazo: isoDaysAgo(10), fecha_pago_total_acreditado: isoDaysAgo(10), fecha_cumplimiento_plazo: null });
+  await evaluateComisionGate(dbReal, 'req-prev-8b', 'c1', 'admin@example.com');
+  const fechaReal = dbReal._state.comisiones.find((c) => c.id === 'c1').fecha_programada_original;
+
+  assert.equal(prevista, fechaReal, 'la fecha prevista (calculada antes de tiempo) coincide con la fecha real que se hubiera calculado al habilitarse — misma función, mismo resultado');
+});
 
 // --- Retención por disputa (nunca desaparece, queda con historial) ---
 

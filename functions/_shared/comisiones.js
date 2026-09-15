@@ -375,6 +375,79 @@ export async function calcularFechaProgramada(db, requestId, fechaHabilitacionSq
 // para una RETENIDA (una disputa se resolvió y hay que reevaluar si ya
 // puede volver a habilitarse) — en ambos casos, si las tres se cumplen,
 // habilita y programa en el mismo paso.
+// RIO-122 (hallazgo 15, 15/09/2026 — "fecha prevista" informativa en Mis
+// comisiones): extraído de evaluateComisionGate() para que la misma
+// verificación de condiciones (nunca una segunda implementación) también
+// pueda usarse en modo SOLO LECTURA, sin escribir nada — necesario para
+// mostrarle al vendedor una fecha prevista antes de que la comisión se
+// habilite de verdad. Devuelve además `fechaCumplimientoPlazo`: la fecha
+// real en que se cumplió el resguardo (columna ya guardada) o, si todavía
+// no se cumplió, la fecha en que SE CUMPLIRÍA (calculada, no guardada) —
+// es lo único que un preview necesita para poder calcular una fecha
+// programada hipotética con calcularFechaProgramada(), sin inventar
+// ninguna regla nueva.
+async function calcularFaltantesHabilitacion(db, requestId, comision) {
+  if (comision.distribucion_id) {
+    // RIO-119 (cuarto bloque, 03/09/2026): una comisión de proyecto
+    // personalizado nunca avanza automáticamente por este gate — ver
+    // comentario completo en evaluateComisionGate().
+    return { faltantes: ['politica_liberacion_pendiente_confirmacion'], fechaCumplimientoPlazo: null };
+  }
+
+  const faltantes = [];
+  let fechaCumplimientoPlazo = comision.fecha_cumplimiento_plazo || null;
+
+  if (!comision.fecha_inicio_plazo) {
+    faltantes.push('plazo_resguardo_iniciado');
+  } else {
+    const inicio = new Date(comision.fecha_inicio_plazo.replace(' ', 'T') + 'Z');
+    const limite = new Date(inicio.getTime() + PLAZO_RESGUARDO_DIAS * 24 * 60 * 60 * 1000);
+    const limiteSql = limite.toISOString().replace('T', ' ').slice(0, 19);
+    const cumplido = Date.now() >= limite.getTime();
+    if (!cumplido) {
+      faltantes.push('plazo_resguardo_cumplido');
+      fechaCumplimientoPlazo = limiteSql; // hipotética — todavía no llegó, nunca se persiste acá.
+    } else if (!fechaCumplimientoPlazo) {
+      fechaCumplimientoPlazo = limiteSql;
+    }
+  }
+
+  if (!comision.fecha_pago_total_acreditado) faltantes.push('pago_total_acreditado');
+
+  const disputasAbiertas = await query(db, requestId, "SELECT id FROM incidencias WHERE venta_id = ? AND estado = 'abierta'", [comision.venta_id]);
+  if (disputasAbiertas.length > 0) faltantes.push('venta_sin_disputa');
+
+  if (await costoDominioPendienteParaComision(db, requestId, comision)) faltantes.push('costo_dominio_confirmado');
+
+  return { faltantes, fechaCumplimientoPlazo };
+}
+
+// RIO-122 (hallazgo 15, 15/09/2026): fecha prevista de pago, exclusivamente
+// informativa — NUNCA escribe nada, nunca habilita ni programa la
+// comisión antes de tiempo. Solo tiene sentido cuando la ÚNICA condición
+// que falta es el paso del tiempo (el resguardo todavía no se cumplió,
+// pero todo lo demás ya está listo) — si falta cualquier otra condición
+// real (pago sin acreditar, disputa abierta, costo de dominio sin
+// confirmar), no hay ninguna fecha que se pueda prever todavía, y se
+// devuelve null (el frontend muestra "Pendiente de habilitación", nunca
+// una fecha inventada). Reutiliza exactamente la misma verificación de
+// condiciones y el mismo calcularFechaProgramada() que ya usa el gate
+// real — nunca una segunda regla de calendario.
+export async function calcularFechaPrevistaComision(db, requestId, comisionId) {
+  const rows = await query(db, requestId, 'SELECT * FROM comisiones WHERE id = ?', [comisionId]);
+  const comision = rows[0];
+  if (!comision) return null;
+  if (comision.estado !== 'calculada_provisional' && comision.estado !== 'retenida') return null; // ya tiene fecha real, o es terminal.
+
+  const { faltantes, fechaCumplimientoPlazo } = await calcularFaltantesHabilitacion(db, requestId, comision);
+  const soloFaltaElTiempo = faltantes.length === 0 || (faltantes.length === 1 && faltantes[0] === 'plazo_resguardo_cumplido');
+  if (!soloFaltaElTiempo || !fechaCumplimientoPlazo) return null;
+
+  const ventaRows = await query(db, requestId, 'SELECT mercado FROM ventas WHERE id = ?', [comision.venta_id]);
+  const mercado = ventaRows[0]?.mercado;
+  return calcularFechaProgramada(db, requestId, fechaCumplimientoPlazo, mercado);
+}
+
 export async function evaluateComisionGate(db, requestId, comisionId, actorEmail) {
   const rows = await query(db, requestId, 'SELECT * FROM comisiones WHERE id = ?', [comisionId]);
   const comision = rows[0];
@@ -398,27 +471,18 @@ export async function evaluateComisionGate(db, requestId, comisionId, actorEmail
     return { habilitada: false, faltantes: ['politica_liberacion_pendiente_confirmacion'] };
   }
 
-  const faltantes = [];
+  const { faltantes, fechaCumplimientoPlazo } = await calcularFaltantesHabilitacion(db, requestId, comision);
 
-  if (!comision.fecha_inicio_plazo) {
-    faltantes.push('plazo_resguardo_iniciado');
-  } else {
-    const inicio = new Date(comision.fecha_inicio_plazo.replace(' ', 'T') + 'Z');
-    const limite = new Date(inicio.getTime() + PLAZO_RESGUARDO_DIAS * 24 * 60 * 60 * 1000);
-    const cumplido = Date.now() >= limite.getTime();
-    if (!cumplido) {
-      faltantes.push('plazo_resguardo_cumplido');
-    } else if (!comision.fecha_cumplimiento_plazo) {
-      await execute(db, requestId, 'UPDATE comisiones SET fecha_cumplimiento_plazo = ? WHERE id = ?', [limite.toISOString().replace('T', ' ').slice(0, 19), comisionId]);
-    }
+  // El único efecto secundario de una lectura "solo faltó el tiempo" real
+  // (ya cumplido, todavía sin persistir): dejar constancia de cuándo se
+  // cumplió — mismo comportamiento que existía antes de extraer esta
+  // verificación, solo movido acá.
+  if (
+    comision.fecha_inicio_plazo && !comision.fecha_cumplimiento_plazo &&
+    fechaCumplimientoPlazo && !faltantes.includes('plazo_resguardo_cumplido')
+  ) {
+    await execute(db, requestId, 'UPDATE comisiones SET fecha_cumplimiento_plazo = ? WHERE id = ?', [fechaCumplimientoPlazo, comisionId]);
   }
-
-  if (!comision.fecha_pago_total_acreditado) faltantes.push('pago_total_acreditado');
-
-  const disputasAbiertas = await query(db, requestId, "SELECT id FROM incidencias WHERE venta_id = ? AND estado = 'abierta'", [comision.venta_id]);
-  if (disputasAbiertas.length > 0) faltantes.push('venta_sin_disputa');
-
-  if (await costoDominioPendienteParaComision(db, requestId, comision)) faltantes.push('costo_dominio_confirmado');
 
   if (faltantes.length > 0) {
     return { habilitada: false, faltantes };
