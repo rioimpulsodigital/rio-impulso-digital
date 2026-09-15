@@ -308,6 +308,87 @@ for (const panel of PANELES) {
     assert.ok(!textoFicha.includes('En producción'), 'sin avance real, nunca debe mostrarse un estado operativo más avanzado');
   });
 
+  // ── RIO-122 (UAT Negocio Test 14B, hallazgo 8, 15/09/2026): entrega
+  // terminada esperando aprobación del cliente — antes seguía mostrando
+  // "En producción", información engañosa sobre quién tiene la pelota. ──
+  test(`Panel ${panel.nombre} — tabla y ficha: componente entregado, esperando aprobación del cliente, muestra "Espera aprobación" (nunca "En producción")`, async () => {
+    const venta = ventaBase({ id: 'venta-3', codigoVenta: 'V-ESPERA-APROBACION', estadoOperativo: 'en_espera_aprobacion', estadoPagoResumen: 'acreditado' });
+    const detalle = {
+      venta: {
+        id: 'venta-3', codigoVenta: 'V-ESPERA-APROBACION', mercado: 'CL', producto: 'ficha', moneda: 'CLP',
+        precioPactado: 60000, vendedorEmail: venta.vendedorEmail, vendedorNombre: venta.vendedorNombre,
+        estadoActual: 'registrada', estadoOperativo: 'en_espera_aprobacion', estadoPagoResumen: 'acreditado',
+        createdAt: '2026-09-15 00:00:00', tipoVenta: 'equipo', equipoId: null, equipoNombre: null,
+        supervisorEmail: null, supervisorNombre: null, supervisionAplica: false, motivoSinSupervision: null,
+        porcentajeSupervisionAplicado: 0, nombreProyecto: null, descripcionProyecto: null, notionUrl: null,
+        distribucionSnapshot: null, modoHistorico: null, proximaAccion: null, responsableProximaAccion: null,
+        antecedentesKit: null,
+      },
+      cliente: { id: 'cliente-3', negocio: 'Peluquería Canina', contactoNombre: null, telefono: null, email: null, datosFacturacionAr: null },
+      proyecto: { id: 'proyecto-3', codigoProyecto: 'P-3', estadoActual: 'en_espera_aprobacion' },
+      componentes: [{ id: 'comp-3', tipo: 'landing', nombre: null, descripcion: null, precioIndividualReferencia: 60000, precioAtribuido: 60000, estadoActual: 'entregada', materialesEstado: 'completos', orden: null, responsableOperativoEmail: null, fechaPrevista: null, fechaReal: null, materialesInformes: [], materialesConfirmaciones: [], costoDominioPendiente: false }],
+      pagosEsperados: [{ id: 'pago-3', tipo: 'total', etiqueta: null, monto: 60000, moneda: 'CLP', estado: 'acreditado', hitoValidado: false, hitoValidadoPor: null, hitoValidadoAt: null, hitoNota: null, fueRechazado: false }],
+    };
+    const dom = await bootPanel({
+      ...panel, ventas: [venta],
+      extraRoutes: {
+        '/interno/api/ventas/venta-3': () => ({ ok: true, data: detalle }),
+        '/interno/api/ventas/venta-3/pagos/pago-3/comprobante': () => ({ ok: true, data: { comprobante: null } }),
+        '/interno/api/ventas/venta-3/historial': () => ({ ok: true, data: { eventos: [] } }),
+      },
+    });
+
+    const textoTabla = filaTexto(dom, 'V-ESPERA-APROBACION');
+    assert.ok(textoTabla.includes('Espera aprobación'), 'tabla real: ' + textoTabla);
+    assert.ok(!textoTabla.includes('En producción'));
+
+    const tr = [...dom.window.document.querySelectorAll('#pvVentasResult tbody tr')].find((r) => r.getAttribute('data-venta-id') === 'venta-3');
+    tr.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+    await flush();
+    const textoFicha = dom.window.document.getElementById('pvDetailBody').textContent;
+    assert.ok(textoFicha.includes('Espera aprobación'), 'ficha real: ' + textoFicha);
+    assert.ok(!textoFicha.includes('En producción'), 'antes de esta corrección, la ficha (y la tabla) seguían mostrando "En producción" mientras se esperaba al cliente');
+  });
+
+  test(`Panel ${panel.nombre} — tabla y ficha: todos los componentes aprobados pero la comisión todavía no está pagada muestra "Pendiente cierre" (nunca "Completado" antes de tiempo)`, async () => {
+    const venta = ventaBase({ id: 'venta-4', codigoVenta: 'V-PENDIENTE-CIERRE', estadoOperativo: 'pendiente_cierre', estadoPagoResumen: 'acreditado' });
+    const detalle = {
+      venta: {
+        id: 'venta-4', codigoVenta: 'V-PENDIENTE-CIERRE', mercado: 'CL', producto: 'ficha', moneda: 'CLP',
+        precioPactado: 60000, vendedorEmail: venta.vendedorEmail, vendedorNombre: venta.vendedorNombre,
+        estadoActual: 'registrada', estadoOperativo: 'pendiente_cierre', estadoPagoResumen: 'acreditado',
+        createdAt: '2026-09-15 00:00:00', tipoVenta: 'equipo', equipoId: null, equipoNombre: null,
+        supervisorEmail: null, supervisorNombre: null, supervisionAplica: false, motivoSinSupervision: null,
+        porcentajeSupervisionAplicado: 0, nombreProyecto: null, descripcionProyecto: null, notionUrl: null,
+        distribucionSnapshot: null, modoHistorico: null, proximaAccion: null, responsableProximaAccion: null,
+        antecedentesKit: null,
+      },
+      cliente: { id: 'cliente-4', negocio: 'Peluquería Canina', contactoNombre: null, telefono: null, email: null, datosFacturacionAr: null },
+      proyecto: { id: 'proyecto-4', codigoProyecto: 'P-4', estadoActual: 'pendiente_cierre' },
+      componentes: [{ id: 'comp-4', tipo: 'landing', nombre: null, descripcion: null, precioIndividualReferencia: 60000, precioAtribuido: 60000, estadoActual: 'aprobada', materialesEstado: 'completos', orden: null, responsableOperativoEmail: null, fechaPrevista: null, fechaReal: null, materialesInformes: [], materialesConfirmaciones: [], costoDominioPendiente: false }],
+      pagosEsperados: [{ id: 'pago-4', tipo: 'total', etiqueta: null, monto: 60000, moneda: 'CLP', estado: 'acreditado', hitoValidado: false, hitoValidadoPor: null, hitoValidadoAt: null, hitoNota: null, fueRechazado: false }],
+    };
+    const dom = await bootPanel({
+      ...panel, ventas: [venta],
+      extraRoutes: {
+        '/interno/api/ventas/venta-4': () => ({ ok: true, data: detalle }),
+        '/interno/api/ventas/venta-4/pagos/pago-4/comprobante': () => ({ ok: true, data: { comprobante: null } }),
+        '/interno/api/ventas/venta-4/historial': () => ({ ok: true, data: { eventos: [] } }),
+      },
+    });
+
+    const textoTabla = filaTexto(dom, 'V-PENDIENTE-CIERRE');
+    assert.ok(textoTabla.includes('Pendiente cierre'), 'tabla real: ' + textoTabla);
+    assert.ok(!textoTabla.includes('Completado'));
+
+    const tr = [...dom.window.document.querySelectorAll('#pvVentasResult tbody tr')].find((r) => r.getAttribute('data-venta-id') === 'venta-4');
+    tr.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+    await flush();
+    const textoFicha = dom.window.document.getElementById('pvDetailBody').textContent;
+    assert.ok(textoFicha.includes('Pendiente cierre'), 'ficha real: ' + textoFicha);
+    assert.ok(!textoFicha.includes('Completado'), 'antes de tiempo, la venta nunca debe mostrarse "Completado" con una comisión real sin pagar');
+  });
+
   test(`Panel ${panel.nombre} — la columna Estado nunca contradice el detalle: mismo criterio (estadoPagoResumen) para ambos`, async () => {
     // Prueba de coherencia general con varias ventas a la vez — ninguna
     // combinación produce una etiqueta de tabla que no corresponda a

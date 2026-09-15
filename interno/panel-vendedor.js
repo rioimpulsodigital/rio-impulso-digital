@@ -571,7 +571,7 @@
       '</div>' +
       '<div class="pv-detail-section"><p class="pv-detail-section-title">Proyecto y componentes</p>' + componentesHTML + '</div>' +
       '<div class="pv-detail-section"><p class="pv-detail-section-title">Pagos</p>' + pagosHTML.join('') + '</div>' +
-      '<div class="pv-detail-section"><p class="pv-detail-section-title">Avance y próximo paso</p>' + historialHTML + '</div>' +
+      '<div class="pv-detail-section"><p class="pv-detail-section-title">Avances</p>' + historialHTML + '</div>' +
       (antecedentesHTML ? '<div class="pv-detail-section">' + antecedentesHTML + '</div>' : '')
     );
   }

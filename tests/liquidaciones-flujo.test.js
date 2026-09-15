@@ -19,9 +19,16 @@ function admin(overrides = {}) {
 function fakeDb() {
   const state = {
     comisiones: [
-      { id: 'com-1', beneficiario_email: 'vendedor@example.com', moneda: 'CLP', monto_comision: 20000, estado: 'programada' },
-      { id: 'com-2', beneficiario_email: 'vendedor@example.com', moneda: 'CLP', monto_comision: 15000, estado: 'programada' },
+      { id: 'com-1', venta_id: 'venta-otra', beneficiario_email: 'vendedor@example.com', moneda: 'CLP', monto_comision: 20000, estado: 'programada' },
+      // RIO-122 (hallazgo 9, 15/09/2026): venta_id/proyecto agregados —
+      // única comisión real de venta-1, que arranca "pendiente_cierre"
+      // (todos los componentes ya aprobados, solo falta esto).
+      { id: 'com-2', venta_id: 'venta-1', beneficiario_email: 'vendedor@example.com', moneda: 'CLP', monto_comision: 15000, estado: 'programada' },
     ],
+    ventas: [{ id: 'venta-1' }],
+    proyectos: [{ id: 'proyecto-1', venta_id: 'venta-1', estado_actual: 'pendiente_cierre' }],
+    componentes: [{ id: 'comp-1', proyecto_id: 'proyecto-1', estado_actual: 'aprobada' }],
+    pagos_esperados: [],
     conversiones: [],
     transferencias_comision: [{ id: 'tr-1', beneficiario_email: 'vendedor@example.com', fecha: '2026-09-25', moneda_final: 'CLP', monto_total_transferido: 20000, comprobante_nota: null, registrado_por: 'admin@example.com' }],
     transferencia_detalle: [{ id: 'det-1', transferencia_id: 'tr-1', comision_id: 'com-1', monto_incluido: 20000, moneda_original: 'CLP', conversion_id: null }],
@@ -45,11 +52,20 @@ function fakeDb() {
     if (sql.startsWith('SELECT * FROM transferencia_detalle WHERE transferencia_id')) return state.transferencia_detalle.filter((d) => d.transferencia_id === p[0]);
     if (sql.startsWith('SELECT * FROM transferencias_comision WHERE beneficiario_email')) return state.transferencias_comision.filter((t) => t.beneficiario_email === p[0]);
     if (sql.startsWith('SELECT * FROM transferencias_comision ORDER BY')) return state.transferencias_comision;
+    // RIO-122 (hallazgo 9): el endpoint de liquidaciones ahora resuelve
+    // las ventas afectadas y recomputeProyectoEstado() -> loadVentaFull().
+    if (sql.startsWith('SELECT DISTINCT venta_id FROM comisiones WHERE id IN')) return state.comisiones.filter((c) => p.includes(c.id)).map((c) => ({ venta_id: c.venta_id }));
+    if (sql.startsWith('SELECT * FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]);
+    if (sql.startsWith('SELECT * FROM proyectos WHERE venta_id')) return state.proyectos.filter((pr) => pr.venta_id === p[0]);
+    if (sql.startsWith('SELECT * FROM componentes WHERE proyecto_id')) return state.componentes.filter((c) => c.proyecto_id === p[0]);
+    if (sql.startsWith('SELECT * FROM pagos_esperados WHERE venta_id')) return state.pagos_esperados.filter((pe) => pe.venta_id === p[0]);
+    if (sql.includes('FROM comisiones WHERE venta_id')) return state.comisiones.filter((c) => c.venta_id === p[0]);
     return [];
   }
   function runMutation(sql, p) {
     if (sql.startsWith('INSERT INTO conversiones')) state.conversiones.push({ id: p[0], comision_id: p[1] });
     else if (sql.startsWith("UPDATE comisiones SET estado = 'pagada'")) { const c = state.comisiones.find((x) => x.id === p[1]); if (c) c.estado = 'pagada'; }
+    else if (sql.startsWith('UPDATE proyectos SET estado_actual')) { const pr = state.proyectos.find((x) => x.id === p[1]); if (pr) pr.estado_actual = p[0]; }
   }
   return { _state: state, prepare: (sql) => makeStatement(sql) };
 }
@@ -84,6 +100,25 @@ test('liquidaciones: admin SÍ puede crear una liquidación', async () => {
   const db = fakeDb();
   const response = await liquidacionesHandler(fakeContext({ body: { beneficiarioEmail: 'vendedor@example.com', fecha: '2026-09-25', monedaFinal: 'CLP', comisionIds: ['com-2'], montoTotalTransferido: 15000 }, roleIdentity: admin(), db }));
   assert.equal(response.status, 201);
+});
+
+// RIO-122 (hallazgo 9, 15/09/2026): al liquidar la ÚLTIMA comisión real
+// pendiente de una venta, el proyecto correspondiente debe recalcularse
+// y salir de "pendiente_cierre" — una liquidación puede pagar comisiones
+// de varias ventas a la vez, cada una se recalcula por separado.
+test('liquidaciones: al pagar la última comisión real de una venta, su proyecto pasa de "pendiente_cierre" a "completado"', async () => {
+  const db = fakeDb();
+  assert.equal(db._state.proyectos.find((p) => p.id === 'proyecto-1').estado_actual, 'pendiente_cierre');
+  const response = await liquidacionesHandler(fakeContext({
+    body: { beneficiarioEmail: 'vendedor@example.com', fecha: '2026-09-25', monedaFinal: 'CLP', comisionIds: ['com-2'], montoTotalTransferido: 15000 },
+    roleIdentity: admin(), db,
+  }));
+  assert.equal(response.status, 201);
+  assert.equal(
+    db._state.proyectos.find((p) => p.id === 'proyecto-1').estado_actual,
+    'completado',
+    'sin más comisiones reales pendientes, el proyecto de venta-1 debe quedar completado'
+  );
 });
 
 test('liquidaciones: GET lista solo las propias para un ejecutivo', async () => {

@@ -29,13 +29,27 @@
  * propia IIFE, igual que ya hace con resolveActiveMarket()/users.js.
  */
 
+// RIO-122 (UAT Negocio Test 14B, 15/09/2026, hallazgos 6/8/9):
+// 'en_espera_aprobacion' — la producción terminó, se está esperando la
+// decisión del cliente (nunca se confunde con "todavía en producción").
+// 'pendiente_cierre' — el cliente ya aprobó, pero el cierre
+// administrativo/financiero (comisión) todavía no está pagado — nunca se
+// confunde con "Completado" antes de tiempo. Ver
+// calcularRollupProyecto en functions/_shared/proyectos.js.
+// RIO-122 (ajuste de UAT, 15/09/2026): texto corto para la columna
+// angosta de la tabla — mismo criterio ya aplicado a los subestados de
+// pago (Brenda: el texto largo se sale de la columna). El identificador
+// interno estable sigue siendo 'en_espera_aprobacion'/'pendiente_cierre'
+// — solo cambia el texto mostrado.
 var ESTADO_OPERATIVO_LABEL_BASE = {
   en_espera_pago: 'En espera de pago', registrado: 'Registrado',
-  en_produccion: 'En producción', completado: 'Completado', cancelada: 'Cancelada',
+  en_produccion: 'En producción', en_espera_aprobacion: 'Espera aprobación',
+  pendiente_cierre: 'Pendiente cierre', completado: 'Completado', cancelada: 'Cancelada',
 };
 var ESTADO_OPERATIVO_BADGE_BASE = {
   en_espera_pago: 'amber', registrado: 'neutral',
-  en_produccion: 'blue', completado: 'green', cancelada: 'red',
+  en_produccion: 'blue', en_espera_aprobacion: 'amber',
+  pendiente_cierre: 'amber', completado: 'green', cancelada: 'red',
 };
 // RIO-122 (ajuste de UAT, 14/09/2026): Brenda confirmó que el texto largo
 // ("... — pendiente de validación" / "... — requiere corrección") se sale
@@ -80,6 +94,12 @@ var PIPELINE_LABEL = {
   pago__pendiente: 'En espera de pago',
   pago__informado: 'Pago informado — pendiente de validación',
   pago__rechazado: 'Pago rechazado — requiere corrección',
-  registrado: 'Registrado', en_produccion: 'En producción', completado: 'Completado', cancelada: 'Cancelada',
+  registrado: 'Registrado', en_produccion: 'En producción',
+  en_espera_aprobacion: 'En espera de aprobación del cliente',
+  pendiente_cierre: 'Pendiente de cierre administrativo/financiero',
+  completado: 'Completado', cancelada: 'Cancelada',
 };
-var ORDEN_PIPELINE = ['pago__pendiente', 'pago__informado', 'pago__rechazado', 'registrado', 'en_produccion', 'completado', 'cancelada'];
+var ORDEN_PIPELINE = [
+  'pago__pendiente', 'pago__informado', 'pago__rechazado', 'registrado',
+  'en_produccion', 'en_espera_aprobacion', 'pendiente_cierre', 'completado', 'cancelada',
+];

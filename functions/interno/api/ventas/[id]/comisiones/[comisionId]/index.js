@@ -10,6 +10,7 @@ import { query } from '../../../../../../_shared/db.js';
 import { assertCanAccessOwner, AuthzError } from '../../../../../../_shared/authz.js';
 import { isMethodAllowed, hasExpectedContentType } from '../../../../../../_shared/security.js';
 import { marcarComisionPagada, ComisionError } from '../../../../../../_shared/comisiones.js';
+import { recomputeProyectoEstado } from '../../../../../../_shared/proyectos.js';
 
 export async function onRequest(context) {
   const { request, env, params, data } = context;
@@ -49,6 +50,10 @@ export async function onRequest(context) {
 
   try {
     await marcarComisionPagada(env.DB, requestId, { comisionId: params.comisionId, actorEmail: roleIdentity.email, fechaPagoReal: body.fechaPagoReal });
+    // RIO-122 (hallazgo 9, 15/09/2026): si esta era la última comisión real
+    // pendiente de pago, el proyecto pasa de 'pendiente_cierre' a
+    // 'completado' — ver calcularRollupProyecto en proyectos.js.
+    await recomputeProyectoEstado(env.DB, requestId, venta.id, roleIdentity.email);
     return ok({ action: 'marcar-pagada' }, requestId);
   } catch (e) {
     if (e instanceof ComisionError) {

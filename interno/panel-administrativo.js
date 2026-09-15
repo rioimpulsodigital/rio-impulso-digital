@@ -563,6 +563,21 @@
   // de verdad (gates de materiales/pago), acá solo evitamos ofrecer un
   // botón que el servidor rechazaría siempre (ej. "aprobar" sobre algo
   // "pendiente").
+  // RIO-122 (hallazgo 8, 15/09/2026): "el cliente pidió cambios" — solo
+  // tiene sentido con la entrega esperando aprobación; motivo obligatorio
+  // (queda en el historial, nunca se pierde el porqué del retroceso).
+  function correccionEntregaFormHTML(c) {
+    if (c.estadoActual !== 'entregada') return '';
+    return (
+      '<form class="pv-accion-form" data-solicitar-correccion="' + escapeHtml(c.id) + '">' +
+        '<label>¿El cliente pidió cambios?</label>' +
+        '<textarea name="motivo" placeholder="Qué pidió corregir (obligatorio)" required></textarea>' +
+        '<button type="submit" class="pv-btn pv-btn--danger">Volver a producción</button>' +
+        '<span class="pv-status-msg" data-status></span>' +
+      '</form>'
+    );
+  }
+
   function accionesComponenteHTML(c) {
     var botones = [];
     if (c.estadoActual === 'pendiente') {
@@ -575,10 +590,19 @@
     // RIO-119: una fase de un proyecto personalizado no tiene el concepto
     // de "materiales que entrega el cliente" — nunca se le ofrece este
     // botón (mismo criterio que el gate que se omite en proyectos.js).
-    if (c.tipo !== 'personalizado' && c.materialesEstado !== 'completos') {
+    // RIO-122 (corrección de causa raíz, UAT Negocio Test 14B, 15/09/2026):
+    // en cuanto existe al menos una entrega informada, "completos" se
+    // decide EXCLUSIVAMENTE revisándola (abajo, "Resultado de esta
+    // entrega") — este botón manual solo tiene sentido cuando no hay
+    // ninguna entrega todavía (materiales recibidos fuera del Portal o
+    // venta histórica reconstruida). Antes convivían las dos vías y
+    // permitían la contradicción que reportó Brenda: "completos" a mano
+    // conviviendo con una entrega vigente rechazada.
+    if (c.tipo !== 'personalizado' && c.materialesEstado !== 'completos' && (!c.materialesInformes || c.materialesInformes.length === 0)) {
       botones.push('<button type="button" class="pv-btn" data-accion-componente="materiales-completos" data-componente-id="' + escapeHtml(c.id) + '">Marcar materiales completos</button>');
     }
-    return botones.length ? '<div class="pv-btn-row">' + botones.join('') + '</div>' : '';
+    var botonesHTML = botones.length ? '<div class="pv-btn-row">' + botones.join('') + '</div>' : '';
+    return botonesHTML + correccionEntregaFormHTML(c);
   }
 
   function entregaRevisionFormHTML(c, entrega) {
@@ -1215,7 +1239,7 @@
         '</div>' +
         '<div class="pv-detail-section"><p class="pv-detail-section-title">Proyecto y componentes</p>' + componentesHTML + '</div>' +
         '<div class="pv-detail-section"><p class="pv-detail-section-title">Pagos</p>' + pagosHTML + '</div>' +
-        '<div class="pv-detail-section"><p class="pv-detail-section-title">Avance y próximo paso</p>' + historialHTML + '</div>' +
+        '<div class="pv-detail-section"><p class="pv-detail-section-title">Avances</p>' + historialHTML + '</div>' +
         (antecedentesHTML ? '<div class="pv-detail-section">' + antecedentesHTML + '</div>' : '')
       );
     });
@@ -1392,6 +1416,32 @@
           return;
         }
         await recargarDetalle(detalle.venta.id);
+      });
+    });
+
+    // RIO-122 (hallazgo 8, 15/09/2026): "el cliente pidió cambios" —
+    // vuelve el componente entregado a producción.
+    Array.prototype.forEach.call(body.querySelectorAll('[data-solicitar-correccion]'), function (form) {
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var componenteId = form.getAttribute('data-solicitar-correccion');
+        var motivo = form.querySelector('[name="motivo"]').value.trim();
+        if (!motivo) {
+          mostrarStatus(form, 'Falta describir qué pidió corregir el cliente.', true);
+          return;
+        }
+        var btn = form.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        var r = await apiPost('/interno/api/ventas/' + encodeURIComponent(detalle.venta.id) + '/componentes/' + encodeURIComponent(componenteId), {
+          action: 'solicitar-correccion', motivo: motivo,
+        });
+        if (!r.ok || !r.body || !r.body.ok) {
+          mostrarStatus(form, (r.body && r.body.error && r.body.error.message) || 'No se pudo registrar la corrección.', true);
+          btn.disabled = false;
+          return;
+        }
+        await recargarDetalle(detalle.venta.id);
+        await cargarVentas(); // el avance operativo de la tabla puede haber cambiado.
       });
     });
 

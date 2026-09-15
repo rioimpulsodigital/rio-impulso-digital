@@ -888,11 +888,11 @@
         <!-- Generado dinámicamente por renderPricing() desde config/markets.js -->
       </div>
 
-      <div class="domain-desired-field">
+      <div class="domain-desired-field" id="domainDesiredField">
         <label>Dominio propio deseado (si aplica)</label>
         <input type="text" id="desiredDomain" placeholder="Ej: tiendadejuanito.cl">
       </div>
-      <p class="domain-note">Recuerda: este dominio es tentativo hasta confirmar disponibilidad. Nunca prometas la dirección exacta como definitiva.</p>
+      <p class="domain-note" id="domainDesiredNote">Recuerda: este dominio es tentativo hasta confirmar disponibilidad. Nunca prometas la dirección exacta como definitiva.</p>
 
       <div class="send-sequence" id="sendSequence">
         <div class="send-step active">
@@ -1162,6 +1162,7 @@
       card.addEventListener('click', () => {
         document.querySelectorAll('.domain-choice-card').forEach(c => c.classList.remove('active'));
         card.classList.add('active');
+        actualizarVisibilidadDominioPropio();
       });
     });
   }
@@ -1173,11 +1174,39 @@
 
   function normalizePhone(raw){ return raw.replace(/[^\d]/g, ''); }
 
+  // RIO-122 (UAT Negocio Test 14B, 15/09/2026): único lugar que decide si un
+  // producto incluye dominio propio — Landing Premium ('personalizado') y su
+  // pack ('ficha_personalizado') únicamente. Landing Express nunca lo tiene,
+  // ni suelto ni en pack. Reutilizada por el campo "Dominio propio deseado"
+  // (visibilidad) y por getProductLabel/buildPriceCardHTML (mensaje/precio)
+  // — antes esta misma condición estaba duplicada en ambos lugares.
+  function esNivelPremium(key){
+    return key === 'personalizado' || key === 'ficha_personalizado';
+  }
+
+  // Muestra "Dominio propio deseado" únicamente para Landing Premium (suelta
+  // o en pack) — para Landing Express/Ficha lo oculta y limpia cualquier
+  // valor escrito antes de cambiar de producto, para no guardar un dato
+  // residual que no aplica (Brenda, UAT Negocio Test 14B).
+  function actualizarVisibilidadDominioPropio(){
+    const activeCard = document.querySelector('.domain-choice-card.active');
+    const productKey = activeCard ? activeCard.dataset.domain : null;
+    const mostrar = productKey ? esNivelPremium(productKey) : false;
+    const field = document.getElementById('domainDesiredField');
+    const note  = document.getElementById('domainDesiredNote');
+    if(field) field.style.display = mostrar ? '' : 'none';
+    if(note)  note.style.display  = mostrar ? '' : 'none';
+    if(!mostrar){
+      const input = document.getElementById('desiredDomain');
+      if(input) input.value = '';
+    }
+  }
+
   function getProductLabel(key, forClientMessage){
     const config = MARKETS[currentMarket];
     const p = config.products[key];
     if(!p) return key;
-    const isPremiumTier = (key === 'personalizado' || key === 'ficha_personalizado');
+    const isPremiumTier = esNivelPremium(key);
     if(!isPremiumTier){
       return forClientMessage ? p.label : `${p.label} (${config.formatPrice(getActivePrice(currentMarket, key))} ${config.currency})`;
     }
@@ -1582,7 +1611,16 @@
       if(Object.keys(conValor).length) facturacion = conValor;
     }
 
-    const desiredDomain = (document.getElementById('desiredDomain').value || '').trim();
+    // RIO-122 (UAT Negocio Test 14B): 'Dominio propio deseado' solo tiene
+    // sentido para Landing Premium — para Express/Ficha nunca se guarda,
+    // aunque el campo tenga un valor residual de una selección anterior
+    // (ya se limpia en actualizarVisibilidadDominioPropio(), pero esto es
+    // la garantía real: nunca depende solo de que el campo esté vacío).
+    const activeProductCard = document.querySelector('.domain-choice-card.active');
+    const activeProductKey  = activeProductCard ? activeProductCard.dataset.domain : null;
+    const desiredDomain = (activeProductKey && esNivelPremium(activeProductKey))
+      ? (document.getElementById('desiredDomain').value || '').trim()
+      : '';
     const config = MARKETS[currentMarket];
     const productoCondiciones = {
       'Dominio propio deseado': desiredDomain || null,
@@ -1809,6 +1847,7 @@
     document.getElementById('revealBox').classList.remove('show');
     document.getElementById('revealQuestion').textContent = '';
     document.querySelectorAll('.domain-choice-card').forEach(c => c.classList.remove('active'));
+    actualizarVisibilidadDominioPropio();
     hasFicha = true;
     document.querySelectorAll('#fichaToggle .fc-btn').forEach(b => b.classList.remove('active'));
     document.querySelector('#fichaToggle .fc-btn[data-has-ficha="si"]').classList.add('active');
@@ -1872,7 +1911,7 @@
     const config = MARKETS[currentMarket];
     const product = config.products[key];
     const price = getActivePrice(currentMarket, key);
-    const isPremiumTier = (key === 'personalizado' || key === 'ficha_personalizado');
+    const isPremiumTier = esNivelPremium(key);
     const paymentNote = product.paymentPlan === '100' ? 'pago único' : '50% al inicio + 50% antes de publicar';
     const detail = config.currency + ' · ' + paymentNote + (isPremiumTier ? ' · dominio propio incluido el 1er año' : '');
     const showExample = (key !== 'ficha');
@@ -1927,6 +1966,7 @@
     if(previousKey){
       document.querySelectorAll('.domain-choice-card[data-domain="' + previousKey + '"]').forEach(c => c.classList.add('active'));
     }
+    actualizarVisibilidadDominioPropio();
 
     // Textos auxiliares dependientes del mercado
     const objPriceEl = document.getElementById('objPriceFrom');

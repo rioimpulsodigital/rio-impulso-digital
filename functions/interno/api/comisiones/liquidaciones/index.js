@@ -7,6 +7,7 @@ import { ok, Errors } from '../../../../_shared/response.js';
 import { query } from '../../../../_shared/db.js';
 import { isMethodAllowed, hasExpectedContentType } from '../../../../_shared/security.js';
 import { registrarLiquidacion, LiquidacionError } from '../../../../_shared/liquidaciones.js';
+import { recomputeProyectoEstado } from '../../../../_shared/proyectos.js';
 
 const VALID_MONEDAS = ['CLP', 'ARS'];
 
@@ -60,9 +61,24 @@ async function handleCreate(context) {
   }
 
   try {
+    // RIO-122 (hallazgo 9, 15/09/2026): la venta correspondiente a cada
+    // comisión pagada podría haber estado esperando exclusivamente este
+    // cierre financiero para pasar de 'pendiente_cierre' a 'completado'
+    // — se recalcula una vez por cada venta distinta entre las comisiones
+    // incluidas (una liquidación puede agrupar comisiones de más de una
+    // venta de la misma persona beneficiaria).
+    const ventasAfectadas = await query(
+      env.DB, requestId,
+      `SELECT DISTINCT venta_id FROM comisiones WHERE id IN (${comisionIds.map(() => '?').join(',')})`,
+      comisionIds
+    );
+
     const id = await registrarLiquidacion(env.DB, requestId, {
       beneficiarioEmail, fecha, monedaFinal, comisionIds, montoTotalTransferido, comprobanteNota, actorEmail: roleIdentity.email,
     });
+    for (const { venta_id: ventaId } of ventasAfectadas) {
+      await recomputeProyectoEstado(env.DB, requestId, ventaId, roleIdentity.email);
+    }
     return ok({ id }, requestId, 201);
   } catch (e) {
     if (e instanceof LiquidacionError) {

@@ -25,8 +25,13 @@ function admin(overrides = {}) {
 function fakeDb() {
   const state = {
     ventas: [{ id: 'venta-1', vendedor_email: VENDEDOR, mercado: 'CL', moneda: 'CLP', equipo_id: 'equipo-1' }],
-    componentes: [{ id: 'comp-x', proyecto_id: 'proyecto-1' }],
-    proyectos: [{ id: 'proyecto-1', venta_id: 'venta-1' }],
+    // RIO-122 (hallazgo 9, 15/09/2026): estado_actual/materiales_estado
+    // agregados para que recomputeProyectoEstado() (llamado por el
+    // endpoint tras marcar-pagada) tenga datos reales con los que
+    // trabajar, en vez de un no-op silencioso por falta de mock.
+    componentes: [{ id: 'comp-x', proyecto_id: 'proyecto-1', tipo: 'landing', estado_actual: 'aprobada', materiales_estado: 'completos' }],
+    proyectos: [{ id: 'proyecto-1', venta_id: 'venta-1', estado_actual: 'pendiente_cierre' }],
+    pagos_esperados: [],
     comisiones: [
       { id: 'com-comercial', venta_id: 'venta-1', tipo: 'comercial', beneficiario_email: VENDEDOR, estado: 'programada' },
       { id: 'com-supervision', venta_id: 'venta-1', tipo: 'supervision', beneficiario_email: 'supervisor@example.com', estado: 'programada' },
@@ -71,6 +76,11 @@ function fakeDb() {
       const u = state.usuarios.find((x) => x.email === p[0]);
       return u ? [{ nombre: u.nombre }] : [];
     }
+    // RIO-122 (hallazgo 9): recomputeProyectoEstado() -> loadVentaFull().
+    if (sql.startsWith('SELECT * FROM proyectos WHERE venta_id')) return state.proyectos.filter((pr) => pr.venta_id === p[0]);
+    if (sql.startsWith('SELECT * FROM componentes WHERE proyecto_id')) return state.componentes.filter((c) => c.proyecto_id === p[0]);
+    if (sql.startsWith('SELECT * FROM pagos_esperados WHERE venta_id')) return state.pagos_esperados.filter((pe) => pe.venta_id === p[0]);
+    if (sql.includes('FROM comisiones WHERE venta_id')) return state.comisiones.filter((c) => c.venta_id === p[0]);
     return [];
   }
 
@@ -85,6 +95,9 @@ function fakeDb() {
     } else if (sql.startsWith("UPDATE incidencias SET estado = 'resuelta'")) {
       const i = state.incidencias.find((x) => x.id === p[0]);
       if (i) i.estado = 'resuelta';
+    } else if (sql.startsWith('UPDATE proyectos SET estado_actual')) {
+      const pr = state.proyectos.find((x) => x.id === p[1]);
+      if (pr) pr.estado_actual = p[0];
     }
   }
 
@@ -231,6 +244,28 @@ test('comisiones: admin SÍ puede marcar una comisión programada como pagada', 
   const response = await comisionPagarHandler(fakeContext({ method: 'POST', body: { action: 'marcar-pagada' }, roleIdentity: admin(), db, params: { id: 'venta-1', comisionId: 'com-comercial' } }));
   assert.equal(response.status, 200);
   assert.equal(db._state.comisiones.find((c) => c.id === 'com-comercial').estado, 'pagada');
+});
+
+// RIO-122 (hallazgo 9, 15/09/2026): marcar la ÚLTIMA comisión real
+// pendiente como pagada debe recalcular el rollup del proyecto — nunca
+// queda "pendiente_cierre" una vez que ya no hay nada más que esperar.
+test('comisiones: marcar pagada la ÚLTIMA comisión real pendiente saca al proyecto de "pendiente_cierre" y lo pasa a "completado"', async () => {
+  const db = fakeDb();
+  // com-supervision ya está pagada de antemano — solo falta com-comercial.
+  db._state.comisiones.find((c) => c.id === 'com-supervision').estado = 'pagada';
+  assert.equal(db._state.proyectos[0].estado_actual, 'pendiente_cierre');
+
+  const response = await comisionPagarHandler(fakeContext({ method: 'POST', body: { action: 'marcar-pagada' }, roleIdentity: admin(), db, params: { id: 'venta-1', comisionId: 'com-comercial' } }));
+  assert.equal(response.status, 200);
+  assert.equal(db._state.proyectos[0].estado_actual, 'completado', 'con las dos comisiones reales ya pagadas, el proyecto debe quedar completado');
+});
+
+test('comisiones: marcar pagada UNA de DOS comisiones reales pendientes NO alcanza — el proyecto sigue "pendiente_cierre"', async () => {
+  const db = fakeDb();
+  // com-supervision sigue "programada" — falta pagarla también.
+  const response = await comisionPagarHandler(fakeContext({ method: 'POST', body: { action: 'marcar-pagada' }, roleIdentity: admin(), db, params: { id: 'venta-1', comisionId: 'com-comercial' } }));
+  assert.equal(response.status, 200);
+  assert.equal(db._state.proyectos[0].estado_actual, 'pendiente_cierre', 'todavía queda com-supervision sin pagar');
 });
 
 // --- Costos directos ---

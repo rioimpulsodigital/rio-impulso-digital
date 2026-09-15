@@ -8,9 +8,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  evaluateLandingGate, iniciarProduccion, marcarEntregada, aprobarComponente,
+  evaluateLandingGate, iniciarProduccion, marcarEntregada, aprobarComponente, solicitarCorreccionEntrega,
   marcarMaterialesInformados, marcarMaterialesCompletos, revisarEntregaMateriales, informarPago, acreditarPago,
-  registrarIncidencia, agregarAntecedente, ProyectoError,
+  registrarIncidencia, agregarAntecedente, recomputeProyectoEstado, ProyectoError,
 } from '../functions/_shared/proyectos.js';
 
 // D1 simulado en memoria — soporta las tablas y consultas reales que usa
@@ -101,6 +101,11 @@ function fakeDb() {
     }
     if (sql.startsWith('SELECT * FROM materiales_informados_detalle WHERE id')) {
       return state.materiales_informados_detalle.filter((m) => m.id === p[0] && m.componente_id === p[1]);
+    }
+    // RIO-122 (corrección de causa raíz, 15/09/2026): marcarMaterialesCompletos()
+    // ahora exige que no exista ninguna entrega informada para este componente.
+    if (sql.startsWith('SELECT id FROM materiales_informados_detalle WHERE componente_id')) {
+      return state.materiales_informados_detalle.filter((m) => m.componente_id === p[0]);
     }
     if (sql.startsWith('SELECT modo_historico FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]).map((v) => ({ modo_historico: v.modo_historico || null }));
     if (sql.startsWith('SELECT * FROM ventas WHERE id')) return state.ventas.filter((v) => v.id === p[0]);
@@ -353,6 +358,57 @@ test('proyecto pasa a completado solo cuando TODOS sus componentes están aproba
   assert.equal(db._state.proyectos.find((p) => p.id === proyectoId).estado_actual, 'completado');
 });
 
+// RIO-122 (hallazgo 9, UAT Negocio Test 14B, 15/09/2026): antes, aprobar
+// el último componente pasaba la venta a "Completado" de inmediato,
+// aunque la comisión todavía no estuviera pagada — Brenda: "todavía queda
+// el proceso administrativo/financiero correspondiente". La fuente de
+// verdad de "cierre financiero" es el propio estado de `comisiones`
+// (RIO-114/115) — nunca una condición nueva.
+
+test('proyecto queda "pendiente_cierre" (no "completado") si al aprobar el último componente queda una comisión real sin pagar', async () => {
+  const db = fakeDb();
+  seedRealizacionFixtures(db);
+  const { ventaId, proyectoId } = seedIndividual(db);
+  setProductoVenta(db, ventaId);
+  const comp = db._state.componentes.find((c) => c.id === 'comp-solo');
+  comp.materiales_estado = 'completos';
+  comp.precio_atribuido = 50000;
+  db._state.pagos_esperados.find((p) => p.id === 'pago-total').estado = 'acreditado';
+  seedUsuarioActivo(db, 'responsable@example.com');
+  seedPlanRealizacion(db, { email: 'responsable@example.com', porcentaje: 30, contexto: 'solo' });
+  db._state.asignaciones_realizacion.push({ componente_id: 'comp-solo', usuario_email: 'responsable@example.com', rol: 'responsable' });
+
+  await iniciarProduccion(db, 'req-cierre-1', { ventaId, componenteId: 'comp-solo', actorEmail: 'a@example.com' });
+  await marcarEntregada(db, 'req-cierre-2', { ventaId, componenteId: 'comp-solo', actorEmail: 'a@example.com' });
+  await aprobarComponente(db, 'req-cierre-3', { ventaId, componenteId: 'comp-solo', actorEmail: 'a@example.com' });
+
+  assert.equal(db._state.comisiones.length, 1, 'la comisión de realización se generó al aprobar');
+  assert.notEqual(db._state.comisiones[0].estado, 'pagada');
+  assert.equal(
+    db._state.proyectos.find((p) => p.id === proyectoId).estado_actual,
+    'pendiente_cierre',
+    'nunca "completado" mientras quede una comisión real sin pagar'
+  );
+
+  // Se paga la comisión — recién ahí el proyecto pasa a completado.
+  db._state.comisiones[0].estado = 'pagada';
+  await recomputeProyectoEstado(db, 'req-cierre-4', ventaId, 'admin@example.com');
+  assert.equal(db._state.proyectos.find((p) => p.id === proyectoId).estado_actual, 'completado');
+});
+
+test('proyecto pasa directo a "completado" si todos los componentes están aprobados y no hay ninguna comisión real generada', async () => {
+  const db = fakeDb();
+  const { ventaId, proyectoId } = seedIndividual(db);
+  const comp = db._state.componentes.find((c) => c.id === 'comp-solo');
+  comp.materiales_estado = 'completos';
+  db._state.pagos_esperados.find((p) => p.id === 'pago-total').estado = 'acreditado';
+  await iniciarProduccion(db, 'req-cierre-5', { ventaId, componenteId: 'comp-solo', actorEmail: 'a@example.com' });
+  await marcarEntregada(db, 'req-cierre-6', { ventaId, componenteId: 'comp-solo', actorEmail: 'a@example.com' });
+  await aprobarComponente(db, 'req-cierre-7', { ventaId, componenteId: 'comp-solo', actorEmail: 'a@example.com' });
+  assert.equal(db._state.comisiones.length, 0, 'sin asignación de responsable, no hay comisión de realización que esperar');
+  assert.equal(db._state.proyectos.find((p) => p.id === proyectoId).estado_actual, 'completado');
+});
+
 // --- RIO-122 (corrección de causa raíz, 15/09/2026): el rollup del
 // proyecto debe reflejar avance real apenas arranca producción, sin
 // esperar la aprobación final — antes `proyectos.estado_actual` quedaba
@@ -383,7 +439,7 @@ test('iniciarProduccion() — el proyecto pasa a "en_produccion" de inmediato, s
   );
 });
 
-test('marcarEntregada() — el proyecto permanece "en_produccion" (no retrocede ni se inventa un tercer valor) mientras falte aprobar', async () => {
+test('marcarEntregada() — el proyecto pasa a "en_espera_aprobacion" (RIO-122, hallazgo 8: ya no queda mostrando "En producción" mientras se espera al cliente)', async () => {
   const db = fakeDb();
   const { ventaId, proyectoId } = seedIndividual(db);
   const comp = db._state.componentes.find((c) => c.id === 'comp-solo');
@@ -392,7 +448,36 @@ test('marcarEntregada() — el proyecto permanece "en_produccion" (no retrocede 
 
   await iniciarProduccion(db, 'req-13a', { ventaId, componenteId: 'comp-solo', actorEmail: 'a@example.com' });
   await marcarEntregada(db, 'req-13b', { ventaId, componenteId: 'comp-solo', actorEmail: 'a@example.com' });
+  assert.equal(
+    db._state.proyectos.find((p) => p.id === proyectoId).estado_actual,
+    'en_espera_aprobacion',
+    'antes de esta corrección, una entrega esperando aprobación del cliente seguía mostrándose como "En producción"'
+  );
+});
+
+test('solicitarCorreccionEntrega() — "el cliente pidió cambios" vuelve el componente a en_produccion y el proyecto deja de estar en espera de aprobación (RIO-122, hallazgo 8)', async () => {
+  const db = fakeDb();
+  const { ventaId, proyectoId } = seedIndividual(db);
+  const comp = db._state.componentes.find((c) => c.id === 'comp-solo');
+  comp.materiales_estado = 'completos';
+  db._state.pagos_esperados.find((p) => p.id === 'pago-total').estado = 'acreditado';
+  await iniciarProduccion(db, 'req-13c', { ventaId, componenteId: 'comp-solo', actorEmail: 'a@example.com' });
+  await marcarEntregada(db, 'req-13d', { ventaId, componenteId: 'comp-solo', actorEmail: 'a@example.com' });
+  assert.equal(db._state.proyectos.find((p) => p.id === proyectoId).estado_actual, 'en_espera_aprobacion');
+
+  await solicitarCorreccionEntrega(db, 'req-13e', { ventaId, componenteId: 'comp-solo', actorEmail: 'admin@example.com', motivo: 'Pidió cambiar el color del fondo.' });
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-solo').estado_actual, 'en_produccion');
   assert.equal(db._state.proyectos.find((p) => p.id === proyectoId).estado_actual, 'en_produccion');
+  assert.ok(db._state.eventos_historial.some((e) => e.entidad_id === 'comp-solo' && e.motivo_nota && e.motivo_nota.includes('Pidió cambiar el color del fondo')));
+});
+
+test('solicitarCorreccionEntrega() — rechaza si el componente no está "entregada"', async () => {
+  const db = fakeDb();
+  const { ventaId } = seedIndividual(db);
+  await assert.rejects(
+    () => solicitarCorreccionEntrega(db, 'req-13f', { ventaId, componenteId: 'comp-solo', actorEmail: 'admin@example.com', motivo: 'x' }),
+    (e) => { assert.equal(e.code, 'transicion_invalida'); return true; }
+  );
 });
 
 test('un pack con un componente en producción y el otro todavía bloqueado: el proyecto ya refleja "en_produccion" (nunca "registrado")', async () => {
@@ -584,22 +669,30 @@ test('marcarMaterialesInformados() — una entrega DESPUÉS de "completos" no to
   assert.ok(db._state.eventos_historial.some((e) => e.entidad_id === 'comp-ficha' && e.estado_nuevo === 'material_adicional_informado'));
 });
 
-test('marcarMaterialesCompletos() — la confirmación oficial funciona tanto desde "pendiente" como desde "informados"', async () => {
+test('marcarMaterialesCompletos() — la confirmación oficial manual solo aplica cuando NO hay ninguna entrega informada (RIO-122: fuera de eso, hay que revisar la entrega)', async () => {
   const db = fakeDb();
   const { ventaId } = seedPack(db);
-  // Ficha: confirmación directa sin haber informado antes.
+  // Ficha: confirmación directa sin haber informado antes — caso legítimo
+  // que sigue existiendo (materiales recibidos fuera del Portal, o venta
+  // histórica reconstruida).
   await marcarMaterialesCompletos(db, 'req-18a', { ventaId, componenteId: 'comp-ficha', actorEmail: 'admin@example.com' });
   assert.equal(db._state.componentes.find((c) => c.id === 'comp-ficha').materiales_estado, 'completos');
 
-  // Landing: primero informados, luego confirmación oficial.
+  // Landing: en cuanto existe una entrega informada, la acción manual
+  // queda bloqueada — la única vía válida es revisar esa entrega (RIO-122,
+  // corrección de causa raíz: antes esto convivía con la revisión y
+  // permitía la contradicción "COMPLETOS con una entrega rechazada").
   await marcarMaterialesInformados(db, 'req-18b', { ventaId, componenteId: 'comp-landing', actorEmail: 'vendedor@example.com', descripcion: 'Fotos del local.' });
-  await marcarMaterialesCompletos(db, 'req-18c', { ventaId, componenteId: 'comp-landing', actorEmail: 'admin@example.com' });
-  assert.equal(db._state.componentes.find((c) => c.id === 'comp-landing').materiales_estado, 'completos');
+  await assert.rejects(
+    () => marcarMaterialesCompletos(db, 'req-18c', { ventaId, componenteId: 'comp-landing', actorEmail: 'admin@example.com' }),
+    (e) => { assert.equal(e.code, 'requiere_revision_de_entrega'); return true; }
+  );
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-landing').materiales_estado, 'informados', 'nunca queda "completos" sin pasar por la revisión');
 });
 
 // --- Antecedentes u observaciones ---
 
-test('revisarEntregaMateriales() — administración revisa una entrega puntual, sin tocar materiales_estado del componente', async () => {
+test('revisarEntregaMateriales() — "aceptada" confirma materiales completos automáticamente, sin la acción manual (RIO-122, corrección de causa raíz)', async () => {
   const db = fakeDb();
   const { ventaId } = seedPack(db);
   const { detalleId } = await marcarMaterialesInformados(db, 'req-19a', { ventaId, componenteId: 'comp-ficha', actorEmail: 'vendedor@example.com', descripcion: 'Fotos.' });
@@ -607,7 +700,30 @@ test('revisarEntregaMateriales() — administración revisa una entrega puntual,
   const entrega = db._state.materiales_informados_detalle.find((m) => m.id === detalleId);
   assert.equal(entrega.estado_revision, 'aceptada');
   assert.equal(entrega.revisado_por, 'admin@example.com');
-  assert.equal(db._state.componentes.find((c) => c.id === 'comp-ficha').materiales_estado, 'informados', 'la revisión de la entrega nunca confirma el componente completo por sí sola');
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-ficha').materiales_estado, 'completos', 'antes de esta corrección, aceptar una entrega nunca confirmaba el componente — había que usar además la acción manual, lo que permitía que quedaran en contradicción');
+});
+
+test('revisarEntregaMateriales() — un rechazo/adicional posterior revierte "completos" a "informados" (RIO-122, bug confirmado: Landing PENDIENTE/rechazado seguía mostrando COMPLETOS)', async () => {
+  const db = fakeDb();
+  const { ventaId } = seedPack(db);
+  const primera = await marcarMaterialesInformados(db, 'req-19x', { ventaId, componenteId: 'comp-ficha', actorEmail: 'vendedor@example.com', descripcion: 'Fotos.' });
+  await revisarEntregaMateriales(db, 'req-19y', { ventaId, componenteId: 'comp-ficha', entregaId: primera.detalleId, actorEmail: 'admin@example.com', resultado: 'aceptada' });
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-ficha').materiales_estado, 'completos');
+
+  // Entrega adicional posterior — administración la rechaza.
+  const segunda = await marcarMaterialesInformados(db, 'req-19z', { ventaId, componenteId: 'comp-ficha', actorEmail: 'vendedor@example.com', descripcion: 'El cliente mandó fotos nuevas.' });
+  assert.equal(segunda.esAdicionalTrasCompletos, true);
+  await revisarEntregaMateriales(db, 'req-19w', { ventaId, componenteId: 'comp-ficha', entregaId: segunda.detalleId, actorEmail: 'admin@example.com', resultado: 'requiere_material_adicional', motivo: 'Falta el logo en alta resolución.' });
+  assert.equal(
+    db._state.componentes.find((c) => c.id === 'comp-ficha').materiales_estado,
+    'informados',
+    'nunca puede sobrevivir "completos" con la entrega vigente rechazada — este era exactamente el bug reportado en UAT'
+  );
+
+  // Nueva entrega, aceptada — vuelve a completos.
+  const tercera = await marcarMaterialesInformados(db, 'req-19v', { ventaId, componenteId: 'comp-ficha', actorEmail: 'vendedor@example.com', descripcion: 'Logo corregido.' });
+  await revisarEntregaMateriales(db, 'req-19u', { ventaId, componenteId: 'comp-ficha', entregaId: tercera.detalleId, actorEmail: 'admin@example.com', resultado: 'aceptada' });
+  assert.equal(db._state.componentes.find((c) => c.id === 'comp-ficha').materiales_estado, 'completos');
 });
 
 test('revisarEntregaMateriales() — "requiere_material_adicional" queda registrado con motivo, sin revertir el componente', async () => {

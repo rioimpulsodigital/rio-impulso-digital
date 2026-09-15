@@ -159,6 +159,34 @@ export async function marcarEntregada(db, requestId, { ventaId, componenteId, ac
   await recomputeProyectoEstado(db, requestId, ventaId, actorEmail);
 }
 
+// Transición entregada -> en_produccion — RIO-122 (hallazgo 8, UAT
+// Negocio Test 14B, 15/09/2026): antes no existía ningún camino oficial
+// para "el cliente pidió cambios" — la única "próxima acción" sugerida
+// tras entregar ya reconocía esa posibilidad ("o corregir si pide
+// cambios") pero no había ninguna transición que la representara. Vuelve
+// el componente a producción sin perder ningún dato de la entrega
+// anterior (las entregas de materiales y el historial ya registrado
+// quedan intactos — nunca se borra nada, solo se agrega el evento nuevo).
+// `motivo` es obligatorio: administración necesita dejar constancia de
+// qué pidió corregir el cliente.
+export async function solicitarCorreccionEntrega(db, requestId, { ventaId, componenteId, actorEmail, motivo }) {
+  const { componentes } = await loadVentaFull(db, requestId, ventaId);
+  const componente = componentes.find((c) => c.id === componenteId);
+  if (!componente) throw new ProyectoError('componente_no_encontrado', 'Componente no encontrado.');
+  if (componente.estado_actual !== 'entregada') {
+    throw new ProyectoError('transicion_invalida', `No se puede solicitar corrección desde el estado ${componente.estado_actual} — solo aplica a una entrega esperando aprobación.`);
+  }
+
+  await execute(db, requestId, "UPDATE componentes SET estado_actual = 'en_produccion' WHERE id = ?", [componenteId]);
+  await logEvento(db, requestId, {
+    ventaId, entidad: 'componente', entidadId: componenteId,
+    estadoAnterior: 'entregada', estadoNuevo: 'en_produccion', usuarioEmail: actorEmail,
+    motivoNota: `El cliente pidió cambios: ${motivo}`,
+    proximaAccion: 'Corregir y volver a entregar', responsableProximaAccion: actorEmail,
+  });
+  await recomputeProyectoEstado(db, requestId, ventaId, actorEmail);
+}
+
 // Transición entregada -> aprobada. Si es el componente Ficha de un pack,
 // reevalúa el gate de Landing (una de las 3 condiciones acaba de
 // cumplirse). También es el momento en que se genera la comisión de
@@ -249,13 +277,25 @@ export async function marcarMaterialesInformados(db, requestId, { ventaId, compo
 }
 
 // Revisión administrativa de UNA entrega puntual (RIO-118, corrección
-// funcional) — exclusivo de administración (se valida en el endpoint).
-// Nunca modifica materiales_estado del componente, el gate, ni ningún
-// plazo: eso queda para marcarMaterialesCompletos (acción aparte,
-// deliberadamente separada) o para lo que administración decida hacer
-// manualmente. `motivo` es obligatorio para 'requiere_material_adicional'
-// y 'descartada_con_motivo' — se valida en el endpoint.
+// funcional; RIO-122 UAT Negocio Test 14B, 15/09/2026 — corrección de
+// causa raíz: antes esta función NUNCA modificaba `materiales_estado`
+// ("esa decisión queda para marcarMaterialesCompletos, acción aparte")
+// — eso permitía la contradicción que reportó Brenda: un componente podía
+// quedar marcado "COMPLETOS" a mano y luego una entrega nueva ser
+// rechazada/requerir material adicional sin que el rollup se enterara,
+// mostrando "COMPLETOS" con una entrega vigente rechazada. Ahora el
+// resultado de la revisión es la ÚNICA fuente de `materiales_estado`
+// (para componentes que pasan por este flujo — ver
+// marcarMaterialesCompletos para el único caso legítimo que queda fuera):
+// 'aceptada' habilita 'completos'; 'requiere_material_adicional' y
+// 'descartada_con_motivo' lo revierten a 'informados' — nunca puede
+// sobrevivir un "completos" con la entrega vigente rechazada. `motivo` es
+// obligatorio para 'requiere_material_adicional' y 'descartada_con_motivo'
+// — se valida en el endpoint.
 export async function revisarEntregaMateriales(db, requestId, { ventaId, componenteId, entregaId, actorEmail, resultado, motivo }) {
+  const { componentes } = await loadVentaFull(db, requestId, ventaId);
+  const componente = componentes.find((c) => c.id === componenteId);
+  if (!componente) throw new ProyectoError('componente_no_encontrado', 'Componente no encontrado.');
   const entregas = await query(db, requestId, 'SELECT * FROM materiales_informados_detalle WHERE id = ? AND componente_id = ?', [entregaId, componenteId]);
   const entrega = entregas[0];
   if (!entrega) throw new ProyectoError('entrega_no_encontrada', 'Entrega de materiales no encontrada.');
@@ -270,20 +310,50 @@ export async function revisarEntregaMateriales(db, requestId, { ventaId, compone
     estadoAnterior: `entrega:${entrega.estado_revision}`, estadoNuevo: `entrega:${resultado}`, usuarioEmail: actorEmail,
     motivoNota: motivo || null,
   });
+
+  let gate = null;
+  if (resultado === 'aceptada' && componente.materiales_estado !== 'completos') {
+    await execute(db, requestId, "UPDATE componentes SET materiales_estado = 'completos' WHERE id = ?", [componenteId]);
+    await logEvento(db, requestId, {
+      ventaId, entidad: 'componente', entidadId: componenteId,
+      estadoAnterior: `materiales:${componente.materiales_estado}`, estadoNuevo: 'materiales:completos', usuarioEmail: actorEmail,
+      motivoNota: `Entrega N.º ${entrega.numero_entrega} aceptada.`,
+    });
+    if (componente.tipo === 'landing') {
+      gate = await evaluateLandingGate(db, requestId, ventaId, actorEmail);
+    }
+  } else if ((resultado === 'requiere_material_adicional' || resultado === 'descartada_con_motivo') && componente.materiales_estado === 'completos') {
+    await execute(db, requestId, "UPDATE componentes SET materiales_estado = 'informados' WHERE id = ?", [componenteId]);
+    await logEvento(db, requestId, {
+      ventaId, entidad: 'componente', entidadId: componenteId,
+      estadoAnterior: 'materiales:completos', estadoNuevo: 'materiales:informados', usuarioEmail: actorEmail,
+      motivoNota: `Entrega N.º ${entrega.numero_entrega} — ${resultado === 'requiere_material_adicional' ? 'requiere material adicional' : 'descartada'} — ya no hay una entrega vigente aceptada.`,
+    });
+  }
+  return { gate };
 }
 
 // Confirma oficialmente los materiales de un componente como completos
-// (exclusivo de administración — se valida en el endpoint). Puede
-// llamarse desde 'pendiente' o 'informados': la confirmación oficial no
-// depende de que el vendedor haya informado antes (Brenda no lo exige
-// como paso obligatorio, solo separa ambos conceptos). Si es Landing,
-// reevalúa el gate.
+// (exclusivo de administración — se valida en el endpoint). RIO-122 (UAT
+// Negocio Test 14B, 15/09/2026): desde la corrección de causa raíz de
+// arriba, esta acción manual queda reservada EXCLUSIVAMENTE para
+// componentes sin ninguna entrega informada todavía (ej. materiales
+// recibidos por un canal fuera del Portal, o ventas históricas
+// reconstruidas) — si ya existe al menos una entrega, la única vía válida
+// es revisarla (revisarEntregaMateriales), nunca esta acción manual en
+// paralelo: eso es exactamente lo que producía la contradicción que
+// reportó Brenda (un componente "completos" a mano, ignorando el
+// resultado real de la revisión de la entrega vigente).
 export async function marcarMaterialesCompletos(db, requestId, { ventaId, componenteId, actorEmail }) {
   const { componentes } = await loadVentaFull(db, requestId, ventaId);
   const componente = componentes.find((c) => c.id === componenteId);
   if (!componente) throw new ProyectoError('componente_no_encontrado', 'Componente no encontrado.');
   if (componente.materiales_estado === 'completos') {
     throw new ProyectoError('ya_completos', 'Los materiales de este componente ya estaban marcados como completos.');
+  }
+  const entregas = await query(db, requestId, 'SELECT id FROM materiales_informados_detalle WHERE componente_id = ?', [componenteId]);
+  if (entregas.length > 0) {
+    throw new ProyectoError('requiere_revision_de_entrega', 'Este componente ya tiene entregas de materiales informadas — confirmá materiales completos revisando la entrega correspondiente como "Aceptada", no con esta acción manual.');
   }
 
   await execute(
@@ -342,11 +412,43 @@ export async function editarFase(db, requestId, { ventaId, componenteId, actorEm
 // Rollup del estado del proyecto a partir de sus componentes — nunca se
 // guarda a mano en paralelo, se recalcula desde los componentes reales
 // cada vez (sin segunda fuente de verdad).
+// RIO-122 (UAT Negocio Test 14B, 15/09/2026, hallazgos 6/8/9): antes esta
+// función solo distinguía 'en_produccion' (algo sin aprobar) de
+// 'completado' (todo aprobado) — Brenda reportó dos problemas reales de
+// esa simplificación: (a) un componente ya ENTREGADO, esperando que el
+// cliente decida, seguía mostrándose como "En producción" — información
+// activamente engañosa sobre quién tiene la pelota; (b) apenas se
+// aprobaba el último componente, la venta pasaba a "Completado" de
+// inmediato, aunque todavía quedara el cierre administrativo/financiero
+// (comisión) pendiente. Se agregan dos estados intermedios reales,
+// nunca inventados sin una fuente de verdad ya existente:
+//   - 'en_espera_aprobacion': ningún componente sigue "en_produccion" y
+//     al menos uno está "entregada" (esperando decisión del cliente) —
+//     nunca se confunde con seguir produciendo.
+//   - 'pendiente_cierre': todos los componentes ya están 'aprobada' pero
+//     todavía queda alguna comisión real (no estimación de un proyecto
+//     personalizado sin costos cerrados) sin llegar a 'pagada' — la
+//     fuente de verdad de "cierre financiero" es el propio estado de
+//     `comisiones` (RIO-114/115), nunca una condición nueva.
+function calcularRollupProyecto(componentes, comisionesEstados) {
+  const todasAprobadas = componentes.every((c) => c.estado_actual === 'aprobada');
+  if (todasAprobadas) {
+    const comisionesReales = comisionesEstados.filter((c) => !c.es_estimacion);
+    const todasPagadas = comisionesReales.every((c) => c.estado === 'pagada');
+    return (comisionesReales.length > 0 && !todasPagadas) ? 'pendiente_cierre' : 'completado';
+  }
+  if (componentes.some((c) => c.estado_actual === 'en_produccion')) return 'en_produccion';
+  const algunaEntregada = componentes.some((c) => c.estado_actual === 'entregada');
+  const restoNoIniciado = componentes.every((c) => c.estado_actual === 'entregada' || c.estado_actual === 'aprobada');
+  if (algunaEntregada && restoNoIniciado) return 'en_espera_aprobacion';
+  return 'en_produccion';
+}
+
 export async function recomputeProyectoEstado(db, requestId, ventaId, actorEmail) {
   const { proyecto, componentes } = await loadVentaFull(db, requestId, ventaId);
   if (!proyecto || componentes.length === 0) return;
-  const todasAprobadas = componentes.every((c) => c.estado_actual === 'aprobada');
-  const nuevoEstado = todasAprobadas ? 'completado' : 'en_produccion';
+  const comisionesEstados = await query(db, requestId, 'SELECT estado, es_estimacion FROM comisiones WHERE venta_id = ?', [ventaId]);
+  const nuevoEstado = calcularRollupProyecto(componentes, comisionesEstados);
   if (proyecto.estado_actual !== nuevoEstado) {
     await execute(db, requestId, 'UPDATE proyectos SET estado_actual = ? WHERE id = ?', [nuevoEstado, proyecto.id]);
     await logEvento(db, requestId, {
