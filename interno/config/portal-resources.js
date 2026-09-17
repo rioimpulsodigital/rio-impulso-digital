@@ -183,7 +183,25 @@ var MARKETING_RESOURCES = [
     estado: 'activo',
     orden: 1,
     alt: 'Servicio para Argentina — Ficha de Google, $125.000 ARS',
-    action: 'descargar'
+    action: 'descargar',
+    copy: `¿Cuando alguien busca en Google lo que ofrecés, encuentra tu negocio con la información correcta?
+
+Una Ficha de Google bien configurada permite mostrar tu ubicación, horarios, medios de contacto, fotografías y datos comerciales de manera clara.
+
+Durante septiembre podés acceder a la configuración profesional de tu Ficha de Google por $125.000 ARS.
+
+✅ Información comercial organizada
+✅ Ubicación, horarios y contacto
+✅ Mayor presencia en búsquedas locales
+✅ Configuración inicial en 3 días hábiles*
+
+Escribime por WhatsApp con la palabra GOOGLE y te cuento cómo comenzar.
+
+Promoción disponible hasta el 30 de septiembre.
+
+*El plazo comienza después de confirmar el pago y recibir toda la información necesaria. La validación o verificación final puede depender de los procesos de Google.
+
+#FichaDeGoogle #NegociosArgentina #PresenciaDigital`
   },
   {
     id: 'mkt-post-landing-express-ar',
@@ -197,7 +215,30 @@ var MARKETING_RESOURCES = [
     estado: 'activo',
     orden: 2,
     alt: 'Servicio para Argentina — Landing Express, $120.000 ARS',
-    action: 'descargar'
+    action: 'descargar',
+    copy: `Tu negocio no necesita comenzar con un sitio enorme.
+
+A veces, una página clara, profesional y enfocada en generar contactos es exactamente lo que necesitás para dar el primer paso.
+
+La Landing Express incluye:
+
+✅ Diseño adaptable a celular
+✅ Botón directo a WhatsApp
+✅ Subdominio incluido
+✅ Hosting sin mensualidad
+✅ Primera versión en 48 horas hábiles*
+
+Precio de lanzamiento: $120.000 ARS.
+
+Podés reservar tu proyecto con el 50%.
+
+Escribime por WhatsApp con la palabra LANDING EXPRESS y te envío los detalles.
+
+Promoción disponible hasta el 30 de septiembre.
+
+*El plazo comienza después de confirmar el primer pago y recibir textos, fotografías, logo y demás materiales necesarios.
+
+#LandingPage #NegociosArgentina #PresenciaDigital #WhatsAppBusiness`
   },
   {
     id: 'mkt-post-landing-premium-ar',
@@ -211,7 +252,30 @@ var MARKETING_RESOURCES = [
     estado: 'activo',
     orden: 3,
     alt: 'Servicio para Argentina — Landing Premium con dominio propio .com.ar, $150.000 ARS',
-    action: 'descargar'
+    action: 'descargar',
+    copy: `Tu negocio merece una presencia digital que también tenga identidad propia.
+
+Con la Landing Premium obtenés una página profesional con dominio .com.ar para presentar tu propuesta y recibir consultas directamente por WhatsApp.
+
+Incluye:
+
+✅ Dominio .com.ar durante el primer año
+✅ Diseño adaptable a celular
+✅ Botón directo a WhatsApp
+✅ Hosting sin mensualidad
+✅ Primera versión en 48 horas hábiles*
+
+Precio de lanzamiento: $150.000 ARS.
+
+Podés reservar tu proyecto con el 50%.
+
+Escribime por WhatsApp con la palabra LANDING PREMIUM y te cuento cómo comenzar.
+
+Promoción disponible hasta el 30 de septiembre.
+
+*El plazo comienza después de confirmar el primer pago y recibir todos los materiales necesarios.
+
+#LandingPremium #DominioPropio #NegociosArgentina #PresenciaDigital`
   },
   {
     id: 'mkt-post-ficha-landing-express-ar',
@@ -225,7 +289,34 @@ var MARKETING_RESOURCES = [
     estado: 'activo',
     orden: 4,
     alt: 'Pack para Argentina — Ficha de Google + Landing Express, $220.000 ARS',
-    action: 'descargar'
+    action: 'descargar',
+    copy: `Que te encuentren es importante. Que además puedan conocer tu propuesta y contactarte fácilmente es mucho mejor.
+
+El Pack Express combina dos elementos esenciales para comenzar a construir tu presencia digital:
+
+📍 Ficha de Google para que encuentren tu negocio.
+🌐 Landing Express para presentar tu propuesta y recibir consultas por WhatsApp.
+
+Incluye:
+
+✅ Diseño adaptable a celular
+✅ Botón directo a WhatsApp
+✅ Subdominio incluido
+✅ Hosting sin mensualidad
+✅ Primera versión de la landing en 48 horas hábiles*
+✅ Configuración inicial de la Ficha de Google en 3 días hábiles*
+
+Precio de lanzamiento: $220.000 ARS.
+
+Podés reservar tu proyecto con el 50%.
+
+Escribime por WhatsApp con la palabra PACK EXPRESS y te envío toda la información.
+
+Promoción disponible hasta el 30 de septiembre.
+
+*Los plazos comienzan después de confirmar el primer pago y recibir los materiales y accesos necesarios.
+
+#NegociosArgentina #LandingPage #FichaDeGoogle #PresenciaDigital`
   },
   {
     id: 'mkt-post-ficha-landing-premium-ar',
@@ -239,7 +330,36 @@ var MARKETING_RESOURCES = [
     estado: 'activo',
     orden: 5,
     alt: 'Pack para Argentina — Ficha de Google + Landing Premium, $250.000 ARS',
-    action: 'descargar'
+    action: 'descargar',
+    copy: `Tu negocio puede estar presente en Google y, al mismo tiempo, tener una dirección digital propia.
+
+El Pack Premium reúne:
+
+📍 Una Ficha de Google profesional.
+🌐 Una Landing Page con dominio .com.ar propio.
+
+Así, las personas pueden encontrarte, conocer tu propuesta y contactarte directamente por WhatsApp.
+
+Incluye:
+
+✅ Diseño adaptable a celular
+✅ Dominio .com.ar durante el primer año
+✅ Hosting sin mensualidad
+✅ Botón directo a WhatsApp
+✅ Primera versión de la landing en 48 horas hábiles*
+✅ Configuración inicial de la Ficha de Google en 3 días hábiles*
+
+Precio de lanzamiento: $250.000 ARS.
+
+Podés reservar tu proyecto con el 50%.
+
+Escribime por WhatsApp con la palabra PACK PREMIUM y te cuento cómo comenzar.
+
+Promoción disponible hasta el 30 de septiembre.
+
+*Los plazos comienzan después de confirmar el primer pago y recibir toda la información y los accesos necesarios.
+
+#NegociosArgentina #DominioPropio #FichaDeGoogle #LandingPage`
   },
 
   /* Retiradas — bundle antiguo de lanzamiento (3 piezas: ficha-google.png,
