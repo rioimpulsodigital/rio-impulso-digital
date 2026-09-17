@@ -11,7 +11,8 @@
  * antiguo, precios ya desactualizados). Durante esta misma tarea aparecieron en el
  * repositorio 10 piezas nuevas, ya producidas y correctas (5 CL + 5 AR, una por
  * producto), verificadas visualmente contra la matriz de RIO-92. Se adoptan como
- * inventario activo y las 3 piezas antiguas quedan retiradas (no borradas del disco).
+ * inventario activo y las 3 piezas antiguas quedan retiradas (no borradas del disco
+ * en ese momento — sí borradas después, ver nota RIO-132 más abajo).
  *
  * Autorización temporal (Brenda, 22 ago 2026): las 10 piezas activas usan el lema
  * "Fluye hacia el éxito". Quedan aprobadas para usarse tal cual durante el período de
@@ -241,48 +242,9 @@ var MARKETING_RESOURCES = [
     action: 'descargar'
   },
 
-  /* Retiradas — bundle antiguo de lanzamiento (3 piezas, precios desactualizados y no
-     separadas por producto). No se borran del disco; quedan fuera del inventario activo. */
-  {
-    id: 'mkt-legacy-ficha-google',
-    title: 'Ficha Google (bundle antiguo)',
-    category: 'estados-historias',
-    market: 'CL',
-    file: './img 1080x1920/ficha-google.png',
-    format: 'image/png',
-    description: 'Reemplazada por mkt-ficha-google-cl — precio desactualizado ($50.000 sin distinguir lanzamiento/regular)',
-    vigencia: null,
-    estado: 'inactivo',
-    orden: 99,
-    alt: null,
-    action: null
-  },
-  {
-    id: 'mkt-legacy-landingpage',
-    title: 'Landing Page (bundle antiguo)',
-    category: 'estados-historias',
-    market: 'CL',
-    file: './img 1080x1920/landingpage.png',
-    format: 'image/png',
-    description: 'Reemplazada por mkt-landing-express-cl y mkt-landing-premium-cl',
-    vigencia: null,
-    estado: 'inactivo',
-    orden: 99,
-    alt: null,
-    action: null
-  },
-  {
-    id: 'mkt-legacy-ficha-landing',
-    title: 'Promo Ficha + Landing (bundle antiguo)',
-    category: 'estados-historias',
-    market: 'CL',
-    file: './img 1080x1920/ficha-landing.png',
-    format: 'image/png',
-    description: 'Reemplazada por mkt-ficha-landing-express-cl y mkt-ficha-landing-premium-cl',
-    vigencia: null,
-    estado: 'inactivo',
-    orden: 99,
-    alt: null,
-    action: null
-  }
+  /* Retiradas — bundle antiguo de lanzamiento (3 piezas: ficha-google.png,
+     landingpage.png, ficha-landing.png). Ya no reflejaban la imagen de marca
+     actual de RiO — Brenda las borró del disco el 16/09/2026 (RIO-132). Quedan
+     fuera del inventario activo; no había entradas 'activo' que dependieran
+     de ellas (RIO-93 ya las había retirado del inventario visible). */
 ];
