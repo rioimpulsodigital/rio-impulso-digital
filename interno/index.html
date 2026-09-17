@@ -620,6 +620,9 @@
   }
 
   function marketingResourceCardHTML(r) {
+    var copyBtn = r.copy
+      ? '<button type="button" class="portfolio-btn copy-caption-btn" data-copy-id="' + r.id + '">📋 Copiar texto</button>'
+      : '';
     return (
       '<div class="portal-portfolio-card">' +
         '<div class="portal-portfolio-img" style="aspect-ratio:9/8;">' +
@@ -629,11 +632,57 @@
           '<h3 class="portal-portfolio-name">' + r.title + '</h3>' +
           '<div class="portal-portfolio-btns">' +
             '<a href="' + r.file + '" class="portfolio-btn portfolio-btn--primary" target="_blank" rel="noopener">⬇ Descargar</a>' +
+            copyBtn +
           '</div>' +
         '</div>' +
       '</div>'
     );
   }
+
+  // Copia el copy sugerido de la pieza (campo `copy` en portal-resources.js) al
+  // portapapeles, para que el ejecutivo no tenga que reescribirlo a mano al
+  // publicar. Delegado en document porque las tarjetas se generan dinámicamente.
+  document.addEventListener('click', function (event) {
+    var btn = event.target.closest('.copy-caption-btn');
+    if (!btn) return;
+
+    var resource = MARKETING_RESOURCES.filter(function (r) { return r.id === btn.dataset.copyId; })[0];
+    if (!resource || !resource.copy) return;
+
+    var originalLabel = btn.textContent;
+    function showFeedback(ok) {
+      btn.textContent = ok ? '✅ Copiado' : '⚠️ No se pudo copiar';
+      btn.disabled = true;
+      setTimeout(function () {
+        btn.textContent = originalLabel;
+        btn.disabled = false;
+      }, 1800);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(resource.copy).then(
+        function () { showFeedback(true); },
+        function () { showFeedback(false); }
+      );
+      return;
+    }
+
+    // Fallback para navegadores sin Clipboard API o contexto no seguro.
+    try {
+      var textarea = document.createElement('textarea');
+      textarea.value = resource.copy;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      showFeedback(ok);
+    } catch (e) {
+      showFeedback(false);
+    }
+  });
 
   function marketingResourcesFor(category, currentMarket) {
     return MARKETING_RESOURCES
