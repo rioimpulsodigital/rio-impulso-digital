@@ -165,6 +165,82 @@ var MARKETING_RESOURCES = [
     action: 'descargar'
   },
 
+  /* Argentina — Publicaciones (post 4:5 de Instagram, pensado también para que los
+     ejecutivos lo compartan en su LinkedIn) — RIO-132. Mismos 5 productos, mismos
+     precios y misma vigencia que las piezas de Estados/Historias de arriba —
+     verificado visualmente pieza por pieza contra portal-resources.js antes de
+     activarlas. */
+  {
+    id: 'mkt-post-ficha-google-ar',
+    title: 'Ficha de Google',
+    category: 'publicaciones',
+    market: 'AR',
+    file: './img 1080x1350/ficha-google-ar.png',
+    format: 'image/png',
+    description: 'Ficha de Google — $125.000 ARS lanzamiento / $215.000 ARS regular',
+    vigencia: '2026-09-30',
+    estado: 'activo',
+    orden: 1,
+    alt: 'Servicio para Argentina — Ficha de Google, $125.000 ARS',
+    action: 'descargar'
+  },
+  {
+    id: 'mkt-post-landing-express-ar',
+    title: 'Landing Express',
+    category: 'publicaciones',
+    market: 'AR',
+    file: './img 1080x1350/landing-express-ar.png',
+    format: 'image/png',
+    description: 'Landing Express — $120.000 ARS lanzamiento / $185.000 ARS regular',
+    vigencia: '2026-09-30',
+    estado: 'activo',
+    orden: 2,
+    alt: 'Servicio para Argentina — Landing Express, $120.000 ARS',
+    action: 'descargar'
+  },
+  {
+    id: 'mkt-post-landing-premium-ar',
+    title: 'Landing Premium',
+    category: 'publicaciones',
+    market: 'AR',
+    file: './img 1080x1350/landing-premium-ar.png',
+    format: 'image/png',
+    description: 'Landing Premium (dominio .com.ar incluido) — $150.000 ARS lanzamiento / $230.000 ARS regular',
+    vigencia: '2026-09-30',
+    estado: 'activo',
+    orden: 3,
+    alt: 'Servicio para Argentina — Landing Premium con dominio propio .com.ar, $150.000 ARS',
+    action: 'descargar'
+  },
+  {
+    id: 'mkt-post-ficha-landing-express-ar',
+    title: 'Pack Ficha + Landing Express',
+    category: 'publicaciones',
+    market: 'AR',
+    file: './img 1080x1350/ficha-landing-express-ar.png',
+    format: 'image/png',
+    description: 'Pack Ficha + Landing Express — $220.000 ARS lanzamiento / $360.000 ARS regular',
+    vigencia: '2026-09-30',
+    estado: 'activo',
+    orden: 4,
+    alt: 'Pack para Argentina — Ficha de Google + Landing Express, $220.000 ARS',
+    action: 'descargar'
+  },
+  {
+    id: 'mkt-post-ficha-landing-premium-ar',
+    title: 'Pack Ficha + Landing Premium',
+    category: 'publicaciones',
+    market: 'AR',
+    file: './img 1080x1350/ficha-landing-premium-ar.png',
+    format: 'image/png',
+    description: 'Pack Ficha + Landing Premium — $250.000 ARS lanzamiento / $400.000 ARS regular',
+    vigencia: '2026-09-30',
+    estado: 'activo',
+    orden: 5,
+    alt: 'Pack para Argentina — Ficha de Google + Landing Premium, $250.000 ARS',
+    action: 'descargar'
+  },
+
   /* Retiradas — bundle antiguo de lanzamiento (3 piezas, precios desactualizados y no
      separadas por producto). No se borran del disco; quedan fuera del inventario activo. */
   {

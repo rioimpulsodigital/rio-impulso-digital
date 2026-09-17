@@ -353,6 +353,9 @@
 
       <div class="portal-subsection">
         <p class="portal-subsection-label">Publicaciones</p>
+        <div class="portal-portfolio-grid" id="marketingPublicacionesGrid">
+          <!-- Generado dinámicamente desde config/portal-resources.js (category: 'publicaciones') según el mercado activo -->
+        </div>
         <div class="ut-cards">
 
           <div class="ut-card ut-card--soon">
@@ -552,7 +555,10 @@
     renderGreeting(executive);
     renderMarketSwitcher(executive, currentMarket);
     applyAccessState(executive);
-    if (currentMarket) renderMarketingResources(currentMarket);
+    if (currentMarket) {
+      renderMarketingResources(currentMarket);
+      renderMarketingPublicaciones(currentMarket);
+    }
     renderArgentinaPresentation(currentMarket);
   });
 
@@ -613,13 +619,33 @@
     console.warn('[Portal RiO] Usuario autenticado sin mercado configurado en USER_MAP — Comercial y Marketing bloqueados.');
   }
 
+  function marketingResourceCardHTML(r) {
+    return (
+      '<div class="portal-portfolio-card">' +
+        '<div class="portal-portfolio-img" style="aspect-ratio:9/8;">' +
+          '<img src="' + r.file + '" alt="' + r.alt + '" style="object-position:top;">' +
+        '</div>' +
+        '<div class="portal-portfolio-body">' +
+          '<h3 class="portal-portfolio-name">' + r.title + '</h3>' +
+          '<div class="portal-portfolio-btns">' +
+            '<a href="' + r.file + '" class="portfolio-btn portfolio-btn--primary" target="_blank" rel="noopener">⬇ Descargar</a>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function marketingResourcesFor(category, currentMarket) {
+    return MARKETING_RESOURCES
+      .filter(function (r) { return r.estado === 'activo' && r.category === category && (r.market === 'common' || r.market === currentMarket); })
+      .sort(function (a, b) { return a.orden - b.orden; });
+  }
+
   function renderMarketingResources(currentMarket) {
     var grid = document.getElementById('marketingResourcesGrid');
     if (!grid) return;
 
-    var items = MARKETING_RESOURCES
-      .filter(function (r) { return r.estado === 'activo' && (r.market === 'common' || r.market === currentMarket); })
-      .sort(function (a, b) { return a.orden - b.orden; });
+    var items = marketingResourcesFor('estados-historias', currentMarket);
 
     if (items.length === 0) {
       document.getElementById('marketingResourcesSection').innerHTML =
@@ -636,21 +662,21 @@
       return;
     }
 
-    grid.innerHTML = items.map(function (r) {
-      return (
-        '<div class="portal-portfolio-card">' +
-          '<div class="portal-portfolio-img" style="aspect-ratio:9/8;">' +
-            '<img src="' + r.file + '" alt="' + r.alt + '" style="object-position:top;">' +
-          '</div>' +
-          '<div class="portal-portfolio-body">' +
-            '<h3 class="portal-portfolio-name">' + r.title + '</h3>' +
-            '<div class="portal-portfolio-btns">' +
-              '<a href="' + r.file + '" class="portfolio-btn portfolio-btn--primary" target="_blank" rel="noopener">⬇ Descargar</a>' +
-            '</div>' +
-          '</div>' +
-        '</div>'
-      );
-    }).join('');
+    grid.innerHTML = items.map(marketingResourceCardHTML).join('');
+  }
+
+  // Post 4:5 de Instagram (también pensado para que el ejecutivo lo comparta en su
+  // LinkedIn) — RIO-132. Si el mercado activo todavía no tiene piezas de esta
+  // categoría, el grid queda vacío y solo se ven las tarjetas "Próximamente" ya
+  // existentes debajo (Feed cuadrado, Carruseles, Videos).
+  function renderMarketingPublicaciones(currentMarket) {
+    var grid = document.getElementById('marketingPublicacionesGrid');
+    if (!grid) return;
+
+    var items = marketingResourcesFor('publicaciones', currentMarket);
+    if (items.length === 0) return;
+
+    grid.innerHTML = items.map(marketingResourceCardHTML).join('');
   }
 
   // Tarjeta "Presentación comercial — Argentina" (RIO-104) — solo existe en el DOM
