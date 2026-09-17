@@ -11,7 +11,8 @@
  * antiguo, precios ya desactualizados). Durante esta misma tarea aparecieron en el
  * repositorio 10 piezas nuevas, ya producidas y correctas (5 CL + 5 AR, una por
  * producto), verificadas visualmente contra la matriz de RIO-92. Se adoptan como
- * inventario activo y las 3 piezas antiguas quedan retiradas (no borradas del disco).
+ * inventario activo y las 3 piezas antiguas quedan retiradas (no borradas del disco
+ * en ese momento — sí borradas después, ver nota RIO-132 más abajo).
  *
  * Autorización temporal (Brenda, 22 ago 2026): las 10 piezas activas usan el lema
  * "Fluye hacia el éxito". Quedan aprobadas para usarse tal cual durante el período de
@@ -165,48 +166,85 @@ var MARKETING_RESOURCES = [
     action: 'descargar'
   },
 
-  /* Retiradas — bundle antiguo de lanzamiento (3 piezas, precios desactualizados y no
-     separadas por producto). No se borran del disco; quedan fuera del inventario activo. */
+  /* Argentina — Publicaciones (post 4:5 de Instagram, pensado también para que los
+     ejecutivos lo compartan en su LinkedIn) — RIO-132. Mismos 5 productos, mismos
+     precios y misma vigencia que las piezas de Estados/Historias de arriba —
+     verificado visualmente pieza por pieza contra portal-resources.js antes de
+     activarlas. */
   {
-    id: 'mkt-legacy-ficha-google',
-    title: 'Ficha Google (bundle antiguo)',
-    category: 'estados-historias',
-    market: 'CL',
-    file: './img 1080x1920/ficha-google.png',
+    id: 'mkt-post-ficha-google-ar',
+    title: 'Ficha de Google',
+    category: 'publicaciones',
+    market: 'AR',
+    file: './img 1080x1350/ficha-google-ar.png',
     format: 'image/png',
-    description: 'Reemplazada por mkt-ficha-google-cl — precio desactualizado ($50.000 sin distinguir lanzamiento/regular)',
-    vigencia: null,
-    estado: 'inactivo',
-    orden: 99,
-    alt: null,
-    action: null
+    description: 'Ficha de Google — $125.000 ARS lanzamiento / $215.000 ARS regular',
+    vigencia: '2026-09-30',
+    estado: 'activo',
+    orden: 1,
+    alt: 'Servicio para Argentina — Ficha de Google, $125.000 ARS',
+    action: 'descargar'
   },
   {
-    id: 'mkt-legacy-landingpage',
-    title: 'Landing Page (bundle antiguo)',
-    category: 'estados-historias',
-    market: 'CL',
-    file: './img 1080x1920/landingpage.png',
+    id: 'mkt-post-landing-express-ar',
+    title: 'Landing Express',
+    category: 'publicaciones',
+    market: 'AR',
+    file: './img 1080x1350/landing-express-ar.png',
     format: 'image/png',
-    description: 'Reemplazada por mkt-landing-express-cl y mkt-landing-premium-cl',
-    vigencia: null,
-    estado: 'inactivo',
-    orden: 99,
-    alt: null,
-    action: null
+    description: 'Landing Express — $120.000 ARS lanzamiento / $185.000 ARS regular',
+    vigencia: '2026-09-30',
+    estado: 'activo',
+    orden: 2,
+    alt: 'Servicio para Argentina — Landing Express, $120.000 ARS',
+    action: 'descargar'
   },
   {
-    id: 'mkt-legacy-ficha-landing',
-    title: 'Promo Ficha + Landing (bundle antiguo)',
-    category: 'estados-historias',
-    market: 'CL',
-    file: './img 1080x1920/ficha-landing.png',
+    id: 'mkt-post-landing-premium-ar',
+    title: 'Landing Premium',
+    category: 'publicaciones',
+    market: 'AR',
+    file: './img 1080x1350/landing-premium-ar.png',
     format: 'image/png',
-    description: 'Reemplazada por mkt-ficha-landing-express-cl y mkt-ficha-landing-premium-cl',
-    vigencia: null,
-    estado: 'inactivo',
-    orden: 99,
-    alt: null,
-    action: null
-  }
+    description: 'Landing Premium (dominio .com.ar incluido) — $150.000 ARS lanzamiento / $230.000 ARS regular',
+    vigencia: '2026-09-30',
+    estado: 'activo',
+    orden: 3,
+    alt: 'Servicio para Argentina — Landing Premium con dominio propio .com.ar, $150.000 ARS',
+    action: 'descargar'
+  },
+  {
+    id: 'mkt-post-ficha-landing-express-ar',
+    title: 'Pack Ficha + Landing Express',
+    category: 'publicaciones',
+    market: 'AR',
+    file: './img 1080x1350/ficha-landing-express-ar.png',
+    format: 'image/png',
+    description: 'Pack Ficha + Landing Express — $220.000 ARS lanzamiento / $360.000 ARS regular',
+    vigencia: '2026-09-30',
+    estado: 'activo',
+    orden: 4,
+    alt: 'Pack para Argentina — Ficha de Google + Landing Express, $220.000 ARS',
+    action: 'descargar'
+  },
+  {
+    id: 'mkt-post-ficha-landing-premium-ar',
+    title: 'Pack Ficha + Landing Premium',
+    category: 'publicaciones',
+    market: 'AR',
+    file: './img 1080x1350/ficha-landing-premium-ar.png',
+    format: 'image/png',
+    description: 'Pack Ficha + Landing Premium — $250.000 ARS lanzamiento / $400.000 ARS regular',
+    vigencia: '2026-09-30',
+    estado: 'activo',
+    orden: 5,
+    alt: 'Pack para Argentina — Ficha de Google + Landing Premium, $250.000 ARS',
+    action: 'descargar'
+  },
+
+  /* Retiradas — bundle antiguo de lanzamiento (3 piezas: ficha-google.png,
+     landingpage.png, ficha-landing.png). Ya no reflejaban la imagen de marca
+     actual de RiO — Brenda las borró del disco el 16/09/2026 (RIO-132). Quedan
+     fuera del inventario activo; no había entradas 'activo' que dependieran
+     de ellas (RIO-93 ya las había retirado del inventario visible). */
 ];
