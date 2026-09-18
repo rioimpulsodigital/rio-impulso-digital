@@ -17,6 +17,21 @@
 // rechazado" en interno/config/estado-pago.js. El detalle de cada pago
 // sigue mostrando el contexto completo (motivo del rechazo incluido);
 // estas pruebas se actualizaron para reflejar el texto corto vigente.
+//
+// Ajuste 17/09/2026 (a pedido de Brenda): la tabla principal ya no
+// fusiona todo en una única columna "Estado" — ahora son dos columnas
+// SIEMPRE independientes, "Estado producto" (`td.pv-cell-estado-producto`)
+// y "Estado pago" (`td.pv-cell-estado-pago`). Varias pruebas de abajo
+// verificaban con `!texto.includes('En espera de pago')` que la fila
+// COMPLETA no contuviera ese texto cuando el pago ya estaba
+// informado/rechazado — eso era correcto bajo el badge fusionado viejo,
+// pero deja de serlo ahora: "Estado producto" sigue diciendo legítimamente
+// "En espera de pago" (el producto de verdad no arranca hasta que el pago
+// se acredita, RIO-117) mientras "Estado pago", en una celda aparte,
+// muestra el subestado real del pago — ninguna de las dos "contradice" a
+// la otra, son conceptos distintos. Se agregó `celdaTexto()` para leer
+// cada columna por separado y afirmar sobre la celda correcta, no sobre
+// el texto de la fila entera.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -83,6 +98,18 @@ function filaTexto(dom, codigoVenta) {
   return fila ? fila.textContent : null;
 }
 
+// Texto de UNA columna específica de la fila (por clase de celda), no de la
+// fila entera — necesario desde que "Estado producto" y "Estado pago" son
+// dos columnas independientes que pueden compartir texto parecido sin
+// contradecirse (ver ajuste 17/09/2026 arriba).
+function celdaTexto(dom, codigoVenta, claseCelda) {
+  const filas = [...dom.window.document.querySelectorAll('#pvVentasResult tbody tr')];
+  const fila = filas.find((tr) => tr.textContent.indexOf(codigoVenta) !== -1);
+  if (!fila) return null;
+  const celda = fila.querySelector('td.' + claseCelda);
+  return celda ? celda.textContent : null;
+}
+
 function ventaBase(overrides) {
   return Object.assign({
     id: 'venta-1', codigoVenta: 'V-TEST', cliente: { negocio: 'Peluquería Canina' },
@@ -112,35 +139,40 @@ const PANELES = [
 // ── Los 4 escenarios mínimos exigidos, en cada uno de los 3 paneles ────
 
 for (const panel of PANELES) {
-  test(`Panel ${panel.nombre} — tabla: pago nunca informado se muestra como "En espera de pago"`, async () => {
+  test(`Panel ${panel.nombre} — tabla: pago nunca informado se muestra como "En espera de pago" en la columna Estado pago`, async () => {
     const venta = ventaBase({ codigoVenta: 'V-NUNCA-INFORMADO', estadoPagoResumen: 'pendiente' });
     const dom = await bootPanel({ ...panel, ventas: [venta] });
-    const texto = filaTexto(dom, 'V-NUNCA-INFORMADO');
-    assert.ok(texto, 'la fila debe existir en la tabla');
-    assert.ok(texto.includes('En espera de pago'), 'texto real de la fila: ' + texto);
-    assert.ok(!texto.includes('Pago informado'), 'un pago nunca informado nunca debe leerse como informado');
-    assert.ok(!texto.includes('rechazado'), 'un pago nunca informado nunca debe leerse como rechazado');
+    const pago = celdaTexto(dom, 'V-NUNCA-INFORMADO', 'pv-cell-estado-pago');
+    assert.ok(pago, 'la celda Estado pago debe existir');
+    assert.ok(pago.includes('En espera de pago'), 'Estado pago real: ' + pago);
+    assert.ok(!pago.includes('Pago informado'), 'un pago nunca informado nunca debe leerse como informado');
+    assert.ok(!pago.includes('rechazado'), 'un pago nunca informado nunca debe leerse como rechazado');
   });
 
-  test(`Panel ${panel.nombre} — tabla: pago informado se muestra como "Pago informado" (caso UAT Peluquería Canina; texto acortado a pedido de Brenda — el largo se salía de la columna)`, async () => {
+  test(`Panel ${panel.nombre} — tabla: pago informado se muestra como "Pago informado" en Estado pago, SIN alterar Estado producto (caso UAT Peluquería Canina; texto acortado a pedido de Brenda — el largo se salía de la columna)`, async () => {
     const venta = ventaBase({ codigoVenta: 'V-20260903-967F6E', cliente: { negocio: 'Peluquería Canina' }, estadoPagoResumen: 'informado' });
     const dom = await bootPanel({ ...panel, ventas: [venta] });
-    const texto = filaTexto(dom, 'V-20260903-967F6E');
-    assert.ok(texto, 'la fila debe existir en la tabla');
-    assert.ok(texto.includes('Pago informado'), 'texto real de la fila: ' + texto);
-    assert.ok(!texto.includes('En espera de pago'), 'la tabla no debe contradecir el detalle (que ya muestra informado)');
+    const producto = celdaTexto(dom, 'V-20260903-967F6E', 'pv-cell-estado-producto');
+    const pago = celdaTexto(dom, 'V-20260903-967F6E', 'pv-cell-estado-pago');
+    assert.ok(pago.includes('Pago informado'), 'Estado pago real: ' + pago);
+    // Estado producto sigue diciendo "En espera de pago" — el producto de
+    // verdad no arranca hasta que el pago se acredite (RIO-117). Esto NO
+    // contradice a Estado pago: son dos columnas independientes, cada una
+    // resuelve su propio concepto — ver ajuste 17/09/2026 arriba.
+    assert.ok(producto.includes('En espera de pago'), 'Estado producto real: ' + producto);
   });
 
-  test(`Panel ${panel.nombre} — tabla: pago rechazado se muestra como "Pago rechazado"`, async () => {
+  test(`Panel ${panel.nombre} — tabla: pago rechazado se muestra como "Pago rechazado" en Estado pago, SIN alterar Estado producto`, async () => {
     const venta = ventaBase({ codigoVenta: 'V-RECHAZADO', estadoPagoResumen: 'rechazado' });
     const dom = await bootPanel({ ...panel, ventas: [venta] });
-    const texto = filaTexto(dom, 'V-RECHAZADO');
-    assert.ok(texto.includes('Pago rechazado'), 'texto real de la fila: ' + texto);
-    assert.ok(!texto.includes('Pago informado'));
-    assert.ok(!texto.includes('En espera de pago'));
+    const producto = celdaTexto(dom, 'V-RECHAZADO', 'pv-cell-estado-producto');
+    const pago = celdaTexto(dom, 'V-RECHAZADO', 'pv-cell-estado-pago');
+    assert.ok(pago.includes('Pago rechazado'), 'Estado pago real: ' + pago);
+    assert.ok(!pago.includes('Pago informado'));
+    assert.ok(producto.includes('En espera de pago'), 'Estado producto real: ' + producto);
   });
 
-  test(`Panel ${panel.nombre} — tabla: pago confirmado (acreditado) ya no se muestra como "en espera de pago"`, async () => {
+  test(`Panel ${panel.nombre} — tabla: pago confirmado (acreditado) muestra "Acreditado" en Estado pago y el siguiente avance real en Estado producto`, async () => {
     const venta = ventaBase({
       codigoVenta: 'V-CONFIRMADO', estadoPagoResumen: 'acreditado',
       // Una vez acreditado, el AVANCE OPERATIVO real deja de ser
@@ -150,11 +182,45 @@ for (const panel of PANELES) {
       estadoOperativo: 'registrado',
     });
     const dom = await bootPanel({ ...panel, ventas: [venta] });
-    const texto = filaTexto(dom, 'V-CONFIRMADO');
-    assert.ok(texto, 'la fila debe existir en la tabla');
-    assert.ok(!texto.includes('En espera de pago'));
-    assert.ok(!texto.includes('rechazado'));
-    assert.ok(texto.includes('Registrado'), 'sin texto especial: se muestra el siguiente estado operativo real — texto real: ' + texto);
+    const producto = celdaTexto(dom, 'V-CONFIRMADO', 'pv-cell-estado-producto');
+    const pago = celdaTexto(dom, 'V-CONFIRMADO', 'pv-cell-estado-pago');
+    assert.ok(pago.includes('Acreditado'), 'Estado pago real: ' + pago);
+    assert.ok(producto.includes('Registrado'), 'Estado producto real: ' + producto);
+  });
+
+  // ── ANTHY (17/09/2026): los 4 escenarios mínimos pedidos por Brenda,
+  // verificados directamente sobre las dos columnas de la tabla resumen,
+  // sin necesidad de abrir la ficha. ──────────────────────────────────
+  test(`Panel ${panel.nombre} — tabla: venta registrada sin pago acreditado`, async () => {
+    const venta = ventaBase({ codigoVenta: 'V-ESC-1', estadoOperativo: 'registrado', estadoPagoResumen: 'pendiente' });
+    const dom = await bootPanel({ ...panel, ventas: [venta] });
+    assert.equal(celdaTexto(dom, 'V-ESC-1', 'pv-cell-estado-producto'), 'Registrado');
+    assert.equal(celdaTexto(dom, 'V-ESC-1', 'pv-cell-estado-pago'), 'En espera de pago');
+  });
+
+  test(`Panel ${panel.nombre} — tabla: venta en producción con pago acreditado`, async () => {
+    const venta = ventaBase({ codigoVenta: 'V-ESC-2', estadoOperativo: 'en_produccion', estadoPagoResumen: 'acreditado' });
+    const dom = await bootPanel({ ...panel, ventas: [venta] });
+    assert.equal(celdaTexto(dom, 'V-ESC-2', 'pv-cell-estado-producto'), 'En producción');
+    assert.equal(celdaTexto(dom, 'V-ESC-2', 'pv-cell-estado-pago'), 'Acreditado');
+  });
+
+  test(`Panel ${panel.nombre} — tabla: venta pendiente de cierre con pago acreditado`, async () => {
+    const venta = ventaBase({ codigoVenta: 'V-ESC-3', estadoOperativo: 'pendiente_cierre', estadoPagoResumen: 'acreditado' });
+    const dom = await bootPanel({ ...panel, ventas: [venta] });
+    // "Pendiente cierre" (no "Pendiente de cierre"): texto corto vigente
+    // desde el ajuste de UAT del 14/09/2026 — el texto largo no entra en
+    // la columna angosta de la tabla, mismo criterio ya aplicado a los
+    // subestados de pago.
+    assert.equal(celdaTexto(dom, 'V-ESC-3', 'pv-cell-estado-producto'), 'Pendiente cierre');
+    assert.equal(celdaTexto(dom, 'V-ESC-3', 'pv-cell-estado-pago'), 'Acreditado');
+  });
+
+  test(`Panel ${panel.nombre} — tabla: venta completada con estado de pago correspondiente`, async () => {
+    const venta = ventaBase({ codigoVenta: 'V-ESC-4', estadoOperativo: 'completado', estadoPagoResumen: 'acreditado' });
+    const dom = await bootPanel({ ...panel, ventas: [venta] });
+    assert.equal(celdaTexto(dom, 'V-ESC-4', 'pv-cell-estado-producto'), 'Completado');
+    assert.equal(celdaTexto(dom, 'V-ESC-4', 'pv-cell-estado-pago'), 'Acreditado');
   });
 
   // ── Secuencia exacta reportada por Brenda: informado → rechazado →
@@ -181,10 +247,13 @@ for (const panel of PANELES) {
       },
     });
 
-    // 1) Tabla — texto real que ve el usuario.
-    const textoTabla = filaTexto(dom, 'V-20260903-967F6E');
-    assert.ok(textoTabla.includes('Pago informado'), 'tabla real: ' + textoTabla);
-    assert.ok(!textoTabla.includes('En espera de pago'), 'la tabla no debe quedar pegada en un estado anterior al rechazo');
+    // 1) Tabla — texto real que ve el usuario, en la columna Estado pago
+    // (Estado producto es una columna aparte y sigue diciendo "En espera
+    // de pago" porque el producto todavía no arranca — no es "quedarse
+    // pegado", es el otro concepto, ver ajuste 17/09/2026 arriba).
+    const pagoTabla = celdaTexto(dom, 'V-20260903-967F6E', 'pv-cell-estado-pago');
+    assert.ok(pagoTabla.includes('Pago informado'), 'Estado pago real: ' + pagoTabla);
+    assert.ok(!pagoTabla.includes('rechazado'), 'la columna Estado pago no debe quedar pegada en un estado anterior al rechazo');
 
     // 2) Detalle — mismo criterio que ya prueba tests/ventas.test.js a
     // nivel de API, ahora confirmado contra el JSON que el panel
@@ -224,7 +293,7 @@ for (const panel of PANELES) {
   // (click en la fila, igual que un usuario) y leen el texto
   // efectivamente renderizado — no alcanza con probar la respuesta de la
   // API (ver mismo criterio ya aplicado arriba para la tabla). ──────────
-  test(`Panel ${panel.nombre} — ficha: caso de referencia (operativo EN PRODUCCIÓN + pago ACREDITADO) muestra "Estado operativo / producción: En producción", coherente con la tabla`, async () => {
+  test(`Panel ${panel.nombre} — ficha: caso de referencia (operativo EN PRODUCCIÓN + pago ACREDITADO) muestra "Estado producto: En producción", coherente con la tabla`, async () => {
     const venta = ventaBase({
       id: 'venta-1', codigoVenta: 'V-20260903-967F6E', cliente: { negocio: 'Peluquería Canina' },
       estadoOperativo: 'en_produccion', estadoPagoResumen: 'acreditado',
@@ -265,13 +334,16 @@ for (const panel of PANELES) {
     tr.dispatchEvent(new dom.window.Event('click', { bubbles: true }));
     await flush();
     const textoFicha = dom.window.document.getElementById('pvDetailBody').textContent;
-    assert.ok(textoFicha.includes('Estado operativo / producción'), 'la ficha debe exponer el campo, separado del estado de pago: ' + textoFicha);
+    assert.ok(textoFicha.includes('Estado producto'), 'la ficha debe exponer el campo, separado del estado de pago: ' + textoFicha);
     assert.ok(textoFicha.includes('En producción'), 'ficha real: ' + textoFicha);
     assert.ok(!textoFicha.includes('Registrado'), 'antes de esta corrección, la ficha quedaba mostrando "Registrado" pese a que la tabla ya avanzó');
 
-    // 3) Estado de pago sigue visible, SEPARADO, en la sección de Pagos
-    // (por-pago, ya existente) — nunca fusionado en el mismo campo.
-    assert.ok(textoFicha.includes('Acreditado'), 'el estado de pago debe seguir visible en su propia sección: ' + textoFicha);
+    // 3) Estado de pago: ahora es su PROPIO campo "Estado pago" en el
+    // resumen de la ficha (coherente con la columna de la tabla), además
+    // de seguir detallado, por-pago, en la sección "Pagos" más abajo —
+    // nunca fusionado con Estado producto en el mismo campo.
+    assert.ok(textoFicha.includes('Estado pago'), 'la ficha debe exponer un campo "Estado pago" propio en el resumen: ' + textoFicha);
+    assert.ok(textoFicha.includes('Acreditado'), 'el estado de pago debe seguir visible: ' + textoFicha);
   });
 
   test(`Panel ${panel.nombre} — ficha: una venta recién registrada (sin pago acreditado) muestra "En espera de pago", igual que la tabla`, async () => {

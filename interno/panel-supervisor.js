@@ -40,11 +40,12 @@
   var PAGO_ESTADO_LABEL = { pendiente: 'Pendiente', informado: 'Informado', acreditado: 'Acreditado' };
   var MATERIALES_ESTADO_LABEL = { pendiente: 'Pendiente', informados: 'Informados (sin confirmar)', completos: 'Completos' };
   var MATERIALES_ESTADO_BADGE = { pendiente: 'neutral', informados: 'amber', completos: 'green' };
-  // RIO-122 (segunda corrección de UAT, 13/09/2026): `estadoVentaVisibleLabel`,
-  // `estadoVentaVisibleBadge`, `clavePipeline`, `PIPELINE_LABEL` y
-  // `ORDEN_PIPELINE` ahora viven en interno/config/estado-pago.js — ÚNICA
-  // fuente compartida entre los 3 paneles (Vendedor/Supervisor/
-  // Administrativo). Antes cada panel tenía su propia copia idéntica de
+  // RIO-122 (segunda corrección de UAT, 13/09/2026; columnas separadas,
+  // 17/09/2026): `estadoProductoLabel`/`Badge`, `estadoPagoLabel`/`Badge`,
+  // `clavePipeline`, `PIPELINE_LABEL` y `ORDEN_PIPELINE` viven en
+  // interno/config/estado-pago.js — ÚNICA fuente compartida entre los 3
+  // paneles (Vendedor/Supervisor/Administrativo). Antes cada panel tenía su
+  // propia copia idéntica de
   // esta lógica; se unifica acá para que no puedan volver a divergir.
   // Cargado antes que este script en panel-supervisor.html.
   var COMISION_ESTADO_LABEL = {
@@ -258,14 +259,15 @@
           '<td>' + escapeHtml(nombreParaMostrar(v.vendedorNombre)) + '<br><span class="pv-badge pv-badge--' + (esPropia ? 'purple' : 'neutral') + '">' + (esPropia ? 'Propia' : 'Supervisada') + '</span></td>' +
           '<td>' + escapeHtml(PRODUCTO_LABEL[v.producto] || v.producto) + '<br><span class="pv-badge pv-badge--neutral">' + escapeHtml(v.mercado) + '</span></td>' +
           '<td>' + fmtMoneda(v.precioPactado, v.moneda) + '</td>' +
-          '<td><span class="pv-badge pv-badge--' + estadoVentaVisibleBadge(v) + '">' + escapeHtml(estadoVentaVisibleLabel(v)) + '</span></td>' +
+          '<td class="pv-cell-estado-producto"><span class="pv-badge pv-badge--' + estadoProductoBadge(v) + '">' + escapeHtml(estadoProductoLabel(v)) + '</span></td>' +
+          '<td class="pv-cell-estado-pago"><span class="pv-badge pv-badge--' + estadoPagoBadge(v) + '">' + escapeHtml(estadoPagoLabel(v)) + '</span></td>' +
           '<td>' + fmtFecha(v.createdAt) + '</td>' +
         '</tr>'
       );
     }).join('');
     el.innerHTML =
       '<div class="pv-table-wrap"><table class="pv-table">' +
-        '<thead><tr><th>Cliente</th><th>Ejecutivo</th><th>Producto</th><th>Precio</th><th>Estado</th><th>Fecha</th></tr></thead>' +
+        '<thead><tr><th>Cliente</th><th>Ejecutivo</th><th>Producto</th><th>Precio</th><th>Estado producto</th><th>Estado pago</th><th>Fecha</th></tr></thead>' +
         '<tbody>' + rows + '</tbody>' +
       '</table></div>';
     Array.prototype.forEach.call(el.querySelectorAll('tbody tr'), function (tr) {
@@ -478,7 +480,8 @@
           // RIO-122 (corrección de causa raíz, 15/09/2026): ver misma nota
           // en panel-vendedor.js — fuente única compartida, nunca un
           // texto propio de la ficha.
-          '<dt>Estado operativo / producción</dt><dd><span class="pv-badge pv-badge--' + estadoVentaVisibleBadge(detalle.venta) + '">' + escapeHtml(estadoVentaVisibleLabel(detalle.venta)) + '</span></dd>' +
+          '<dt>Estado producto</dt><dd><span class="pv-badge pv-badge--' + estadoProductoBadge(detalle.venta) + '">' + escapeHtml(estadoProductoLabel(detalle.venta)) + '</span></dd>' +
+          '<dt>Estado pago</dt><dd><span class="pv-badge pv-badge--' + estadoPagoBadge(detalle.venta) + '">' + escapeHtml(estadoPagoLabel(detalle.venta)) + '</span></dd>' +
           renderTipoVentaSupervisionHTML(detalle.venta) +
         '</dl>' +
       '</div>' +
