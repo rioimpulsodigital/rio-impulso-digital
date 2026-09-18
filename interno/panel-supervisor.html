@@ -96,6 +96,13 @@
     .pv-badge--red     { background: var(--pv-red-bg); color: var(--pv-red); border: 1px solid var(--pv-red-bd); }
     .pv-badge--blue    { background: var(--pv-blue-bg); color: var(--pv-blue); border: 1px solid var(--pv-blue-bd); }
     .pv-badge--purple  { background: var(--purple-soft, #f3ecfa); color: var(--p); border: 1px solid var(--p); }
+    /* RIO-122 (17/09/2026, a pedido de Brenda): Estado producto y Estado
+       pago angostos — el badge envuelve el texto en 2 líneas en vez de
+       una sola línea larga, así la columna no fuerza scroll horizontal
+       para ver Fecha. Mismo criterio en los 3 paneles. */
+    .pv-cell-estado-producto .pv-badge, .pv-cell-estado-pago .pv-badge {
+      white-space: normal; text-align: center; line-height: 1.25; max-width: 84px;
+    }
 
     /* Tabla */
     .pv-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r-l); background: var(--white); }
