@@ -610,7 +610,15 @@
     // venta histórica reconstruida). Antes convivían las dos vías y
     // permitían la contradicción que reportó Brenda: "completos" a mano
     // conviviendo con una entrega vigente rechazada.
-    if (c.tipo !== 'personalizado' && c.materialesEstado !== 'completos' && (!c.materialesInformes || c.materialesInformes.length === 0)) {
+    // RIO-122 (17/09/2026): defensivo — este botón ya era prácticamente
+    // inalcanzable una vez en_produccion (iniciarProduccion() en
+    // proyectos.js ya exige materiales_estado='completos' antes de esa
+    // transición para tipos no personalizados), pero se agrega el chequeo
+    // explícito de estadoActual para que nunca dependa solo de esa
+    // relación indirecta — misma fuente de verdad que el resto de esta
+    // corrección (cierre de la etapa de materiales al entrar en producción).
+    if (c.tipo !== 'personalizado' && c.materialesEstado !== 'completos' && (!c.materialesInformes || c.materialesInformes.length === 0) &&
+        (c.estadoActual === 'bloqueada' || c.estadoActual === 'pendiente')) {
       botones.push('<button type="button" class="pv-btn" data-accion-componente="materiales-completos" data-componente-id="' + escapeHtml(c.id) + '">Marcar materiales completos</button>');
     }
     var botonesHTML = botones.length ? '<div class="pv-btn-row">' + botones.join('') + '</div>' : '';
@@ -620,6 +628,17 @@
   function entregaRevisionFormHTML(c, entrega) {
     // Cada entrega se revisa por separado — nunca se confirma el
     // componente completo por revisar una sola entrega (RIO-118).
+    //
+    // RIO-122 (17/09/2026, corrección de UAT): la etapa de materiales
+    // pertenece a ANTES de producción. Una vez que el componente entra
+    // formalmente en producción (o avanza más), este formulario se cierra
+    // — el historial de la entrega (arriba, en renderMaterialesHTML) sigue
+    // siempre visible con quién entregó, qué entregó, fecha y resultado
+    // final, nunca se borra ni se oculta. Si el cliente pide cambios
+    // después de este punto, es el flujo de corrección de entrega
+    // (solicitarCorreccionEntrega, ver correccionEntregaFormHTML arriba),
+    // no reabrir materiales indefinidamente.
+    if (c.estadoActual !== 'bloqueada' && c.estadoActual !== 'pendiente') return '';
     return (
       '<form class="pv-accion-form" data-revisar-entrega="' + escapeHtml(entrega.id) + '" data-componente-id="' + escapeHtml(c.id) + '">' +
         '<label>Resultado de esta entrega</label>' +

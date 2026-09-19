@@ -448,10 +448,15 @@
       html += '<div class="pv-dominio-pendiente">El costo del dominio propio todavía no fue confirmado por administración — mientras tanto, la comisión de esta venta queda estimada, no definitiva.</div>';
     }
 
-    // RIO-118: el botón queda SIEMPRE disponible — "Materiales completos"
-    // nunca lo oculta ni cierra el registro (Brenda: "la posibilidad de
-    // informar materiales debe permanecer siempre abierta").
-    if (esVendedor) {
+    // RIO-122 (17/09/2026, corrección de UAT — reemplaza la regla de
+    // RIO-118 de "siempre abierta"): la etapa de materiales pertenece a
+    // ANTES de producción. Una vez que el componente entra formalmente en
+    // producción (o avanza más), el formulario se cierra — el historial de
+    // entregas de arriba sigue siempre visible, nunca se borra ni se
+    // oculta. Si el cliente pide materiales después de este punto, es el
+    // flujo de corrección de entrega (solicitarCorreccionEntrega), no
+    // reabrir materiales indefinidamente.
+    if (esVendedor && (c.estadoActual === 'bloqueada' || c.estadoActual === 'pendiente')) {
       var asunto = construirAsuntoSugerido(detalle, c);
       html += '<div class="pv-materiales-asunto">' +
         '<span class="pv-materiales-asunto-label">Asunto sugerido para el correo:</span>' +
