@@ -1218,7 +1218,20 @@
           gateHTML +
           accionesComponenteHTML(c) +
           (c.tipo === 'personalizado' ? '' : renderMaterialesHTML(c)) +
-          costoDirectoFormHTML(c) +
+          // RIO-122 (19/09/2026): "Registrar costo directo" es, en la
+          // práctica, exclusivamente el costo del dominio propio (label,
+          // valor por defecto y todo el resto del código — ver
+          // requiereDominio en functions/interno/api/ventas/[id].js —
+          // solo consultan tipo='dominio'; la tabla costos_directos no
+          // tiene CHECK sobre `tipo`, pero ningún otro valor real se usa
+          // hoy en ningún flujo). Solo corresponde en la Landing de un
+          // plan con dominio propio incluido (Premium / Pack Premium) —
+          // Landing genérica/Express usa el dominio de RiO, nunca compra
+          // uno propio. Mismo criterio exacto que ya usa el backend, sin
+          // crear ninguna regla paralela.
+          (c.tipo === 'landing' && (detalle.venta.producto === 'personalizado' || detalle.venta.producto === 'ficha_personalizado')
+            ? costoDirectoFormHTML(c)
+            : '') +
         '</div>'
       );
     }).join('');
