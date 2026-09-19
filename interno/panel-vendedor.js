@@ -639,14 +639,23 @@
       } else if (comprobante) {
         comprobanteHTML = '<div class="pv-comprobante-info">Comprobante subido (versión ' + comprobante.version + ') — ' + escapeHtml(comprobante.nombreOriginal) + '</div>';
       }
-      accionesHTML =
-        '<div class="pv-upload-row">' +
-          '<form data-subir-comprobante="' + escapeHtml(pago.id) + '">' +
-            '<input type="file" accept=".pdf,.jpg,.jpeg,.png" aria-label="Subir comprobante de este pago">' +
-            '<button type="submit" class="pv-btn" style="margin-top:6px;">' + (comprobante ? 'Subir corrección (nueva versión)' : 'Subir comprobante') + '</button>' +
-          '</form>' +
-          '<p class="pv-upload-hint">Solo PDF, JPG o PNG — hasta 10 MB. Se valida también en el servidor.</p>' +
-        '</div>';
+      // RIO-122 (19/09/2026, corrección de UAT): la etapa de comprobante
+      // pertenece a ANTES de que administración acredite el pago. Una vez
+      // acreditado, se cierra para nuevas cargas/correcciones — el
+      // comprobante ya validado sigue siempre visible arriba
+      // (comprobanteHTML), esto solo oculta el selector de archivo y el
+      // botón de carga. Mismo criterio ya aplicado a la etapa de
+      // materiales (ver renderMaterialesHTML).
+      if (pago.estado !== 'acreditado') {
+        accionesHTML =
+          '<div class="pv-upload-row">' +
+            '<form data-subir-comprobante="' + escapeHtml(pago.id) + '">' +
+              '<input type="file" accept=".pdf,.jpg,.jpeg,.png" aria-label="Subir comprobante de este pago">' +
+              '<button type="submit" class="pv-btn" style="margin-top:6px;">' + (comprobante ? 'Subir corrección (nueva versión)' : 'Subir comprobante') + '</button>' +
+            '</form>' +
+            '<p class="pv-upload-hint">Solo PDF, JPG o PNG — hasta 10 MB. Se valida también en el servidor.</p>' +
+          '</div>';
+      }
     }
 
     return (
