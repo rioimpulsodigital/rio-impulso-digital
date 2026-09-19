@@ -144,12 +144,13 @@
     wireNuevoProyecto();
     wirePersonasEquipos();
     wirePlanesComision();
+    wireLiquidacionesTabForms();
     await cargarVentas();
     await cargarNotificacionesResumen();
     await cargarEquiposDisponibles();
   });
 
-  var TABS = ['ventas', 'notif', 'personas', 'planes', 'hubspot'];
+  var TABS = ['ventas', 'notif', 'personas', 'planes', 'liquidaciones', 'hubspot'];
 
   function wireTabs() {
     document.getElementById('pvTabVentasBtn').addEventListener('click', function () { activarTab('ventas'); });
@@ -165,6 +166,10 @@
     document.getElementById('pvTabPlanesBtn').addEventListener('click', function () {
       activarTab('planes');
       cargarPlanesComision();
+    });
+    document.getElementById('pvTabLiquidacionesBtn').addEventListener('click', function () {
+      activarTab('liquidaciones');
+      if (!liquidacionesTabYaCargada) { liquidacionesTabYaCargada = true; cargarLiquidacionesTab(); }
     });
     document.getElementById('pvTabHubspotBtn').addEventListener('click', function () {
       activarTab('hubspot');
@@ -723,7 +728,7 @@
     );
   }
 
-  var TIPO_PLAN_LABEL_DIST = { comercial: 'Comercial', supervision: 'Supervisión', desarrollo: 'Desarrollo' };
+  var TIPO_PLAN_LABEL_DIST = { comercial: 'Comercial', supervision: 'Supervisión', desarrollo: 'Desarrollo', realizacion: 'Realización', produccion: 'Producción' };
 
   function finanzasEmpresaHTML(f) {
     if (!f) return '';
@@ -2078,6 +2083,10 @@
   // (tercer bloque, item 1) y planes de comisión (tercer bloque, items 2-3)
   // se agregan más abajo.
 
+  var liquidacionesTabYaCargada = false;
+  var comisionesElegiblesCache = [];
+  var liquidacionesCache = [];
+
   var personasCache = [];
   var personasYaCargadas = false;
   var equiposAdminCache = [];
@@ -2796,6 +2805,365 @@
       statusEl.textContent = '';
       document.getElementById('pvPlanAsignarForm').reset();
       await cargarAsignacionesPlan(planId);
+    });
+  }
+
+  // ── Liquidaciones (RIO-122, 19/09/2026) ──────────────────────────────
+  // Conecta a la UI el backend de liquidaciones ya cerrado desde RIO-115
+  // (agrupar comisiones 'programada' de una misma persona, reconciliar el
+  // monto exacto, convertir ARS→CLP a mano vía Global66) y RIO-116
+  // (comprobante de transferencia en R2) — nunca reimplementa esa lógica,
+  // solo la consume. GET /interno/api/comisiones?estado=programada es la
+  // única pieza de backend nueva de esta tarea (agregada porque no existía
+  // ningún endpoint para listar comisiones elegibles entre ventas).
+  //
+  // Confirmado con Brenda antes de construir: no existe un estado de
+  // "borrador" en el backend — crear la liquidación (POST) YA paga las
+  // comisiones incluidas, en la misma llamada. El comprobante de
+  // transferencia se sube como paso siguiente, sobre la liquidación ya
+  // creada — nunca antes. El botón "marcar pagada" individual (por
+  // comisión, sin agrupar) queda intacto en el servidor como excepción
+  // técnica, pero deliberadamente no se conecta acá — el único camino
+  // visible en Administración es Liquidaciones.
+
+  async function cargarLiquidacionesTab() {
+    await Promise.all([cargarComisionesElegibles(), cargarListaLiquidaciones()]);
+  }
+
+  async function cargarComisionesElegibles() {
+    var r = await apiFetch('/interno/api/comisiones?estado=programada');
+    if (!r.ok || !r.body || !r.body.ok) {
+      document.getElementById('pvLiqComisionesResult').innerHTML = pvErrorHTML('No se pudieron cargar las comisiones programadas.');
+      return;
+    }
+    comisionesElegiblesCache = r.body.data.comisiones || [];
+    poblarFiltroLiqBeneficiario();
+    renderComisionesElegibles();
+  }
+
+  function poblarFiltroLiqBeneficiario() {
+    var select = document.getElementById('fLiqBeneficiario');
+    var actual = select.value;
+    var porEmail = {};
+    comisionesElegiblesCache.forEach(function (c) { porEmail[c.beneficiarioEmail] = c.beneficiarioNombre; });
+    var emails = Object.keys(porEmail).sort(function (a, b) {
+      return nombreParaMostrar(porEmail[a]).localeCompare(nombreParaMostrar(porEmail[b]));
+    });
+    select.innerHTML = '<option value="">Elegí una persona…</option>' + emails.map(function (e) {
+      return '<option value="' + escapeHtml(e) + '">' + escapeHtml(nombreParaMostrar(porEmail[e])) + ' — ' + escapeHtml(e) + '</option>';
+    }).join('');
+    select.value = actual;
+  }
+
+  function comisionesDelBeneficiarioSeleccionado() {
+    var email = document.getElementById('fLiqBeneficiario').value;
+    if (!email) return [];
+    return comisionesElegiblesCache.filter(function (c) { return c.beneficiarioEmail === email; });
+  }
+
+  function conversionFormHTML(c) {
+    return (
+      '<form class="pv-accion-form" data-registrar-conversion="' + escapeHtml(c.id) + '" style="margin-top:8px;">' +
+        '<label>Registrar conversión a CLP (Global66) antes de incluirla</label>' +
+        '<div class="pv-costo-form-row">' +
+          '<div class="pv-costo-form-field"><label>Monto original (ARS)</label><input type="number" name="montoOriginal" min="1" step="1" value="' + c.montoComision + '" required></div>' +
+          '<div class="pv-costo-form-field"><label>Tipo de cambio mostrado</label><input type="number" name="tipoCambioMostrado" min="0.0001" step="0.0001" required></div>' +
+          '<div class="pv-costo-form-field"><label>Costos/diferencias (opcional)</label><input type="number" name="costosODiferencias" min="0" step="1" value="0"></div>' +
+          '<div class="pv-costo-form-field"><label>Monto convertido (CLP)</label><input type="number" name="montoConvertido" min="1" step="1" required></div>' +
+          '<button type="submit" class="pv-btn">Registrar conversión</button>' +
+        '</div>' +
+        '<span class="pv-status-msg" data-status></span>' +
+      '</form>'
+    );
+  }
+
+  function renderComisionesElegibles() {
+    var el = document.getElementById('pvLiqComisionesResult');
+    var email = document.getElementById('fLiqBeneficiario').value;
+    if (!email) {
+      el.innerHTML = '<p class="pv-materiales-vacio">Elegí un beneficiario para ver sus comisiones programadas.</p>';
+      actualizarResumenLiquidacion();
+      return;
+    }
+    var monedaFinal = document.getElementById('fLiqMoneda').value;
+    var lista = comisionesDelBeneficiarioSeleccionado();
+    if (lista.length === 0) {
+      el.innerHTML = '<p class="pv-materiales-vacio">Esta persona no tiene comisiones programadas todavía.</p>';
+      actualizarResumenLiquidacion();
+      return;
+    }
+    el.innerHTML = lista.map(function (c) {
+      // Una comisión en CLP nunca puede incluirse en una liquidación en
+      // ARS — la conversión solo existe en sentido ARS→CLP (RIO-115), no
+      // existe el camino inverso.
+      var incompatibleClpEnArs = c.moneda === 'CLP' && monedaFinal === 'ARS';
+      var necesitaConversion = c.moneda === 'ARS' && monedaFinal === 'CLP' && c.requiereConversion;
+      var puedeSeleccionar = !incompatibleClpEnArs && !necesitaConversion;
+      var montoAIncluir = (c.moneda === 'ARS' && monedaFinal === 'CLP' && c.conversion) ? c.conversion.montoConvertido : c.montoComision;
+      return (
+        '<div class="pv-notif-card">' +
+          '<div class="pv-notif-head">' +
+            '<label style="display:flex;align-items:center;gap:8px;flex:1;">' +
+              '<input type="checkbox" class="pvLiqCheck" value="' + escapeHtml(c.id) + '" data-monto="' + montoAIncluir + '"' + (puedeSeleccionar ? '' : ' disabled') + '>' +
+              '<span>' + escapeHtml(TIPO_PLAN_LABEL_DIST[c.tipo] || c.tipo) + ' — ' + escapeHtml(c.clienteNegocio || '—') + ' <span class="pv-mono">' + escapeHtml(c.codigoVenta || '') + '</span><br>' +
+              '<strong>' + fmtMoneda(c.montoComision, c.moneda) + '</strong>' + (c.moneda === 'ARS' && monedaFinal === 'CLP' && c.conversion ? ' → ' + fmtMoneda(c.conversion.montoConvertido, 'CLP') : '') +
+              ' · programada ' + fmtFecha(c.fechaProgramadaEfectiva) +
+              '</span>' +
+            '</label>' +
+          '</div>' +
+          (incompatibleClpEnArs ? '<p class="pv-materiales-vacio" style="margin:6px 0 0;">Una comisión en CLP no puede incluirse en una liquidación en ARS.</p>' : '') +
+          (necesitaConversion ? conversionFormHTML(c) : '') +
+        '</div>'
+      );
+    }).join('');
+
+    Array.prototype.forEach.call(el.querySelectorAll('.pvLiqCheck'), function (chk) {
+      chk.addEventListener('change', actualizarResumenLiquidacion);
+    });
+    Array.prototype.forEach.call(el.querySelectorAll('form[data-registrar-conversion]'), function (form) {
+      form.addEventListener('submit', onSubmitConversion);
+    });
+    actualizarResumenLiquidacion();
+  }
+
+  async function onSubmitConversion(e) {
+    e.preventDefault();
+    var form = e.currentTarget;
+    var comisionId = form.getAttribute('data-registrar-conversion');
+    var statusEl = form.querySelector('[data-status]');
+    var fd = new FormData(form);
+    var payload = {
+      comisionId: comisionId,
+      montoOriginal: Number(fd.get('montoOriginal')),
+      tipoCambioMostrado: Number(fd.get('tipoCambioMostrado')),
+      costosODiferencias: fd.get('costosODiferencias') ? Number(fd.get('costosODiferencias')) : 0,
+      montoConvertido: Number(fd.get('montoConvertido')),
+    };
+    var r = await apiPost('/interno/api/comisiones/conversiones', payload);
+    if (!r.ok || !r.body || !r.body.ok) {
+      statusEl.textContent = (r.body && r.body.error && r.body.error.message) || 'No se pudo registrar la conversión.';
+      statusEl.className = 'pv-status-msg err';
+      return;
+    }
+    await cargarComisionesElegibles();
+  }
+
+  function actualizarResumenLiquidacion() {
+    var checks = document.querySelectorAll('.pvLiqCheck:checked');
+    var total = 0;
+    Array.prototype.forEach.call(checks, function (chk) { total += Number(chk.getAttribute('data-monto')) || 0; });
+    var moneda = document.getElementById('fLiqMoneda').value;
+    document.getElementById('pvLiqTotal').textContent = checks.length ? fmtMoneda(total, moneda) : '—';
+    document.getElementById('pvLiqCrearBtn').disabled = checks.length === 0 || !document.getElementById('fLiqBeneficiario').value;
+  }
+
+  var ESTADO_DOCUMENTAL_LABEL = {
+    sin_comprobantes: 'Sin comprobantes', conversion_documentada: 'Conversión documentada',
+    transferencia_documentada: 'Transferencia documentada', documentacion_completa: 'Documentación completa',
+    rechazado_pendiente_reemplazo: 'Comprobante rechazado — pendiente reemplazo',
+  };
+  var ESTADO_DOCUMENTAL_BADGE = {
+    sin_comprobantes: 'neutral', conversion_documentada: 'blue', transferencia_documentada: 'blue',
+    documentacion_completa: 'green', rechazado_pendiente_reemplazo: 'red',
+  };
+
+  async function cargarListaLiquidaciones() {
+    var r = await apiFetch('/interno/api/comisiones/liquidaciones');
+    if (!r.ok || !r.body || !r.body.ok) {
+      document.getElementById('pvLiqListaResult').innerHTML = pvErrorHTML('No se pudieron cargar las liquidaciones.');
+      return;
+    }
+    liquidacionesCache = r.body.data.liquidaciones || [];
+    renderListaLiquidaciones();
+  }
+
+  function renderListaLiquidaciones() {
+    var el = document.getElementById('pvLiqListaResult');
+    if (liquidacionesCache.length === 0) {
+      el.innerHTML = '<p class="pv-materiales-vacio">Todavía no hay liquidaciones registradas.</p>';
+      return;
+    }
+    el.innerHTML = liquidacionesCache.map(function (l) {
+      return (
+        '<div class="pv-notif-card">' +
+          '<div class="pv-notif-head">' +
+            '<span>' + escapeHtml(nombreParaMostrar(l.beneficiarioEmail)) + ' — <strong>' + fmtMoneda(l.montoTotalTransferido, l.monedaFinal) + '</strong> · ' + fmtFecha(l.fecha) + '</span>' +
+            '<span class="pv-badge pv-badge--neutral" data-estado-doc-badge="' + escapeHtml(l.id) + '">…</span>' +
+          '</div>' +
+          '<div class="pv-btn-row" style="margin-top:6px;"><button type="button" class="pv-btn" data-ver-liquidacion="' + escapeHtml(l.id) + '">Ver detalle</button></div>' +
+          '<div id="pvLiqDetalle-' + escapeHtml(l.id) + '" hidden></div>' +
+        '</div>'
+      );
+    }).join('');
+
+    liquidacionesCache.forEach(function (l) { cargarEstadoDocumentalBadge(l.id); });
+
+    Array.prototype.forEach.call(el.querySelectorAll('[data-ver-liquidacion]'), function (btn) {
+      btn.addEventListener('click', function () { toggleDetalleLiquidacion(btn.getAttribute('data-ver-liquidacion')); });
+    });
+  }
+
+  async function cargarEstadoDocumentalBadge(liquidacionId) {
+    var badge = document.querySelector('[data-estado-doc-badge="' + liquidacionId + '"]');
+    if (!badge) return;
+    var r = await apiFetch('/interno/api/comisiones/liquidaciones/' + encodeURIComponent(liquidacionId) + '/estado-documental');
+    if (!r.ok || !r.body || !r.body.ok) return;
+    var estado = r.body.data.estadoDocumental;
+    badge.className = 'pv-badge pv-badge--' + (ESTADO_DOCUMENTAL_BADGE[estado] || 'neutral');
+    badge.textContent = ESTADO_DOCUMENTAL_LABEL[estado] || estado;
+  }
+
+  function comprobanteUploadFormHTML(liquidacionId) {
+    return (
+      '<div class="pv-upload-row">' +
+        '<form data-subir-comprobante-liquidacion="' + escapeHtml(liquidacionId) + '">' +
+          '<input type="file" accept=".pdf,.jpg,.jpeg,.png" aria-label="Subir comprobante de transferencia">' +
+          '<button type="submit" class="pv-btn" style="margin-top:6px;">Subir comprobante</button>' +
+        '</form>' +
+        '<p class="pv-upload-hint">Solo PDF, JPG o PNG — hasta 10 MB.</p>' +
+      '</div>'
+    );
+  }
+
+  function wireLiquidacionDetalleForms(slot, liquidacionId) {
+    var uploadForm = slot.querySelector('form[data-subir-comprobante-liquidacion]');
+    if (uploadForm) {
+      uploadForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var input = uploadForm.querySelector('input[type="file"]');
+        var archivo = input.files[0];
+        if (!archivo) { alert('Elegí un archivo primero.'); return; }
+        var extension = (archivo.name.split('.').pop() || '').toLowerCase();
+        if (['pdf', 'jpg', 'jpeg', 'png'].indexOf(extension) === -1) { alert('Solo se aceptan PDF, JPG o PNG.'); return; }
+        if (archivo.size > 10 * 1024 * 1024) { alert('El archivo supera el límite de 10 MB.'); return; }
+        var btn = uploadForm.querySelector('button');
+        btn.disabled = true; btn.textContent = 'Subiendo…';
+        var fd = new FormData();
+        fd.append('archivo', archivo);
+        var r = await apiFetch('/interno/api/comisiones/liquidaciones/' + encodeURIComponent(liquidacionId) + '/comprobante-transferencia', { method: 'POST', body: fd });
+        if (!r.ok) {
+          btn.disabled = false; btn.textContent = 'Subir comprobante';
+          alert((r.body && r.body.error && r.body.error.message) || 'No se pudo subir el comprobante.');
+          return;
+        }
+        await cargarEstadoDocumentalBadge(liquidacionId);
+        // Se reemplaza el contenido del propio `slot` que tenía el
+        // formulario — funciona igual sea la fila de la lista o el
+        // resultado de recién crear la liquidación, sin adivinar cuál de
+        // los dos es. Si es una fila de la lista, la próxima vez que se
+        // abra "Ver detalle" carga la versión fresca del servidor.
+        slot.innerHTML = '<div class="pv-status-msg ok">Comprobante subido (versión ' + r.body.data.version + ').</div>';
+      });
+    }
+
+    var rechazarForm = slot.querySelector('form[data-rechazar-comprobante-liquidacion]');
+    if (rechazarForm) {
+      rechazarForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var comprobanteId = rechazarForm.getAttribute('data-rechazar-comprobante-liquidacion');
+        var statusEl = rechazarForm.querySelector('[data-status]');
+        var motivo = rechazarForm.querySelector('[name="motivo"]').value.trim();
+        var r = await apiPost('/interno/api/comisiones/liquidaciones/' + encodeURIComponent(liquidacionId) + '/comprobante-transferencia/' + encodeURIComponent(comprobanteId), { action: 'rechazar', motivo: motivo });
+        if (!r.ok || !r.body || !r.body.ok) {
+          statusEl.textContent = (r.body && r.body.error && r.body.error.message) || 'No se pudo rechazar.';
+          statusEl.className = 'pv-status-msg err';
+          return;
+        }
+        await cargarEstadoDocumentalBadge(liquidacionId);
+        slot.hidden = true;
+        await toggleDetalleLiquidacion(liquidacionId);
+      });
+    }
+  }
+
+  async function toggleDetalleLiquidacion(liquidacionId) {
+    var slot = document.getElementById('pvLiqDetalle-' + liquidacionId);
+    if (!slot) return;
+    if (!slot.hidden) { slot.hidden = true; return; }
+    slot.hidden = false;
+    slot.innerHTML = '<div class="pv-loading">Cargando…</div>';
+    var detalleR = await apiFetch('/interno/api/comisiones/liquidaciones/' + encodeURIComponent(liquidacionId));
+    var comprobanteR = await apiFetch('/interno/api/comisiones/liquidaciones/' + encodeURIComponent(liquidacionId) + '/comprobante-transferencia');
+    if (!detalleR.ok || !detalleR.body || !detalleR.body.ok) { slot.innerHTML = pvErrorHTML('No se pudo cargar el detalle.'); return; }
+    var liquidacion = detalleR.body.data.liquidacion;
+    var detalle = detalleR.body.data.detalle;
+    var comprobante = (comprobanteR.ok && comprobanteR.body && comprobanteR.body.ok) ? comprobanteR.body.data.comprobante : null;
+
+    var filasHTML = detalle.map(function (d) {
+      return '<div style="font-size:.78rem;color:var(--muted);padding:3px 0;">' + fmtMoneda(d.montoIncluido, liquidacion.monedaFinal) + ' — comisión <span class="pv-mono">' + escapeHtml(d.comisionId) + '</span>' + (d.monedaOriginal !== liquidacion.monedaFinal ? ' (originalmente ' + escapeHtml(d.monedaOriginal) + ')' : '') + '</div>';
+    }).join('');
+
+    var comprobanteHTML;
+    if (comprobante && comprobante.rechazadoEn) {
+      comprobanteHTML = '<div class="pv-motivo-box"><strong>Comprobante rechazado.</strong> Motivo: ' + escapeHtml(comprobante.motivoRechazo) + '<br>Subí una versión nueva.</div>' + comprobanteUploadFormHTML(liquidacionId);
+    } else if (comprobante) {
+      comprobanteHTML =
+        '<div class="pv-comprobante-info">Comprobante subido (versión ' + comprobante.version + ') — ' + escapeHtml(comprobante.nombreOriginal) +
+          ' <a href="/interno/api/comisiones/liquidaciones/' + encodeURIComponent(liquidacionId) + '/comprobante-transferencia/' + encodeURIComponent(comprobante.id) + '/archivo" target="_blank" rel="noopener">Ver</a>' +
+        '</div>' +
+        '<form class="pv-accion-form" data-rechazar-comprobante-liquidacion="' + escapeHtml(comprobante.id) + '" style="border-top:none;">' +
+          '<label>Rechazar comprobante (subir uno nuevo)</label>' +
+          '<textarea name="motivo" placeholder="Motivo (obligatorio)" required></textarea>' +
+          '<button type="submit" class="pv-btn pv-btn--danger">Rechazar</button>' +
+          '<span class="pv-status-msg" data-status></span>' +
+        '</form>';
+    } else {
+      comprobanteHTML = comprobanteUploadFormHTML(liquidacionId);
+    }
+
+    slot.innerHTML =
+      '<dl class="pv-kv" style="margin-top:6px;">' +
+        '<dt>Beneficiario</dt><dd>' + escapeHtml(liquidacion.beneficiarioEmail) + '</dd>' +
+        '<dt>Fecha</dt><dd>' + fmtFecha(liquidacion.fecha) + '</dd>' +
+        '<dt>Total transferido</dt><dd>' + fmtMoneda(liquidacion.montoTotalTransferido, liquidacion.monedaFinal) + '</dd>' +
+        (liquidacion.comprobanteNota ? '<dt>Nota</dt><dd>' + escapeHtml(liquidacion.comprobanteNota) + '</dd>' : '') +
+      '</dl>' +
+      '<p class="pv-detail-section-title" style="margin-top:10px;">Comisiones incluidas</p>' + filasHTML +
+      '<p class="pv-detail-section-title" style="margin-top:10px;">Comprobante de transferencia</p>' + comprobanteHTML;
+
+    wireLiquidacionDetalleForms(slot, liquidacionId);
+  }
+
+  function wireLiquidacionesTabForms() {
+    document.getElementById('fLiqBeneficiario').addEventListener('change', renderComisionesElegibles);
+    document.getElementById('fLiqMoneda').addEventListener('change', renderComisionesElegibles);
+
+    document.getElementById('pvLiqCrearForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var form = e.currentTarget;
+      var statusEl = form.querySelector('[data-status]');
+      var checks = document.querySelectorAll('.pvLiqCheck:checked');
+      var comisionIds = Array.prototype.map.call(checks, function (chk) { return chk.value; });
+      var total = 0;
+      Array.prototype.forEach.call(checks, function (chk) { total += Number(chk.getAttribute('data-monto')) || 0; });
+      var payload = {
+        beneficiarioEmail: document.getElementById('fLiqBeneficiario').value,
+        monedaFinal: document.getElementById('fLiqMoneda').value,
+        comisionIds: comisionIds,
+        montoTotalTransferido: total,
+        fecha: form.querySelector('[name="fecha"]').value,
+        comprobanteNota: form.querySelector('[name="comprobanteNota"]').value.trim() || undefined,
+      };
+      var btn = document.getElementById('pvLiqCrearBtn');
+      btn.disabled = true; btn.textContent = 'Creando…';
+      var r = await apiPost('/interno/api/comisiones/liquidaciones', payload);
+      if (!r.ok || !r.body || !r.body.ok) {
+        btn.disabled = false; btn.textContent = 'Crear liquidación';
+        statusEl.textContent = (r.body && r.body.error && r.body.error.message) || 'No se pudo crear la liquidación.';
+        statusEl.className = 'pv-status-msg err';
+        return;
+      }
+      btn.textContent = 'Crear liquidación';
+      statusEl.textContent = '';
+      var liquidacionId = r.body.data.id;
+      document.getElementById('pvLiqNuevaResult').innerHTML =
+        '<div class="pv-status-msg ok" style="margin-top:10px;">Liquidación creada y comisiones pagadas. Subí el comprobante de transferencia para completar la documentación:</div>' +
+        comprobanteUploadFormHTML(liquidacionId);
+      wireLiquidacionDetalleForms(document.getElementById('pvLiqNuevaResult'), liquidacionId);
+      form.reset();
+      document.getElementById('fLiqBeneficiario').value = '';
+      btn.disabled = true;
+      await cargarLiquidacionesTab();
     });
   }
 })();

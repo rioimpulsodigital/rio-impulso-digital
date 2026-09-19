@@ -176,6 +176,16 @@
       background: var(--pv-red-bg); border: 1px solid var(--pv-red-bd);
       border-radius: var(--r-m); padding: 8px 10px;
     }
+    /* RIO-122 (19/09/2026): faltaban acá — ya existían en panel-vendedor.html,
+       necesarias ahora para subir/ver el comprobante de transferencia de
+       una liquidación. */
+    .pv-upload-row { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .pv-upload-row input[type="file"] { font-size: .78rem; }
+    .pv-upload-hint { font-size: .72rem; color: var(--muted); }
+    .pv-comprobante-info {
+      margin-top: 8px; font-size: .78rem; padding: 8px 10px; border-radius: var(--r-m);
+      background: var(--pv-green-bg); border: 1px solid var(--pv-green-bd); color: var(--pv-green);
+    }
     .pv-dominio-pendiente {
       margin-top: 8px; font-size: .78rem; color: var(--pv-amber);
       background: var(--pv-amber-bg); border: 1px solid var(--pv-amber-bd);
@@ -327,6 +337,7 @@
         <button class="pv-tab" id="pvTabNotifBtn" role="tab" aria-selected="false" aria-controls="pvTabNotif">Notificaciones<span class="pv-tab-badge" id="pvNotifBadge" style="display:none;"></span></button>
         <button class="pv-tab" id="pvTabPersonasBtn" role="tab" aria-selected="false" aria-controls="pvTabPersonas">Personas y equipos</button>
         <button class="pv-tab" id="pvTabPlanesBtn" role="tab" aria-selected="false" aria-controls="pvTabPlanes">Planes de comisión</button>
+        <button class="pv-tab" id="pvTabLiquidacionesBtn" role="tab" aria-selected="false" aria-controls="pvTabLiquidaciones">Liquidaciones</button>
         <button class="pv-tab" id="pvTabHubspotBtn" role="tab" aria-selected="false" aria-controls="pvTabHubspot">Sincronización HubSpot<span class="pv-tab-badge" id="pvHubspotBadge" style="display:none;"></span></button>
       </div>
 
@@ -457,6 +468,50 @@
             <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--muted);"><input type="checkbox" id="fPlanesInactivos"> Incluir inactivos</label>
           </div>
           <div id="pvPlanesResult"><div class="pv-loading">Cargando planes…</div></div>
+        </div>
+      </div>
+
+      <!-- ── LIQUIDACIONES ── -->
+      <!-- RIO-122 (19/09/2026): conecta a la UI el backend de liquidaciones
+           ya cerrado desde RIO-115/RIO-116 — agrupar comisiones
+           'programada' de una misma persona en una transferencia,
+           reconciliar el monto exacto, y confirmar (lo que paga las
+           comisiones incluidas) es una única llamada atómica al servidor;
+           no hay un estado de "borrador" separado (ver informe de la
+           tarea). El comprobante de transferencia se sube como paso
+           siguiente, sobre la liquidación ya creada. -->
+      <div class="pv-panel" id="pvTabLiquidaciones" role="tabpanel">
+        <div class="pv-moneda-block">
+          <div class="pv-moneda-head"><span class="pv-moneda-titulo">Armar una liquidación</span></div>
+          <p style="font-size:.82rem;color:var(--muted);margin:0 0 12px;">Elegí un beneficiario y la moneda final — se listan solo sus comisiones ya <strong>programadas</strong> (listas para pagarse). Una comisión en ARS necesita su conversión a CLP registrada antes de poder incluirse en una liquidación en CLP.</p>
+          <div class="pv-filters">
+            <div class="pv-filter-field">
+              <label>Beneficiario</label>
+              <select id="fLiqBeneficiario"><option value="">Elegí una persona…</option></select>
+            </div>
+            <div class="pv-filter-field">
+              <label>Moneda final de la liquidación</label>
+              <select id="fLiqMoneda"><option value="CLP">CLP</option><option value="ARS">ARS</option></select>
+            </div>
+          </div>
+          <div id="pvLiqComisionesResult"><p class="pv-materiales-vacio">Elegí un beneficiario para ver sus comisiones programadas.</p></div>
+
+          <form class="pv-accion-form" id="pvLiqCrearForm" style="border-top:1.5px solid var(--border);margin-top:16px;padding-top:16px;">
+            <div class="pv-costo-form-row">
+              <div class="pv-costo-form-field"><label>Fecha</label><input type="date" name="fecha" required></div>
+              <div class="pv-costo-form-field" style="flex:1;min-width:160px;"><label>Nota (opcional)</label><input type="text" name="comprobanteNota" placeholder="Referencia interna, opcional"></div>
+            </div>
+            <p style="font-size:.9rem;">Total a transferir: <strong id="pvLiqTotal">—</strong></p>
+            <button type="submit" class="pv-btn pv-btn--primary" id="pvLiqCrearBtn" disabled>Crear liquidación</button>
+            <span class="pv-status-msg" data-status></span>
+          </form>
+
+          <div id="pvLiqNuevaResult"></div>
+        </div>
+
+        <div class="pv-moneda-block" style="margin-top:20px;">
+          <div class="pv-moneda-head"><span class="pv-moneda-titulo">Liquidaciones registradas</span></div>
+          <div id="pvLiqListaResult"><div class="pv-loading">Cargando liquidaciones…</div></div>
         </div>
       </div>
 
@@ -885,7 +940,7 @@
      cargar antes del panel-*.js correspondiente (mismo orden que config/users.js). -->
 <script src="./config/estado-pago.js?v=20260917" defer></script>
 <script src="../assets/js/main.js?v=20260627" defer></script>
-<script src="./panel-administrativo.js?v=20260917" defer></script>
+<script src="./panel-administrativo.js?v=20260919" defer></script>
 
 </body>
 </html>
