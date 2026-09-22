@@ -215,7 +215,7 @@ test('Panel Vendedor — pago "acreditado": NO hay selector de archivo ni "Subir
 
 // ── Panel Administrativo ────────────────────────────────────────────────
 
-test('Panel Administrativo — pago "informado" (antes de acreditar): "Rechazar / solicitar comprobante nuevo" sigue disponible', async () => {
+test('Panel Administrativo — pago "informado" (antes de acreditar): "Acreditar pago" y "Rechazar" siguen disponibles, comprobante visible', async () => {
   const venta = ventaBase({ codigoVenta: 'V-ADMIN-INFORMADO', vendedorEmail: 'vendedor@example.com', vendedorNombre: 'Vendedor de Prueba' });
   const pago = pagoBase({ estado: 'informado' });
   const detalle = detalleBase({ vendedorEmail: venta.vendedorEmail, vendedorNombre: venta.vendedorNombre, pago });
@@ -228,10 +228,14 @@ test('Panel Administrativo — pago "informado" (antes de acreditar): "Rechazar 
     },
   });
   const body = await abrirFicha(dom, 'venta-1');
+  assert.ok(body.querySelector('form[data-acreditar-pago]'), 'debe poder acreditar el pago mientras está solo informado: ' + body.textContent);
   assert.ok(body.querySelector('form[data-rechazar-pago]'), 'debe poder rechazar/pedir comprobante nuevo antes de acreditar: ' + body.textContent);
+  // Panel Administrativo muestra "Ver comprobante (versión N)" — nunca el
+  // nombre original del archivo (a diferencia de Panel Vendedor).
+  assert.ok(body.textContent.includes('Ver comprobante (versión 1)'), 'el comprobante informado debe estar visible: ' + body.textContent);
 });
 
-test('Panel Administrativo — pago "acreditado": "Rechazar / solicitar comprobante nuevo" ya NO está (regresión — ya estaba correcto antes de esta corrección)', async () => {
+test('Panel Administrativo — pago "acreditado": ni "Acreditar pago" ni "Rechazar" siguen disponibles (RIO-122, hallazgo de UAT), comprobante validado sigue visible', async () => {
   const venta = ventaBase({ codigoVenta: 'V-ADMIN-ACREDITADO', vendedorEmail: 'vendedor@example.com', vendedorNombre: 'Vendedor de Prueba' });
   const pago = pagoBase({ estado: 'acreditado' });
   const detalle = detalleBase({ vendedorEmail: venta.vendedorEmail, vendedorNombre: venta.vendedorNombre, pago });
@@ -244,5 +248,10 @@ test('Panel Administrativo — pago "acreditado": "Rechazar / solicitar comproba
     },
   });
   const body = await abrirFicha(dom, 'venta-1');
+  // RIO-122 (22/09/2026): antes de esta corrección, "Acreditar pago" seguía
+  // renderizándose acá aunque el backend (acreditarPago) ya rechazara una
+  // segunda acreditación — defecto puramente de presentación, nunca de datos.
+  assert.equal(body.querySelector('form[data-acreditar-pago]'), null, 'no debe poder volver a acreditar un pago ya acreditado: ' + body.textContent);
   assert.equal(body.querySelector('form[data-rechazar-pago]'), null, 'no debe poder rechazar un pago ya acreditado: ' + body.textContent);
+  assert.ok(body.textContent.includes('Ver comprobante (versión 1)'), 'el comprobante validado debe seguir visible: ' + body.textContent);
 });

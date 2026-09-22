@@ -1337,17 +1337,27 @@
         (esRechazado ? 'Comprobante rechazado — esperando que el vendedor suba uno corregido.' : 'Pendiente de que el vendedor lo informe.') +
         '</p>';
     } else {
-      accionesHTML =
-        '<div class="pv-comprobante-link" data-comprobante-slot="' + escapeHtml(pago.id) + '">Consultando comprobante…</div>' +
-        '<form class="pv-accion-form" data-acreditar-pago="' + escapeHtml(pago.id) + '">' +
-          '<label>Acreditar pago</label>' +
-          '<input type="number" name="montoAcreditado" min="1" step="1" placeholder="Monto acreditado" required>' +
-          '<input type="text" name="nota" placeholder="Nota (opcional)">' +
-          '<button type="submit" class="pv-btn pv-btn--primary">Acreditar</button>' +
-          '<span class="pv-status-msg" data-status></span>' +
-        '</form>';
+      // El link al comprobante vigente siempre va, sin importar el estado
+      // (informado o acreditado) — nunca depende de si todavía se puede
+      // actuar sobre el pago.
+      accionesHTML = '<div class="pv-comprobante-link" data-comprobante-slot="' + escapeHtml(pago.id) + '">Consultando comprobante…</div>';
+      // RIO-122 (22/09/2026, hallazgo de UAT): "Acreditar pago" quedaba
+      // visible incluso ya acreditado — el backend (acreditarPago) ya
+      // rechazaba una segunda acreditación ('ya_acreditado'), así que nunca
+      // fue un problema de datos, solo de presentación. Antes solo
+      // "Rechazar" tenía este guard; ahora los dos formularios de acción
+      // comparten la misma condición — una vez acreditado, el badge de
+      // estado ya es información suficiente, no queda ninguna acción
+      // pendiente sobre este pago.
       if (pago.estado !== 'acreditado') {
         accionesHTML +=
+          '<form class="pv-accion-form" data-acreditar-pago="' + escapeHtml(pago.id) + '">' +
+            '<label>Acreditar pago</label>' +
+            '<input type="number" name="montoAcreditado" min="1" step="1" placeholder="Monto acreditado" required>' +
+            '<input type="text" name="nota" placeholder="Nota (opcional)">' +
+            '<button type="submit" class="pv-btn pv-btn--primary">Acreditar</button>' +
+            '<span class="pv-status-msg" data-status></span>' +
+          '</form>' +
           '<form class="pv-accion-form" data-rechazar-pago="' + escapeHtml(pago.id) + '">' +
             '<label>Rechazar / solicitar un comprobante nuevo</label>' +
             '<textarea name="motivo" placeholder="Motivo (obligatorio)" required></textarea>' +
