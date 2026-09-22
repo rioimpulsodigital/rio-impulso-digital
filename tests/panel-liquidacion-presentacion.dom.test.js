@@ -158,6 +158,26 @@ test('Panel Vendedor — "Ver liquidación" traduce el estado documental, nunca 
   assert.ok(!info.innerHTML.includes('documentacion_completa'), 'nunca debe exponerse el enum interno crudo en la interfaz: ' + info.innerHTML);
 });
 
+test('Panel Vendedor — Mis comisiones: "Ver liquidación" nunca queda pegado al badge "Pagada" en la misma línea', async () => {
+  const venta = ventaBase({});
+  // Sin motivoRetencionOReprogramacion ni costoDominioPendiente — son los
+  // únicos dos casos que ya forzaban un salto de línea (al ser <div>) antes
+  // de esta corrección; sin ellos era exactamente cuando "Ver liquidación"
+  // quedaba pegado al badge, como reportó Brenda desde el UAT real.
+  const comision = comisionPagadaBase({});
+  const dom = await bootPanel({
+    identity: IDENTIDAD, ventas: [venta],
+    comisionesPorVenta: { 'venta-1': [comision] },
+  });
+  await abrirMisComisiones(dom);
+  const celdaEstado = dom.window.document.querySelector('[data-ver-liquidacion="' + comision.id + '"]').closest('td');
+  assert.ok(celdaEstado, 'debe existir la celda de Estado de la comisión');
+  assert.ok(
+    /<\/span><br><button/.test(celdaEstado.innerHTML),
+    'debe haber un salto de línea explícito entre el badge y "Ver liquidación": ' + celdaEstado.innerHTML
+  );
+});
+
 test('Panel Vendedor — "Ver liquidación": los links de descarga (transferencia y conversión) se ven como acción y conservan href/target/rel exactos', async () => {
   const venta = ventaBase({});
   const comision = comisionPagadaBase({});

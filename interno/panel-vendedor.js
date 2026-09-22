@@ -919,8 +919,13 @@
     } else if (!fechasHTML && c.fechaPrevistaPago) {
       fechasHTML = 'Prevista: ' + fmtFecha(c.fechaPrevistaPago);
     }
+    // RIO-122 (22/09/2026, hallazgo visual de UAT): "Ver liquidación" salía
+    // pegado al badge "PAGADA" en la misma línea cuando no había motivo ni
+    // aviso de dominio (los únicos casos que hasta ahora forzaban un salto
+    // de línea, al ser <div>). Un <br> explícito lo baja siempre, sin
+    // depender de si esos otros bloques existen.
     var liqBtn = c.estado === 'pagada'
-      ? '<button type="button" class="pv-comision-liq-btn" data-ver-liquidacion="' + escapeHtml(c.id) + '">Ver liquidación</button><div class="pv-liq-info" data-liq-info="' + escapeHtml(c.id) + '"></div>'
+      ? '<br><button type="button" class="pv-comision-liq-btn" data-ver-liquidacion="' + escapeHtml(c.id) + '">Ver liquidación</button><div class="pv-liq-info" data-liq-info="' + escapeHtml(c.id) + '"></div>'
       : '';
 
     return (
