@@ -2957,15 +2957,10 @@
     document.getElementById('pvLiqCrearBtn').disabled = checks.length === 0 || !document.getElementById('fLiqBeneficiario').value;
   }
 
-  var ESTADO_DOCUMENTAL_LABEL = {
-    sin_comprobantes: 'Sin comprobantes', conversion_documentada: 'Conversión documentada',
-    transferencia_documentada: 'Transferencia documentada', documentacion_completa: 'Documentación completa',
-    rechazado_pendiente_reemplazo: 'Comprobante rechazado — pendiente reemplazo',
-  };
-  var ESTADO_DOCUMENTAL_BADGE = {
-    sin_comprobantes: 'neutral', conversion_documentada: 'blue', transferencia_documentada: 'blue',
-    documentacion_completa: 'green', rechazado_pendiente_reemplazo: 'red',
-  };
+  // RIO-122 (22/09/2026): ESTADO_DOCUMENTAL_LABEL/BADGE se centralizaron en
+  // interno/config/estado-documental.js (cargado antes que este archivo en
+  // panel-administrativo.html) — Panel Vendedor los necesitaba también y
+  // no tiene por qué duplicarse la traducción entre paneles.
 
   async function cargarListaLiquidaciones() {
     var r = await apiFetch('/interno/api/comisiones/liquidaciones');

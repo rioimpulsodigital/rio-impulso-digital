@@ -949,15 +949,26 @@
     if (!resultado) { info.textContent = 'No se encontró una liquidación asociada.'; return; }
 
     var estadoDoc = await apiFetch('/interno/api/comisiones/liquidaciones/' + encodeURIComponent(resultado.liquidacionId) + '/estado-documental');
-    var estadoTexto = (estadoDoc.ok && estadoDoc.body && estadoDoc.body.ok) ? estadoDoc.body.data.estadoDocumental : 'desconocido';
+    var estadoDocumental = (estadoDoc.ok && estadoDoc.body && estadoDoc.body.ok) ? estadoDoc.body.data.estadoDocumental : null;
+    // RIO-122 (22/09/2026, hallazgo de UAT): nunca se muestra el enum crudo
+    // del servidor (ej. "documentacion_completa") — se traduce con el mismo
+    // mapa que ya usa Panel Administrativo, centralizado en
+    // interno/config/estado-documental.js.
+    var estadoTexto = estadoDocumental ? (ESTADO_DOCUMENTAL_LABEL[estadoDocumental] || estadoDocumental) : 'Desconocido';
 
     // Los metadatos de cada comprobante traen su propio id, que es lo que
     // hace falta para armar el link real de descarga (.../archivo) — nunca
     // se arma esa ruta a mano con datos que no vinieron del servidor.
     var transferenciaMeta = await apiFetch('/interno/api/comisiones/liquidaciones/' + encodeURIComponent(resultado.liquidacionId) + '/comprobante-transferencia');
     var transferenciaComprobante = (transferenciaMeta.ok && transferenciaMeta.body && transferenciaMeta.body.ok) ? transferenciaMeta.body.data.comprobante : null;
+    // RIO-122 (22/09/2026, hallazgo de UAT): el link funcionaba (mismo
+    // href/target/rel de siempre) pero no se reconocía como acción —
+    // hereda el reset global `a { text-decoration:none; color:inherit; }`
+    // de assets/css/main.css. Se reutiliza la clase que ya usa "Ver
+    // liquidación" en esta misma tarjeta (interno/panel-vendedor.html) en
+    // vez de crear un estilo nuevo.
     var transferenciaHTML = transferenciaComprobante
-      ? '<br><a href="/interno/api/comisiones/liquidaciones/' + encodeURIComponent(resultado.liquidacionId) + '/comprobante-transferencia/' + encodeURIComponent(transferenciaComprobante.id) + '/archivo" target="_blank" rel="noopener">Descargar comprobante de transferencia</a>'
+      ? '<br><a class="pv-comision-liq-btn" href="/interno/api/comisiones/liquidaciones/' + encodeURIComponent(resultado.liquidacionId) + '/comprobante-transferencia/' + encodeURIComponent(transferenciaComprobante.id) + '/archivo" target="_blank" rel="noopener">Descargar comprobante de transferencia</a>'
       : '<br>Comprobante de transferencia: todavía no subido.';
 
     var conversionHTML = '';
@@ -965,7 +976,7 @@
       var conversionMeta = await apiFetch('/interno/api/comisiones/conversiones/' + encodeURIComponent(resultado.conversionId) + '/comprobante');
       var conversionComprobante = (conversionMeta.ok && conversionMeta.body && conversionMeta.body.ok) ? conversionMeta.body.data.comprobante : null;
       conversionHTML = conversionComprobante
-        ? '<br><a href="/interno/api/comisiones/conversiones/' + encodeURIComponent(resultado.conversionId) + '/comprobante/' + encodeURIComponent(conversionComprobante.id) + '/archivo" target="_blank" rel="noopener">Descargar comprobante de conversión</a>'
+        ? '<br><a class="pv-comision-liq-btn" href="/interno/api/comisiones/conversiones/' + encodeURIComponent(resultado.conversionId) + '/comprobante/' + encodeURIComponent(conversionComprobante.id) + '/archivo" target="_blank" rel="noopener">Descargar comprobante de conversión</a>'
         : '<br>Comprobante de conversión: todavía no subido.';
     }
 

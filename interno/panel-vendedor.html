@@ -532,8 +532,12 @@
      compartida con panel-supervisor.html y panel-administrativo.html —
      cargar antes del panel-*.js correspondiente (mismo orden que config/users.js). -->
 <script src="./config/estado-pago.js?v=20260917" defer></script>
+<!-- RIO-122: fuente única de ESTADO_DOCUMENTAL_LABEL/BADGE (liquidaciones),
+     compartida con panel-administrativo.html — cargar antes del panel-*.js
+     correspondiente (mismo orden que config/estado-pago.js). -->
+<script src="./config/estado-documental.js?v=20260922" defer></script>
 <script src="../assets/js/main.js?v=20260627" defer></script>
-<script src="./panel-vendedor.js?v=20260917" defer></script>
+<script src="./panel-vendedor.js?v=20260922" defer></script>
 
 </body>
 </html>
