@@ -3102,9 +3102,13 @@
     if (comprobante && comprobante.rechazadoEn) {
       comprobanteHTML = '<div class="pv-motivo-box"><strong>Comprobante rechazado.</strong> Motivo: ' + escapeHtml(comprobante.motivoRechazo) + '<br>Subí una versión nueva.</div>' + comprobanteUploadFormHTML(liquidacionId);
     } else if (comprobante) {
+      // RIO-122 (22/09/2026, hallazgo de UAT): "Ver" funcionaba pero no se
+      // veía como acción — se envuelve con la misma clase pv-comprobante-link
+      // que ya usa el link de comprobante de pago (línea ~1390), en vez de
+      // crear un estilo aislado nuevo.
       comprobanteHTML =
         '<div class="pv-comprobante-info">Comprobante subido (versión ' + comprobante.version + ') — ' + escapeHtml(comprobante.nombreOriginal) +
-          ' <a href="/interno/api/comisiones/liquidaciones/' + encodeURIComponent(liquidacionId) + '/comprobante-transferencia/' + encodeURIComponent(comprobante.id) + '/archivo" target="_blank" rel="noopener">Ver</a>' +
+          ' <span class="pv-comprobante-link"><a href="/interno/api/comisiones/liquidaciones/' + encodeURIComponent(liquidacionId) + '/comprobante-transferencia/' + encodeURIComponent(comprobante.id) + '/archivo" target="_blank" rel="noopener">Ver</a></span>' +
         '</div>' +
         '<form class="pv-accion-form" data-rechazar-comprobante-liquidacion="' + escapeHtml(comprobante.id) + '" style="border-top:none;">' +
           '<label>Rechazar comprobante (subir uno nuevo)</label>' +

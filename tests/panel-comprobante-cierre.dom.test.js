@@ -31,6 +31,10 @@ import { JSDOM } from 'jsdom';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ESTADO_PAGO_JS = fs.readFileSync(path.join(ROOT, 'interno/config/estado-pago.js'), 'utf8');
+// RIO-122 (22/09/2026): necesario para las pruebas de la pestaña
+// Liquidaciones de Panel Administrativo, que ya lo carga en producción
+// (panel-administrativo.html) antes de panel-administrativo.js.
+const ESTADO_DOCUMENTAL_JS = fs.readFileSync(path.join(ROOT, 'interno/config/estado-documental.js'), 'utf8');
 
 function flush(ticks = 12) {
   return new Promise((resolve) => {
@@ -66,6 +70,7 @@ async function bootPanel({ htmlFile, jsFile, identity, ventas, extraRoutes = {} 
   };
 
   dom.window.eval(ESTADO_PAGO_JS);
+  dom.window.eval(ESTADO_DOCUMENTAL_JS);
   dom.window.eval(panelSrc);
   dom.window.document.dispatchEvent(new dom.window.Event('DOMContentLoaded', { bubbles: true, cancelable: true }));
   await flush();
@@ -233,6 +238,16 @@ test('Panel Administrativo — pago "informado" (antes de acreditar): "Acreditar
   // Panel Administrativo muestra "Ver comprobante (versión N)" — nunca el
   // nombre original del archivo (a diferencia de Panel Vendedor).
   assert.ok(body.textContent.includes('Ver comprobante (versión 1)'), 'el comprobante informado debe estar visible: ' + body.textContent);
+  // RIO-122 (22/09/2026, hallazgo de UAT): el link funcionaba pero no se
+  // veía como acción — debe vivir dentro de .pv-comprobante-link (el mismo
+  // patrón ya existente en Panel Administrativo, sin CSS aislado nuevo) y
+  // conservar exactamente el mismo href/target/rel de siempre.
+  const linkComprobante = [...body.querySelectorAll('a')].find((a) => a.textContent === 'Ver comprobante (versión 1)');
+  assert.ok(linkComprobante, 'debe existir el link real "Ver comprobante (versión 1)": ' + body.textContent);
+  assert.ok(linkComprobante.closest('.pv-comprobante-link'), 'debe reconocerse como acción vía el patrón ya existente pv-comprobante-link');
+  assert.equal(linkComprobante.getAttribute('href'), '/interno/api/ventas/venta-1/pagos/pago-1/comprobante/c1/archivo', 'el href no debe cambiar con esta corrección de presentación');
+  assert.equal(linkComprobante.getAttribute('target'), '_blank');
+  assert.equal(linkComprobante.getAttribute('rel'), 'noopener');
 });
 
 test('Panel Administrativo — pago "acreditado": ni "Acreditar pago" ni "Rechazar" siguen disponibles (RIO-122, hallazgo de UAT), comprobante validado sigue visible', async () => {
@@ -254,4 +269,30 @@ test('Panel Administrativo — pago "acreditado": ni "Acreditar pago" ni "Rechaz
   assert.equal(body.querySelector('form[data-acreditar-pago]'), null, 'no debe poder volver a acreditar un pago ya acreditado: ' + body.textContent);
   assert.equal(body.querySelector('form[data-rechazar-pago]'), null, 'no debe poder rechazar un pago ya acreditado: ' + body.textContent);
   assert.ok(body.textContent.includes('Ver comprobante (versión 1)'), 'el comprobante validado debe seguir visible: ' + body.textContent);
+});
+
+test('Panel Administrativo — detalle de Liquidaciones: el link "Ver" del comprobante de transferencia se reconoce como acción (RIO-122, hallazgo de UAT)', async () => {
+  const venta = ventaBase({ codigoVenta: 'V-ADMIN-LIQ' });
+  const dom = await bootPanel({
+    htmlFile: 'panel-administrativo.html', jsFile: 'panel-administrativo.js', identity: IDENTIDAD_ADMIN, ventas: [venta],
+    extraRoutes: {
+      '/interno/api/comisiones': () => ({ ok: true, data: { comisiones: [] } }),
+      '/interno/api/comisiones/liquidaciones': () => ({ ok: true, data: { liquidaciones: [{ id: 'liq-1', beneficiarioEmail: 'brenda@rioimpulsodigital.com', montoTotalTransferido: 48000, monedaFinal: 'ARS', fecha: '2026-09-21' }] } }),
+      '/interno/api/comisiones/liquidaciones/liq-1': () => ({ ok: true, data: { liquidacion: { beneficiarioEmail: 'brenda@rioimpulsodigital.com', fecha: '2026-09-21', montoTotalTransferido: 48000, monedaFinal: 'ARS', comprobanteNota: null }, detalle: [] } }),
+      '/interno/api/comisiones/liquidaciones/liq-1/estado-documental': () => ({ ok: true, data: { estadoDocumental: 'documentacion_completa' } }),
+      '/interno/api/comisiones/liquidaciones/liq-1/comprobante-transferencia': () => ({ ok: true, data: { comprobante: { id: 'comp-1', version: 1, nombreOriginal: 'comprobante.pdf', rechazadoEn: null, motivoRechazo: null } } }),
+    },
+  });
+  dom.window.document.getElementById('pvTabLiquidacionesBtn').dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+  await flush(20);
+  dom.window.document.querySelector('[data-ver-liquidacion="liq-1"]').dispatchEvent(new dom.window.Event('click', { bubbles: true }));
+  await flush(20);
+
+  const slot = dom.window.document.getElementById('pvLiqDetalle-liq-1');
+  const link = [...slot.querySelectorAll('a')].find((a) => a.textContent === 'Ver');
+  assert.ok(link, 'debe existir el link real "Ver": ' + slot.innerHTML);
+  assert.ok(link.closest('.pv-comprobante-link'), 'debe reutilizar el mismo patrón pv-comprobante-link, sin CSS aislado nuevo');
+  assert.equal(link.getAttribute('href'), '/interno/api/comisiones/liquidaciones/liq-1/comprobante-transferencia/comp-1/archivo', 'el href no debe cambiar con esta corrección de presentación');
+  assert.equal(link.getAttribute('target'), '_blank');
+  assert.equal(link.getAttribute('rel'), 'noopener');
 });

@@ -246,7 +246,10 @@
     .pv-accion-form label { font-family: var(--ff-mono); font-size: .62rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 
     .pv-comprobante-link { font-size: .78rem; margin-top: 6px; }
-    .pv-comprobante-link a { color: var(--p); font-weight: 600; }
+    /* RIO-122 (22/09/2026, hallazgo de UAT): el link funcionaba (mismo
+       href/target/rel de siempre) pero color+negrita solo no bastaba para
+       leerse inequívocamente como acción — se agrega subrayado explícito. */
+    .pv-comprobante-link a { color: var(--p); font-weight: 600; text-decoration: underline; }
 
     .pv-notif-tipo { font-weight: 700; font-size: .82rem; color: var(--ink); }
     .pv-notif-meta { font-size: .76rem; color: var(--muted); margin-top: 2px; }
@@ -944,7 +947,7 @@
      correspondiente (mismo orden que config/estado-pago.js). -->
 <script src="./config/estado-documental.js?v=20260922" defer></script>
 <script src="../assets/js/main.js?v=20260627" defer></script>
-<script src="./panel-administrativo.js?v=20260922b" defer></script>
+<script src="./panel-administrativo.js?v=20260922c" defer></script>
 
 </body>
 </html>
