@@ -810,8 +810,21 @@
     // No es únicamente lo que devuelve /ventas (mis ventas como VENDEDOR) —
     // una persona puede además cobrar realización sobre una venta ajena
     // (ej. un practicante que hizo el trabajo de una venta de otro
-    // ejecutivo). Se completa con /comisiones/liquidaciones (ya filtra a
-    // "las mías" del lado del servidor) para no perder esas filas.
+    // ejecutivo), o participar de un proyecto personalizado. RIO-122
+    // (22/09/2026): se completa con GET /comisiones/propias, que el servidor
+    // resuelve solo por la identidad autenticada y que nunca trae datos de
+    // la venta (ni nombre del cliente). Las que ya llegaron por mis ventas
+    // se conservan tal cual (traen más contexto) — se evita duplicarlas.
+    var yaListadas = {};
+    lista.forEach(function (c) { yaListadas[c.id] = true; });
+    try {
+      var rp = await apiFetch('/interno/api/comisiones/propias');
+      var propias = (rp.ok && rp.body && rp.body.ok) ? (rp.body.data.comisiones || []) : [];
+      propias.forEach(function (c) {
+        if (c.beneficiarioEmail !== identity.email || yaListadas[c.id]) return;
+        lista.push(c);
+      });
+    } catch (e) { /* si falla, "Mis comisiones" conserva el comportamiento anterior */ }
     todasMisComisiones = lista;
     comisionesYaCargadas = true;
     renderComisiones();
