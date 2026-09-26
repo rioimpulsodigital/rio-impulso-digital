@@ -2,51 +2,74 @@ name = "rio-impulso-digital"
 compatibility_date = "2026-07-14"
 pages_build_output_dir = "."
 
+# ─────────────────────────────────────────────────────────────────────────
+# RIO-123 (26/09/2026) — Preview y Producción SEPARADOS.
+#
+# Con `pages_build_output_dir`, este archivo es la fuente de verdad de los
+# bindings de Pages (Cloudflare: "no se pueden editar en el dashboard los
+# mismos campos"). Los bindings son claves NO heredables: lo que estuviera a
+# nivel superior lo heredarían Preview Y Producción. Antes de este cambio el
+# D1/R2 de Preview estaban a nivel superior — al fusionar a `main`,
+# Producción habría quedado conectada a `rio-ventas-preview` y a
+# `rio-comprobantes-preview`. Por eso ahora NO hay ningún binding a nivel
+# superior: cada entorno declara los suyos, completos, y solo los suyos.
+# tests/wrangler-config.test.js protege esta separación.
+#
+# Secretos (`CF_ACCESS_AUD`, `DATOS_SENSIBLES_KEY_V1`): NO viven acá — solo
+# nombres, nunca valores. Se cargan por entorno en Cloudflare Pages (Settings
+# → Variables and Secrets) y, para desarrollo local, en `.dev.vars` (ignorado
+# por git — ver `.dev.vars.example`). Producción usa valores PROPIOS: el AUD
+# de la aplicación de Access de Producción y una clave AES nueva; nunca los
+# de Preview.
+# ─────────────────────────────────────────────────────────────────────────
+
+# ── Preview (toda rama que no sea `main`) ────────────────────────────────
 # D1 — RIO-110 sección 5/6. Base de desarrollo/preview creada el 28/08/2026
 # (`wrangler d1 create rio-ventas-preview`, región ENAM). NO es la base de
-# producción — esa no existe todavía y requiere aprobación expresa de Brenda.
-[[d1_databases]]
+# producción.
+#
+# R2 — RIO-116 sección "archivos y comprobantes seguros". Bucket privado
+# (creado el 31/08/2026) — sin dominio personalizado ni r2.dev habilitado, así
+# que no existe ninguna URL pública: todo archivo se sirve exclusivamente por
+# una ruta autenticada de este Worker (nunca un link directo al bucket).
+#
+# Variable pública — no es secreto (confirmado en la auditoría RIO-108: el
+# dominio de equipo de Access es un dato público, no un identificador de
+# validación de tokens).
+[env.preview.vars]
+CF_ACCESS_TEAM_DOMAIN = "rio-impulsodigital-team.cloudflareaccess.com"
+
+[[env.preview.d1_databases]]
 binding = "DB"
 database_name = "rio-ventas-preview"
 database_id = "1aed8e43-6e47-40c9-9770-1c50f6586d20"
 migrations_dir = "migrations"
 
-# R2 — RIO-116 sección "archivos y comprobantes seguros". Bucket privado
-# (creado el 31/08/2026, `wrangler r2 bucket create`) — sin dominio
-# personalizado ni r2.dev habilitado, así que no existe ninguna URL pública:
-# todo archivo se sirve exclusivamente por una ruta autenticada de este
-# Worker (nunca un link directo al bucket). Solo Preview — Producción no
-# tiene bucket propio todavía y requiere aprobación expresa de Brenda.
-[[r2_buckets]]
+[[env.preview.r2_buckets]]
 binding = "COMPROBANTES"
 bucket_name = "rio-comprobantes-preview"
 
-# Variables públicas — no son secretos (confirmado en la auditoría RIO-108:
-# el dominio de equipo de Access es un dato público, no un identificador de
-# validación de tokens). El AUD de la aplicación de Access SÍ es sensible y
-# se define como secreto, nunca acá — ver abajo.
-[vars]
+# ── Producción (rama `main`) ─────────────────────────────────────────────
+# Nombres aprobados (RIO-123): D1 `rio-ventas-prod`, R2 `rio-comprobantes-prod`.
+# TODAVÍA NO EXISTEN en Cloudflare — se crean con autorización expresa de
+# Brenda (RIO-123, fase de infraestructura). Por eso los bindings de abajo
+# están comentados: el build de Pages VALIDA este archivo (RIO-110: un
+# `database_id` placeholder hizo fallar el deploy), así que no se puede dejar
+# un ID inventado ni un bucket inexistente activo. NO inventar IDs.
+#
+# Al crear la infraestructura: descomentar, reemplazar `<COMPLETAR>` por el
+# `database_id` real que devuelve `wrangler d1 create rio-ventas-prod` y
+# recién ahí fusionar a `main`. Hasta entonces Producción no tiene D1 ni R2
+# (estado real hoy) y NO hereda ninguno de los de Preview.
+[env.production.vars]
 CF_ACCESS_TEAM_DOMAIN = "rio-impulsodigital-team.cloudflareaccess.com"
 
-# Secretos requeridos (nombres únicamente — nunca el valor en este archivo
-# ni en ningún archivo versionado):
-#   CF_ACCESS_AUD   → wrangler pages secret put CF_ACCESS_AUD
-#     (etiqueta AUD de la aplicación de Access "rioimpulsodigital.com",
-#     visible solo en el panel de Cloudflare Access → Applications.)
+# [[env.production.d1_databases]]
+# binding = "DB"
+# database_name = "rio-ventas-prod"
+# database_id = "<COMPLETAR>"
+# migrations_dir = "migrations"
 #
-# En desarrollo local, estos mismos nombres van en `.dev.vars` (ignorado por
-# git — ver `.dev.vars.example` para el formato, sin valores reales).
-
-# --- Entornos ---
-# Preview (esta rama y cualquier otra que no sea main): CONFIGURADO el
-# 28/08/2026 vía API sobre el proyecto real de Cloudflare — binding D1 "DB" →
-# rio-ventas-preview + CF_ACCESS_TEAM_DOMAIN. Falta únicamente el secreto
-# CF_ACCESS_AUD (Anthy no tiene permisos de Access/Zero Trust — ver RIO-109 —
-# y no tiene el valor real). Pendiente: Brenda lo entrega por el mismo canal
-# de archivo local usado para el token, y se carga con
-# `wrangler pages secret put CF_ACCESS_AUD` (o Brenda lo carga directo desde
-# el panel: Pages → rio-impulso-digital → Settings → Environment variables →
-# Preview).
-# Producción (rama main): esto SOLO se toca cuando RIO-110 esté aprobada y
-# fusionada — no se modificó nada de producción en esta tarea (verificado:
-# deployment_configs.production sigue exactamente igual que antes del PATCH).
+# [[env.production.r2_buckets]]
+# binding = "COMPROBANTES"
+# bucket_name = "rio-comprobantes-prod"

@@ -76,9 +76,9 @@ dependencias extra de testing). `wrangler` queda fijado como devDependency
 
 | Nombre | Tipo | Dónde vive | Estado |
 |---|---|---|---|
-| `CF_ACCESS_TEAM_DOMAIN` | variable pública | `wrangler.toml` → `[vars]`; configurada también en el entorno Preview del proyecto real | ✅ Configurado (28/08/2026) |
+| `CF_ACCESS_TEAM_DOMAIN` | variable pública | `wrangler.toml` → `[env.preview.vars]` / `[env.production.vars]` (RIO-123: ya no a nivel superior); configurada también en el entorno Preview del proyecto real | ✅ Configurado (28/08/2026) |
 | `CF_ACCESS_AUD` | secreto | `.dev.vars` (local) + entorno Preview del proyecto real, vía API (`secret_text`, nunca en texto plano) | ✅ Configurado y verificado con login real (28/08/2026) |
-| `DB` | binding D1, no es una variable | `wrangler.toml` → `[[d1_databases]]`; configurado también en el entorno Preview del proyecto real | ✅ Configurado (28/08/2026) |
+| `DB` | binding D1, no es una variable | `wrangler.toml` → `[[env.preview.d1_databases]]` (Producción: `[[env.production.d1_databases]]`, pendiente de crear — RIO-123); configurado también en el entorno Preview del proyecto real | ✅ Configurado (28/08/2026) |
 
 Copiar `.dev.vars.example` a `.dev.vars` (ya en `.gitignore`) y completar el
 valor real solo en la máquina local — nunca commitear ni pegar el valor en
