@@ -299,6 +299,15 @@
           <span class="ut-card-link">Abrir <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
         </a>
 
+        <a class="ut-card" href="./capacitacion-ficha-landing-imprimible.pdf" download aria-label="Descargar PDF: Capacitación Ficha y Landing en formato imprimible">
+          <div class="ut-card-icon ut-card-icon--violet">📄</div>
+          <span class="ut-card-tag">Material descargable</span>
+          <h3>Capacitación en PDF (para leer y marcar)</h3>
+          <p>El mismo contenido de la capacitación interactiva — los 14 módulos, ejercicios y autoevaluación con respuestas al final — en un PDF pensado para imprimir, leer y subrayar. Sin precios: consultalos siempre en el Kit o el Portal.</p>
+          <p style="font-size:.7rem;color:var(--muted);margin:0 0 6px;">📎 PDF descargable · 17 páginas</p>
+          <span class="ut-card-link">Descargar PDF <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 21h16"/></svg></span>
+        </a>
+
         <a class="ut-card" href="./kit-comercial-imprimible.pdf" download aria-label="Descargar PDF: Ficha comercial imprimible">
           <div class="ut-card-icon ut-card-icon--violet">📄</div>
           <span class="ut-card-tag">Material descargable</span>
@@ -344,6 +353,9 @@
 
       <div class="portal-subsection">
         <p class="portal-subsection-label">Publicaciones</p>
+        <div class="portal-portfolio-grid" id="marketingPublicacionesGrid">
+          <!-- Generado dinámicamente desde config/portal-resources.js (category: 'publicaciones') según el mercado activo -->
+        </div>
         <div class="ut-cards">
 
           <div class="ut-card ut-card--soon">
@@ -545,7 +557,10 @@
     renderGreeting(executive);
     renderMarketSwitcher(executive, currentMarket);
     applyAccessState(executive);
-    if (currentMarket) renderMarketingResources(currentMarket);
+    if (currentMarket) {
+      renderMarketingResources(currentMarket);
+      renderMarketingPublicaciones(currentMarket);
+    }
     renderArgentinaPresentation(currentMarket);
   });
 
@@ -608,13 +623,82 @@
     console.warn('[Portal RiO] Identidad no resuelta por el servidor (whoami) — Comercial y Marketing bloqueados.');
   }
 
+  function marketingResourceCardHTML(r) {
+    var copyBtn = r.copy
+      ? '<button type="button" class="portfolio-btn copy-caption-btn" data-copy-id="' + r.id + '">📋 Copiar texto</button>'
+      : '';
+    return (
+      '<div class="portal-portfolio-card">' +
+        '<div class="portal-portfolio-img" style="aspect-ratio:9/8;">' +
+          '<img src="' + r.file + '" alt="' + r.alt + '" style="object-position:top;">' +
+        '</div>' +
+        '<div class="portal-portfolio-body">' +
+          '<h3 class="portal-portfolio-name">' + r.title + '</h3>' +
+          '<div class="portal-portfolio-btns">' +
+            '<a href="' + r.file + '" class="portfolio-btn portfolio-btn--primary" target="_blank" rel="noopener">⬇ Descargar</a>' +
+            copyBtn +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  // Copia el copy sugerido de la pieza (campo `copy` en portal-resources.js) al
+  // portapapeles, para que el ejecutivo no tenga que reescribirlo a mano al
+  // publicar. Delegado en document porque las tarjetas se generan dinámicamente.
+  document.addEventListener('click', function (event) {
+    var btn = event.target.closest('.copy-caption-btn');
+    if (!btn) return;
+
+    var resource = MARKETING_RESOURCES.filter(function (r) { return r.id === btn.dataset.copyId; })[0];
+    if (!resource || !resource.copy) return;
+
+    var originalLabel = btn.textContent;
+    function showFeedback(ok) {
+      btn.textContent = ok ? '✅ Copiado' : '⚠️ No se pudo copiar';
+      btn.disabled = true;
+      setTimeout(function () {
+        btn.textContent = originalLabel;
+        btn.disabled = false;
+      }, 1800);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(resource.copy).then(
+        function () { showFeedback(true); },
+        function () { showFeedback(false); }
+      );
+      return;
+    }
+
+    // Fallback para navegadores sin Clipboard API o contexto no seguro.
+    try {
+      var textarea = document.createElement('textarea');
+      textarea.value = resource.copy;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      showFeedback(ok);
+    } catch (e) {
+      showFeedback(false);
+    }
+  });
+
+  function marketingResourcesFor(category, currentMarket) {
+    return MARKETING_RESOURCES
+      .filter(function (r) { return r.estado === 'activo' && r.category === category && (r.market === 'common' || r.market === currentMarket); })
+      .sort(function (a, b) { return a.orden - b.orden; });
+  }
+
   function renderMarketingResources(currentMarket) {
     var grid = document.getElementById('marketingResourcesGrid');
     if (!grid) return;
 
-    var items = MARKETING_RESOURCES
-      .filter(function (r) { return r.estado === 'activo' && (r.market === 'common' || r.market === currentMarket); })
-      .sort(function (a, b) { return a.orden - b.orden; });
+    var items = marketingResourcesFor('estados-historias', currentMarket);
 
     if (items.length === 0) {
       document.getElementById('marketingResourcesSection').innerHTML =
@@ -631,21 +715,21 @@
       return;
     }
 
-    grid.innerHTML = items.map(function (r) {
-      return (
-        '<div class="portal-portfolio-card">' +
-          '<div class="portal-portfolio-img" style="aspect-ratio:9/8;">' +
-            '<img src="' + r.file + '" alt="' + r.alt + '" style="object-position:top;">' +
-          '</div>' +
-          '<div class="portal-portfolio-body">' +
-            '<h3 class="portal-portfolio-name">' + r.title + '</h3>' +
-            '<div class="portal-portfolio-btns">' +
-              '<a href="' + r.file + '" class="portfolio-btn portfolio-btn--primary" target="_blank" rel="noopener">⬇ Descargar</a>' +
-            '</div>' +
-          '</div>' +
-        '</div>'
-      );
-    }).join('');
+    grid.innerHTML = items.map(marketingResourceCardHTML).join('');
+  }
+
+  // Post 4:5 de Instagram (también pensado para que el ejecutivo lo comparta en su
+  // LinkedIn) — RIO-132. Si el mercado activo todavía no tiene piezas de esta
+  // categoría, el grid queda vacío y solo se ven las tarjetas "Próximamente" ya
+  // existentes debajo (Feed cuadrado, Carruseles, Videos).
+  function renderMarketingPublicaciones(currentMarket) {
+    var grid = document.getElementById('marketingPublicacionesGrid');
+    if (!grid) return;
+
+    var items = marketingResourcesFor('publicaciones', currentMarket);
+    if (items.length === 0) return;
+
+    grid.innerHTML = items.map(marketingResourceCardHTML).join('');
   }
 
   // Tarjeta "Presentación comercial — Argentina" (RIO-104) — solo existe en el DOM
