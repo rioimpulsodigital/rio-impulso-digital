@@ -50,26 +50,25 @@ binding = "COMPROBANTES"
 bucket_name = "rio-comprobantes-preview"
 
 # ── Producción (rama `main`) ─────────────────────────────────────────────
-# Nombres aprobados (RIO-123): D1 `rio-ventas-prod`, R2 `rio-comprobantes-prod`.
-# TODAVÍA NO EXISTEN en Cloudflare — se crean con autorización expresa de
-# Brenda (RIO-123, fase de infraestructura). Por eso los bindings de abajo
-# están comentados: el build de Pages VALIDA este archivo (RIO-110: un
-# `database_id` placeholder hizo fallar el deploy), así que no se puede dejar
-# un ID inventado ni un bucket inexistente activo. NO inventar IDs.
-#
-# Al crear la infraestructura: descomentar, reemplazar `<COMPLETAR>` por el
-# `database_id` real que devuelve `wrangler d1 create rio-ventas-prod` y
-# recién ahí fusionar a `main`. Hasta entonces Producción no tiene D1 ni R2
-# (estado real hoy) y NO hereda ninguno de los de Preview.
+# Recursos exclusivos de Producción (RIO-123, 26/09/2026), creados con
+# autorización expresa de Brenda en la cuenta real, región ENAM:
+#   - D1 `rio-ventas-prod` — vacía al crearse; las migraciones se aplican
+#     por separado, con backup previo (no las aplica el deploy de Pages).
+#   - R2 `rio-comprobantes-prod` — privado: sin dominio personalizado y con
+#     r2.dev deshabilitado; los archivos solo se sirven por la ruta
+#     autenticada de este proyecto.
+# Nunca reutilizan nada de Preview. Los secretos de Producción
+# (`CF_ACCESS_AUD`, `DATOS_SENSIBLES_KEY_V1`) tienen valores PROPIOS y se
+# cargan en Cloudflare Pages, nunca en este archivo.
 [env.production.vars]
 CF_ACCESS_TEAM_DOMAIN = "rio-impulsodigital-team.cloudflareaccess.com"
 
-# [[env.production.d1_databases]]
-# binding = "DB"
-# database_name = "rio-ventas-prod"
-# database_id = "<COMPLETAR>"
-# migrations_dir = "migrations"
-#
-# [[env.production.r2_buckets]]
-# binding = "COMPROBANTES"
-# bucket_name = "rio-comprobantes-prod"
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "rio-ventas-prod"
+database_id = "11132d3b-4016-482f-a7b5-24c026d89ffa"
+migrations_dir = "migrations"
+
+[[env.production.r2_buckets]]
+binding = "COMPROBANTES"
+bucket_name = "rio-comprobantes-prod"

@@ -84,23 +84,35 @@ test('wrangler.toml — nunca queda un placeholder ni un ID inventado activo (el
   assert.ok(!/<COMPLETAR>|PENDIENTE_|TODO_ID/i.test(activo), 'un database_id placeholder hace fallar el deploy de Pages (RIO-110)');
 });
 
-test('wrangler.toml — los nombres productivos aprobados quedan documentados para completarse al crear la infraestructura', () => {
+test('wrangler.toml — los nombres productivos aprobados figuran en el archivo', () => {
   assert.ok(TOML.includes(PROD_DB_NAME), 'debe figurar rio-ventas-prod');
   assert.ok(TOML.includes(PROD_BUCKET), 'debe figurar rio-comprobantes-prod');
 });
 
-// GATE previo al merge a `main`: hoy es esperado que NO se cumpla (Producción
-// todavía no tiene D1 ni R2 — se crean con autorización expresa de Brenda en
-// RIO-123). Marcada `todo`: se ejecuta y se reporta, pero no rompe la suite.
-// Al crear la infraestructura y activar los bindings, pasa a cumplirse: en
-// ese momento se le quita el `todo`.
-test('GATE merge a main — Producción declara su propio D1 (rio-ventas-prod) y R2 (rio-comprobantes-prod) activos', { todo: 'RIO-123: completar cuando existan D1/R2 de Producción' }, () => {
+// Recursos reales de Producción (creados el 26/09/2026 con autorización de
+// Brenda; ENAM; D1 vacía, R2 privado sin dominio público ni r2.dev). Era el
+// GATE previo al merge a `main` (antes marcado `todo`): ahora se exige.
+const PROD_DB_ID = '11132d3b-4016-482f-a7b5-24c026d89ffa';
+
+test('Producción declara su propio D1 (rio-ventas-prod) y R2 (rio-comprobantes-prod), activos y exclusivos', () => {
   const t = textoActivo(esProduccion);
   assert.ok(t.includes('env.production.d1_databases'));
   assert.ok(t.includes(`database_name = "${PROD_DB_NAME}"`));
-  assert.match(t, /database_id = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"/);
+  assert.ok(t.includes(`database_id = "${PROD_DB_ID}"`), 'database_id real de rio-ventas-prod');
   assert.match(t, /binding = "DB"/);
   assert.ok(t.includes('env.production.r2_buckets'));
   assert.ok(t.includes(`bucket_name = "${PROD_BUCKET}"`));
   assert.match(t, /binding = "COMPROBANTES"/);
+  assert.match(t, /CF_ACCESS_TEAM_DOMAIN = "/, 'Producción conserva su variable pública');
+  assert.notEqual(PROD_DB_ID, PREVIEW_DB_ID, 'Producción y Preview jamás comparten base');
+});
+
+test('Cada entorno declara exactamente UN D1 y UN R2 (sin bindings duplicados ni cruzados)', () => {
+  const headers = secciones().map((s) => s.header);
+  for (const entorno of ['preview', 'production']) {
+    assert.equal(headers.filter((h) => h === `env.${entorno}.d1_databases`).length, 1, `un solo D1 en ${entorno}`);
+    assert.equal(headers.filter((h) => h === `env.${entorno}.r2_buckets`).length, 1, `un solo R2 en ${entorno}`);
+  }
+  const todosLosBindings = headers.filter((h) => /(d1_databases|r2_buckets)$/.test(h));
+  assert.equal(todosLosBindings.length, 4, 'solo los 4 bindings esperados (2 por entorno), ninguno a nivel superior: ' + todosLosBindings.join(', '));
 });
