@@ -12,7 +12,7 @@
 // interfaz (RIO-111, requisito 14).
 
 import { ok, Errors } from '../../../_shared/response.js';
-import { resolveRoleIdentity, AuthzError } from '../../../_shared/authz.js';
+import { resolveRoleIdentity, panelesAutorizados, AuthzError } from '../../../_shared/authz.js';
 import { isMethodAllowed } from '../../../_shared/security.js';
 
 function serialize(roleIdentity) {
@@ -27,6 +27,11 @@ function serialize(roleIdentity) {
     validFrom: roleIdentity.validFrom,
     validUntil: roleIdentity.validUntil,
     permissions: roleIdentity.permissions,
+    // RIO-123: qué paneles puede usar esta identidad, derivado en el servidor
+    // (misma regla que los guards de cada panel — ver PANELES en authz.js).
+    // Solo ids de panel: interno/index.html los usa para mostrar las tarjetas;
+    // ocultar una tarjeta nunca es autorización, cada API se protege por sí sola.
+    panelesAutorizados: panelesAutorizados(roleIdentity),
   };
 }
 

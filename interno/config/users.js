@@ -66,6 +66,10 @@ async function resolveExecutive() {
     // decide qué mostrar en la interfaz.
     role: body.data.role,
     permissions: body.data.permissions,
+    // RIO-123: paneles que el SERVIDOR ya determinó para esta identidad
+    // (whoami.panelesAutorizados) — index.html solo los dibuja como tarjetas.
+    // No es autorización: cada panel y cada API la vuelven a exigir.
+    panelesAutorizados: Array.isArray(body.data.panelesAutorizados) ? body.data.panelesAutorizados : [],
   };
 }
 

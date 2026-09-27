@@ -198,6 +198,23 @@
 <div class="ut-main">
   <div class="ut-container">
 
+    <!-- ── 🧭 MIS PANELES (RIO-123) ────────────────────
+         Se dibuja desde whoami.panelesAutorizados (lo decide el servidor,
+         desde D1). Oculta hasta que la identidad esté resuelta. Ocultar o
+         mostrar una tarjeta NO es autorización: cada panel y cada API se
+         protegen por sí solos. -->
+    <div class="portal-section" id="section-paneles" hidden>
+      <div class="portal-section-head">
+        <span class="portal-section-emoji">🧭</span>
+        <div>
+          <h2 class="portal-section-title">Mis paneles</h2>
+          <p class="portal-section-desc">Accede a las herramientas habilitadas para tu rol.</p>
+        </div>
+      </div>
+      <div class="ut-cards" id="panelesCards"></div>
+      <p class="portal-section-desc" id="panelesVacio" hidden>No tienes paneles de gestión asignados actualmente.</p>
+    </div>
+
     <!-- ── 🚀 COMERCIAL ─────────────────────────── -->
     <div class="portal-section" id="section-comercial">
       <div class="portal-section-head">
@@ -557,6 +574,7 @@
     renderGreeting(executive);
     renderMarketSwitcher(executive, currentMarket);
     applyAccessState(executive);
+    renderMisPaneles(executive);
     if (currentMarket) {
       renderMarketingResources(currentMarket);
       renderMarketingPublicaciones(currentMarket);
@@ -569,6 +587,73 @@
     document.getElementById('portalDesc').innerHTML =
       executive.name + ', RiO te da la bienvenida al Portal Interno.<br>Selecciona una herramienta para empezar.';
   }
+
+  /* MIS-PANELES:INICIO */
+  // RIO-123 — "Mis paneles". QUÉ paneles ve cada persona lo decide el
+  // SERVIDOR (whoami.panelesAutorizados, derivado de D1); acá solo se dibuja
+  // la tarjeta de cada id recibido. Esta tabla es un catálogo de textos y
+  // enlaces — nunca decide quién puede ver qué: sin lista de correos, sin
+  // reglas por nombre ni por rol. Un id que el servidor no envía no se
+  // dibuja, y un id desconocido se ignora. Ocultar/mostrar una tarjeta NO es
+  // autorización: cada panel y cada API se protegen por sí solos.
+  var PANEL_CATALOGO = {
+    vendedor: {
+      icon: '💼', color: 'coral', title: 'Panel Vendedor', href: './panel-vendedor.html',
+      desc: 'Consulta tus ventas, comisiones y estado de tus operaciones.'
+    },
+    supervisor: {
+      icon: '👥', color: 'violet', title: 'Panel Supervisor', href: './panel-supervisor.html',
+      desc: 'Supervisa las operaciones y el desempeño del equipo asignado.'
+    },
+    administrativo: {
+      icon: '⚙️', color: 'coral', title: 'Panel Administrativo', href: './panel-administrativo.html',
+      desc: 'Gestiona ventas, pagos, producción, equipo y comisiones.'
+    }
+  };
+
+  function renderMisPaneles(executive) {
+    var section = document.getElementById('section-paneles');
+    var cards = document.getElementById('panelesCards');
+    var vacio = document.getElementById('panelesVacio');
+    if (!section || !cards || !vacio) return;
+    if (!executive) return; // identidad no resuelta: sigue oculta (Comercial/Marketing ya muestran el bloqueo).
+
+    var ids = (executive.panelesAutorizados || []).filter(function (id) {
+      return Object.prototype.hasOwnProperty.call(PANEL_CATALOGO, id);
+    });
+    cards.innerHTML = '';
+    section.hidden = false;
+    if (ids.length === 0) {
+      vacio.hidden = false;
+      return;
+    }
+    vacio.hidden = true;
+    ids.forEach(function (id) {
+      var p = PANEL_CATALOGO[id];
+      var a = document.createElement('a');
+      a.className = 'ut-card';
+      a.href = p.href;
+      a.setAttribute('data-panel', id);
+
+      var icon = document.createElement('div');
+      icon.className = 'ut-card-icon ut-card-icon--' + p.color;
+      icon.textContent = p.icon;
+      var tag = document.createElement('span');
+      tag.className = 'ut-card-tag';
+      tag.textContent = 'Panel';
+      var h3 = document.createElement('h3');
+      h3.textContent = p.title;
+      var desc = document.createElement('p');
+      desc.textContent = p.desc;
+      var link = document.createElement('span');
+      link.className = 'ut-card-link';
+      link.innerHTML = 'Abrir <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+
+      a.appendChild(icon); a.appendChild(tag); a.appendChild(h3); a.appendChild(desc); a.appendChild(link);
+      cards.appendChild(a);
+    });
+  }
+  /* MIS-PANELES:FIN */
 
   // Solo se agrega al DOM si allowedMarkets tiene más de un elemento (hoy, Brenda y Alberto).
   // Para el resto de ejecutivos el elemento no existe en absoluto — no solo está oculto.
