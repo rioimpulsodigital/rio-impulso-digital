@@ -121,7 +121,10 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
         porcentaje_snapshot: p[8], base_snapshot: p[9], monto_base: p[10], moneda: p[11], monto_comision: p[12], estado: 'calculada_provisional',
       });
     } else if (sql.startsWith('INSERT INTO eventos_historial')) {
-      state.eventos_historial.push({ id: p[0], venta_id: p[1], entidad: p[2], entidad_id: p[3], proxima_accion: p[8] || null, responsable_proxima_accion: p[9] || null });
+      // RIO-123: se agrega estado_nuevo (columna real 6ª, ver historial.js) —
+      // lo necesita el fake de "componentes que ya pasaron por 'entregada'"
+      // más abajo, para calcularProximaAccionProyecto().
+      state.eventos_historial.push({ id: p[0], venta_id: p[1], entidad: p[2], entidad_id: p[3], estado_nuevo: p[5], proxima_accion: p[8] || null, responsable_proxima_accion: p[9] || null });
     } else if (sql.startsWith('INSERT INTO hubspot_sync')) {
       // RIO-120 (11/09/2026, alcance simplificado): crearRegistroPendiente
       // es lo único que POST /ventas dispara — 'pendiente'/'forms_api_browser'
@@ -254,10 +257,17 @@ function fakeDb(seed = { clientes: [], ventas: [], proyectos: [], componentes: [
       const fila = state.notificaciones.find((n) => n.clave_idempotencia === p[0]);
       return fila ? [{ id: fila.id }] : [];
     }
-    if (sql.startsWith('SELECT proxima_accion, responsable_proxima_accion FROM eventos_historial')) {
-      const coincidencias = (state.eventos_historial || []).filter((e) => e.venta_id === p[0] && e.proxima_accion);
-      const ultimo = coincidencias[coincidencias.length - 1]; // orden de inserción = orden cronológico en este fake.
-      return ultimo ? [{ proxima_accion: ultimo.proxima_accion, responsable_proxima_accion: ultimo.responsable_proxima_accion }] : [];
+    // RIO-123: qué componentes de esta venta ya pasaron alguna vez por
+    // 'entregada' — distingue "recién entra a producción" de "el cliente
+    // pidió corrección y vuelve a producción" para calcularProximaAccionProyecto().
+    if (sql.startsWith("SELECT DISTINCT entidad_id FROM eventos_historial WHERE entidad = 'componente' AND estado_nuevo = 'entregada'")) {
+      const idsConsultados = new Set(p);
+      const matches = new Set(
+        (state.eventos_historial || [])
+          .filter((e) => e.entidad === 'componente' && e.estado_nuevo === 'entregada' && idsConsultados.has(e.entidad_id))
+          .map((e) => e.entidad_id)
+      );
+      return [...matches].map((entidad_id) => ({ entidad_id }));
     }
     if (sql.startsWith('SELECT producto FROM ventas WHERE id')) {
       const v = state.ventas.find((x) => x.id === p[0]);
