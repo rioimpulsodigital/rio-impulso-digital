@@ -9,6 +9,7 @@ import { query } from '../../../_shared/db.js';
 import { assertCanViewVentaDetalle, AuthzError } from '../../../_shared/authz.js';
 import { isMethodAllowed } from '../../../_shared/security.js';
 import { calcularEstadoOperativo } from './index.js';
+import { calcularProximaAccionProyecto } from '../../../_shared/proyectos.js';
 
 export async function onRequest(context) {
   const { request, env, params, data } = context;
@@ -106,14 +107,25 @@ export async function onRequest(context) {
     if (pagos.some((p) => p.estado === 'pendiente' && pagosConHistorial.has(p.id))) return 'rechazado';
     return 'pendiente';
   })();
-  // RIO-119 (tercer bloque, item 5, 03/09/2026): "próxima acción y
-  // responsable" ya se registra por evento (historial.js) — se expone acá
-  // la más reciente en vez de duplicar el dato en la venta.
-  const proximaAccionRows = await query(
-    env.DB, requestId,
-    "SELECT proxima_accion, responsable_proxima_accion FROM eventos_historial WHERE venta_id = ? AND proxima_accion IS NOT NULL ORDER BY created_at DESC LIMIT 1",
-    [venta.id]
-  );
+  // RIO-123 (27/09/2026, corrección de causa raíz — ver calcularProximaAccionProyecto
+  // en _shared/proyectos.js): antes se exponía la `proxima_accion` MÁS
+  // RECIENTE de todo el historial de la venta (RIO-119) — quedaba obsoleta
+  // en cuanto una transición posterior no escribía una nueva (ej.
+  // aprobarComponente), mostrando para siempre un paso ya cumplido. Ahora es
+  // una PROYECCIÓN del estado vigente, no una lectura histórica — el
+  // historial de eventos (GET /ventas/:id/historial, ver historial.js) sigue
+  // intacto como evidencia — cada evento conserva la próxima acción tal como
+  // se registró en su momento, sin tocar.
+  const idsConEntregaPrevia = componentes.length
+    ? new Set(
+        (await query(
+          env.DB, requestId,
+          `SELECT DISTINCT entidad_id FROM eventos_historial WHERE entidad = 'componente' AND estado_nuevo = 'entregada' AND entidad_id IN (${componentes.map(() => '?').join(',')})`,
+          componentes.map((c) => c.id)
+        )).map((r) => r.entidad_id)
+      )
+    : new Set();
+  const proximaAccionProyectada = proyecto ? calcularProximaAccionProyecto(componentes, estadoOperativo, idsConEntregaPrevia) : null;
 
   // RIO-117 (corrección tras validación real, 01/09/2026): datos
   // tributarios/de facturación — nunca automáticos para un supervisor
@@ -251,8 +263,11 @@ export async function onRequest(context) {
         // RIO-119 (tercer bloque, item 5, 03/09/2026): 'referencia' o
         // 'reconstruccion' — null en cualquier venta del flujo normal.
         modoHistorico: venta.modo_historico || null,
-        proximaAccion: proximaAccionRows[0]?.proxima_accion || null,
-        responsableProximaAccion: proximaAccionRows[0]?.responsable_proxima_accion || null,
+        proximaAccion: proximaAccionProyectada,
+        // La proyección no está atada a un evento ni a la persona que lo
+        // disparó — "responsable" solo tenía sentido para un evento
+        // puntual, nunca para un estado vigente derivado.
+        responsableProximaAccion: null,
         // RIO-117 (corrección tras validación real): categorizado, nunca
         // repite lo que ya está en cabecera (cliente/producto/mercado/
         // precio) — ver Kit para el detalle de qué llena cada categoría.

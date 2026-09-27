@@ -444,6 +444,51 @@ function calcularRollupProyecto(componentes, comisionesEstados) {
   return 'en_produccion';
 }
 
+// "Próxima acción" — RIO-123 (27/09/2026, hallazgo de la venta controlada
+// V-20260927-7CF244 en Producción): antes se exponía la `proxima_accion` más
+// reciente de `eventos_historial` (venta_id, sin filtrar por si ese evento
+// seguía vigente) — cualquier transición que no escribiera una `proxima_accion`
+// nueva (aprobarComponente, entre otras) dejaba visible para siempre la de la
+// transición anterior, aunque ya estuviera cumplida ("Esperar aprobación del
+// cliente" seguía mostrándose después de la aprobación). El historial de
+// eventos NUNCA se toca por esto — sigue siendo la fuente de verdad de "qué
+// se esperaba en cada momento" (RIO-119); esta función resuelve, en cambio,
+// una PROYECCIÓN del estado actual: qué falta AHORA, derivada exclusivamente
+// de hechos vigentes (estado real de los componentes, más `estadoOperativo`,
+// ya calculado una sola vez por calcularEstadoOperativo/calcularRollupProyecto
+// — nunca una segunda fuente de verdad de estados).
+//
+// `componentes` en su orden real de producción (mismo ORDER BY que ya usa
+// GET /ventas/:id). `idsConEntregaPrevia` distingue "recién entra a
+// producción" de "el cliente pidió corrección y vuelve a producción" —
+// mismo criterio que ya usa el sistema para pagos rechazados (RIO-122): la
+// única señal real es que YA EXISTE un evento de este componente que pasó
+// por 'entregada' antes; solicitarCorreccionEntrega() vuelve el componente a
+// 'en_produccion', igual que iniciarProduccion(), así que el estado actual
+// por sí solo no alcanza para distinguirlos.
+export function calcularProximaAccionProyecto(componentes, estadoOperativo, idsConEntregaPrevia = new Set()) {
+  // Nunca se menciona el pago acá — una vez acreditado (o si nunca llegó a
+  // acreditarse porque la venta se canceló), lo que falta es enteramente
+  // operativo o financiero-interno, jamás "esperar el pago del cliente".
+  if (estadoOperativo === 'pendiente_cierre') return 'Pendiente de cierre y liquidación de comisiones';
+  if (estadoOperativo === 'completado' || estadoOperativo === 'cancelada' || estadoOperativo === 'en_espera_pago' || !estadoOperativo) return null;
+
+  const pendiente = componentes.find((c) => c.estado_actual !== 'aprobada');
+  if (!pendiente) return null; // defensivo: calcularRollupProyecto ya lo habría marcado pendiente_cierre/completado.
+
+  if (pendiente.estado_actual === 'entregada') {
+    return 'Esperar aprobación del cliente (o corregir si pide cambios)';
+  }
+  if (pendiente.estado_actual === 'en_produccion' && idsConEntregaPrevia.has(pendiente.id)) {
+    return 'Corregir y volver a entregar';
+  }
+  // 'bloqueada' (gate de Landing sin cumplir), 'pendiente' (todavía sin
+  // iniciar) o 'en_produccion' recién iniciada, sin entrega previa: no hay
+  // una única próxima acción más específica que la que ya muestra el propio
+  // estado del componente — nunca se inventa una.
+  return null;
+}
+
 export async function recomputeProyectoEstado(db, requestId, ventaId, actorEmail) {
   const { proyecto, componentes } = await loadVentaFull(db, requestId, ventaId);
   if (!proyecto || componentes.length === 0) return;
