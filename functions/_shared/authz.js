@@ -73,6 +73,40 @@ export const PERMISSIONS = Object.freeze({
   }),
 });
 
+// ── Paneles del Portal Interno — RIO-123 (27/09/2026) ────────────────────
+// PANELES:INICIO
+// Qué paneles puede usar una identidad ya resuelta. Es la MISMA regla que hoy
+// aplican los guards de cada panel (interno/panel-*.js) sobre lo que devuelve
+// whoami — centralizada acá para que interno/index.html muestre exactamente
+// las tarjetas que cada persona puede abrir, sin duplicar la regla en el
+// navegador:
+//   - vendedor:       cualquier identidad resuelta (panel-vendedor.js solo
+//                     exige whoami válido; sus datos se acotan por identidad
+//                     en el servidor — ventas propias y comisiones propias,
+//                     incluidas las de quien no vende, RIO-122).
+//   - supervisor:     capacidad `viewOthersData` (panel-supervisor.js) — admin
+//                     y supervisor; nunca por nombre de rol suelto.
+//   - administrativo: rol admin (panel-administrativo.js).
+// Nunca depende de un correo, un nombre ni del entorno (Preview/Producción
+// usan exactamente la misma regla; solo cambian los datos de D1).
+//
+// IMPORTANTE: mostrar u ocultar una tarjeta NO es autorización. Cada API
+// sigue exigiendo su propio permiso en el servidor, y cada acción sensible lo
+// vuelve a verificar (ver tests/paneles-acceso-directo.test.js). Si cambia
+// el guard de un panel, cambiar esta regla también — tests/paneles-autorizados.test.js
+// compara ambos.
+export const PANELES = Object.freeze({
+  vendedor: () => true,
+  supervisor: (ri) => !!ri.permissions.viewOthersData,
+  administrativo: (ri) => ri.role === 'admin',
+});
+
+export function panelesAutorizados(roleIdentity) {
+  if (!roleIdentity || !roleIdentity.role || !roleIdentity.permissions) return [];
+  return Object.keys(PANELES).filter((panel) => PANELES[panel](roleIdentity));
+}
+// PANELES:FIN
+
 function parseAllowedMarkets(raw) {
   try {
     const parsed = JSON.parse(raw);
