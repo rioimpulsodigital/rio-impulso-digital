@@ -1,0 +1,1163 @@
+// Cálculo y máquina de estados de la comisión — RIO-114, corregido según
+// las decisiones definitivas de Brenda del 28/08/2026 (segunda corrección).
+//
+// Independiente de la máquina de estados del proyecto (RIO-113): que una
+// comisión esté pagada no dice nada sobre el avance de producción, y
+// viceversa (RIO-97 v2 sección 8).
+//
+// Principio central: el porcentaje NUNCA es un valor fijo en el código, y
+// tampoco alcanza con una tabla de tasas por producto — se resuelve en dos
+// pasos, igual que el modelo de identidad de RIO-111: una DEFINICIÓN de
+// plan (`planes_comision`: tipo, porcentaje, base, productos y mercados
+// alcanzados, estado) y una ASIGNACIÓN versionada de ese plan a una persona
+// (`asignaciones_plan_comision`, mismo patrón que `asignaciones_rol`). Si
+// una persona no tiene una asignación vigente de un plan que además
+// alcance el producto y mercado de la venta, NO se genera esa comisión —
+// nunca un número inventado ni una fila con 0% disfrazado de definitivo
+// (Brenda: "la atribución como vendedor no genera comisión si no existe un
+// plan comercial activo").
+//
+// Deliberadamente NO implementado acá (fuera de alcance de RIO-114, ya
+// documentado en las tareas correspondientes): agrupación en liquidaciones
+// y transferencias (RIO-115, "Calendario y liquidaciones").
+
+import { query, execute } from './db.js';
+import { logEvento } from './historial.js';
+
+export class ComisionError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = 'ComisionError';
+    this.code = code;
+  }
+}
+
+// Plazo de resguardo — confirmado por Brenda, RIO-97 v2 sección 9: 10 días
+// corridos desde la acreditación del primer pago.
+const PLAZO_RESGUARDO_DIAS = 10;
+
+function nowSql() {
+  return new Date().toISOString().replace('T', ' ').slice(0, 19);
+}
+
+function parseJsonArray(raw) {
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+async function utilidadNetaComponente(db, requestId, componente) {
+  const costos = await query(db, requestId, 'SELECT monto FROM costos_directos WHERE componente_id = ?', [componente.id]);
+  const totalCostos = costos.reduce((sum, c) => sum + c.monto, 0);
+  return componente.precio_atribuido - totalCostos;
+}
+
+// RIO-117 (corrección tras validación real, 01/09/2026): en Landing
+// Premium ("personalizado"/"ficha_personalizado") RiO asume el costo real
+// del dominio propio incluido — hasta que ese costo se registre (aunque
+// sea con monto 0, cuando el cliente trae su propio dominio y RiO no
+// asume nada — "costo 0 con motivo auditable"), la utilidad neta de ese
+// componente es una ESTIMACIÓN, no un valor definitivo: no hay forma de
+// saber si el costo real la va a reducir. Por eso ninguna comisión que
+// dependa de esa utilidad puede quedar habilitada/programada/pagada
+// mientras el costo siga sin confirmar — se queda en
+// 'calculada_provisional' (nunca se inventa un valor de dominio).
+// Nunca aplica a Ficha ni a Landing genérica (sin dominio propio incluido).
+export async function costoDominioPendienteParaComision(db, requestId, comision) {
+  const ventaRows = await query(db, requestId, 'SELECT producto FROM ventas WHERE id = ?', [comision.venta_id]);
+  const producto = ventaRows[0]?.producto;
+  if (producto !== 'personalizado' && producto !== 'ficha_personalizado') return false;
+
+  let landingIds;
+  if (comision.componente_id) {
+    // Comisión de realización: solo bloquea si ESTE componente es la Landing.
+    const compRows = await query(db, requestId, 'SELECT id, tipo FROM componentes WHERE id = ?', [comision.componente_id]);
+    if (!compRows[0] || compRows[0].tipo !== 'landing') return false;
+    landingIds = [compRows[0].id];
+  } else {
+    // Comisión comercial/supervisión: a nivel de venta — busca la Landing del proyecto.
+    const proyectoRows = await query(db, requestId, 'SELECT id FROM proyectos WHERE venta_id = ?', [comision.venta_id]);
+    if (!proyectoRows[0]) return false;
+    const compRows = await query(db, requestId, "SELECT id FROM componentes WHERE proyecto_id = ? AND tipo = 'landing'", [proyectoRows[0].id]);
+    landingIds = compRows.map((c) => c.id);
+  }
+
+  for (const id of landingIds) {
+    const costoRows = await query(db, requestId, "SELECT id FROM costos_directos WHERE componente_id = ? AND tipo = 'dominio'", [id]);
+    if (costoRows.length === 0) return true; // todavía sin confirmar, ni siquiera en 0.
+  }
+  return false;
+}
+
+// Resuelve la asignación de plan VIGENTE de una persona para un tipo de
+// comisión, solo si el plan además alcanza el producto y el mercado de
+// esta venta (productos_alcanzados/mercados_alcanzados). Devuelve null si
+// no hay asignación, si el plan está inactivo/vencido, o si no alcanza
+// este producto o mercado — en cualquiera de esos casos, no corresponde
+// generar la comisión (ver principio central arriba).
+//
+// IMPORTANTE (corrección RIO-115, 30/08/2026): una misma persona puede
+// tener MÁS de una asignación vigente del mismo tipo a la vez, cada una
+// alcanzando productos distintos — ej. Brenda tiene comercial 0% para
+// Ficha/packs y comercial 40% para Landing individual, simultáneamente
+// vigentes. Por eso acá se traen TODAS las asignaciones vigentes de ese
+// tipo (sin LIMIT en la consulta) y el filtro por producto/mercado se
+// aplica en código a cada una — quedarse con la primera fila antes de
+// filtrar (como hacía la versión anterior) podía descartar por accidente
+// la asignación que sí correspondía a este producto.
+// `contextoRealizacion` solo aplica cuando tipo = 'realizacion' — distingue
+// cuál de los 3 escenarios del pool de 30% corresponde ('solo' |
+// 'responsable_con_practicante' | 'practicante', RIO-115 consolidación
+// 31/08/2026). Para el resto de los tipos se ignora (esos planes siempre
+// tienen contexto_realizacion NULL, sin ambigüedad).
+export async function resolverAsignacionVigente(db, requestId, { usuarioEmail, tipo, producto, mercado, contextoRealizacion }) {
+  const rows = await query(
+    db, requestId,
+    `SELECT ap.id AS asignacion_id, pl.id AS plan_id, pl.porcentaje, pl.base, pl.productos_alcanzados, pl.mercados_alcanzados, pl.contexto_realizacion
+     FROM usuarios u
+     JOIN asignaciones_plan_comision ap ON ap.usuario_id = u.id
+     JOIN planes_comision pl ON pl.id = ap.plan_id
+     WHERE u.email = ? AND pl.tipo = ?
+       AND (ap.valid_until IS NULL OR ap.valid_until > datetime('now')) AND ap.valid_from <= datetime('now')
+       AND pl.estado = 'activo'
+       AND (pl.valid_until IS NULL OR pl.valid_until > datetime('now')) AND pl.valid_from <= datetime('now')
+     ORDER BY ap.valid_from DESC`,
+    [usuarioEmail, tipo]
+  );
+  const coincide = rows.find((row) =>
+    parseJsonArray(row.productos_alcanzados).includes(producto)
+    && parseJsonArray(row.mercados_alcanzados).includes(mercado)
+    && (!contextoRealizacion || row.contexto_realizacion === contextoRealizacion)
+  );
+  return coincide || null;
+}
+
+async function crearComisionSiCorresponde(db, requestId, { tipo, ventaId, componenteId, beneficiarioEmail, producto, mercado, moneda, montoBase, contextoRealizacion, rolRealizacion }) {
+  // RIO-119 (tercer bloque, item 5, 03/09/2026): puerta única — un
+  // proyecto marcado como importación histórica NUNCA programa una
+  // comisión nueva, sin importar desde qué flujo se dispare la generación
+  // (comercial/supervisión al registrar la venta, realización/desarrollo
+  // al aprobar un componente). Se verifica acá, en el punto más bajo
+  // común, para no depender de que cada llamador recuerde filtrarlo.
+  const ventaRows = await query(db, requestId, 'SELECT modo_historico FROM ventas WHERE id = ?', [ventaId]);
+  if (ventaRows[0]?.modo_historico) return null;
+
+  const asignacion = await resolverAsignacionVigente(db, requestId, { usuarioEmail: beneficiarioEmail, tipo, producto, mercado, contextoRealizacion });
+  if (!asignacion) return null;
+
+  const id = crypto.randomUUID();
+  const montoComision = Math.round((montoBase * asignacion.porcentaje) / 100);
+  await execute(
+    db, requestId,
+    `INSERT INTO comisiones (id, tipo, rol_realizacion, venta_id, componente_id, beneficiario_email, plan_id, asignacion_plan_id, porcentaje_snapshot, base_snapshot, monto_base, moneda, monto_comision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, tipo, rolRealizacion || null, ventaId, componenteId || null, beneficiarioEmail, asignacion.plan_id, asignacion.asignacion_id, asignacion.porcentaje, asignacion.base, montoBase, moneda, montoComision]
+  );
+  await logEvento(db, requestId, {
+    ventaId, entidad: 'comision', entidadId: id, estadoNuevo: 'calculada_provisional', usuarioEmail: beneficiarioEmail,
+  });
+  return id;
+}
+
+// Resuelve el equipo VIGENTE de un vendedor — se llama al REGISTRAR la
+// venta (ventas/index.js) para dejar un snapshot inmutable en
+// ventas.equipo_id (RIO-115 consolidación, 31/08/2026: "mercado no
+// equivale a equipo"). Si la persona no está en ningún equipo, devuelve
+// null — la venta queda sin equipo, y por lo tanto sin comisión de
+// supervisión, en vez de inventar un supervisor "del mercado".
+export async function resolverEquipoVigenteDeVendedor(db, requestId, usuarioEmail) {
+  const rows = await query(
+    db, requestId,
+    `SELECT equipo_id FROM equipo_miembros
+     WHERE usuario_email = ? AND (valid_until IS NULL OR valid_until > datetime('now')) AND valid_from <= datetime('now')
+     ORDER BY valid_from DESC LIMIT 1`,
+    [usuarioEmail]
+  );
+  return rows[0]?.equipo_id || null;
+}
+
+// Resuelve el supervisor VIGENTE de un equipo — nunca "todos los
+// supervisores del mercado" (Brenda: "no pagar automáticamente a todos
+// los supervisores de un mercado. Debe corresponder al supervisor
+// asignado al equipo de la venta").
+export async function resolverSupervisorVigenteDeEquipo(db, requestId, equipoId) {
+  const rows = await query(
+    db, requestId,
+    `SELECT usuario_email FROM equipo_supervisores
+     WHERE equipo_id = ? AND (valid_until IS NULL OR valid_until > datetime('now')) AND valid_from <= datetime('now')
+     ORDER BY valid_from DESC LIMIT 1`,
+    [equipoId]
+  );
+  return rows[0]?.usuario_email || null;
+}
+
+// Genera la comisión comercial (si el vendedor tiene un plan comercial
+// vigente que alcance este producto/mercado) y la comisión de supervisión
+// del supervisor VIGENTE del equipo snapshotteado en la venta (nunca de
+// "todos los supervisores del mercado" — RIO-115 consolidación,
+// 31/08/2026). Sin equipo snapshotteado, o sin supervisor vigente en ese
+// equipo, o sin plan vigente de ese supervisor: no se genera comisión de
+// supervisión — nunca se inventa (ver principio central arriba).
+export async function generarComisionesParaVenta(db, requestId, { ventaId, vendedorEmail, mercado, producto, moneda, componentes, equipoId }) {
+  let utilidadNetaVenta = 0;
+  for (const c of componentes) {
+    utilidadNetaVenta += await utilidadNetaComponente(db, requestId, c);
+  }
+
+  const ids = [];
+  const comercialId = await crearComisionSiCorresponde(db, requestId, {
+    tipo: 'comercial', ventaId, componenteId: null, beneficiarioEmail: vendedorEmail, producto, mercado, moneda, montoBase: utilidadNetaVenta,
+  });
+  if (comercialId) ids.push(comercialId);
+
+  if (equipoId) {
+    const supervisorEmail = await resolverSupervisorVigenteDeEquipo(db, requestId, equipoId);
+    if (supervisorEmail) {
+      const id = await crearComisionSiCorresponde(db, requestId, {
+        tipo: 'supervision', ventaId, componenteId: null, beneficiarioEmail: supervisorEmail, producto, mercado, moneda, montoBase: utilidadNetaVenta,
+      });
+      if (id) ids.push(id);
+    }
+  }
+
+  return ids;
+}
+
+// Realización — RIO-115 (consolidación, Brenda 31/08/2026), reemplaza la
+// distribución anterior de producción(10%)+desarrollo(20%) como roles
+// siempre independientes. Landing, Ficha y cada componente de un Pack
+// reparten un único pool de 30% de "realización":
+//   - Sin practicante: el responsable se lleva el 30% entero.
+//   - Con practicante: responsable 20% + practicante 10% — el practicante
+//     participa DENTRO del 30%, nunca por encima (nunca 30+10=40%).
+// El 40% comercial y el 20% empresa completan el 100% junto al 10% de
+// supervisión (ya generados a nivel de venta, arriba) — el empresa NO se
+// modela como fila, es el remanente implícito, nunca una comisión
+// personal (Brenda: "todavía debe cubrir los gastos generales e
+// impuestos").
+//
+// Requiere, para cada persona, sus propias 3 condiciones: (1) una
+// asignación EXPRESA del componente a esa persona PARA ESE ROL en
+// `asignaciones_realizacion` (RIO-97 v2: "hoy sin nadie asignado" — nunca
+// se inventa un beneficiario, y "no asignar porcentajes automáticamente a
+// Brenda por ser administradora" — ni a nadie más); (2) que esté activa;
+// (3) un plan de 'realizacion' vigente CON EL CONTEXTO correcto (solo /
+// responsable_con_practicante / practicante) que alcance este
+// producto/mercado — el contexto lo decide el código según si hay o no
+// practicante asignado en este componente, nunca una persona por sí sola.
+// Se llama al aprobar oficialmente el componente (proyectos.js) — nunca
+// antes, y nunca retroactiva: si la asignación llega después de aprobado,
+// no hay a qué "aprobar" de nuevo.
+async function usuarioActivo(db, requestId, email) {
+  const rows = await query(
+    db, requestId,
+    `SELECT a.user_status FROM usuarios u JOIN asignaciones_rol a ON a.usuario_id = u.id
+     WHERE u.email = ? AND (a.valid_until IS NULL OR a.valid_until > datetime('now')) AND a.valid_from <= datetime('now')
+     ORDER BY a.valid_from DESC LIMIT 1`,
+    [email]
+  );
+  return rows[0]?.user_status === 'activo';
+}
+
+export async function generarComisionesRealizacionSiCorresponde(db, requestId, { ventaId, componente, producto, mercado, moneda }) {
+  const asignaciones = await query(db, requestId, 'SELECT usuario_email, rol FROM asignaciones_realizacion WHERE componente_id = ?', [componente.id]);
+  const responsable = asignaciones.find((a) => a.rol === 'responsable');
+  const practicante = asignaciones.find((a) => a.rol === 'practicante');
+  if (!responsable) return []; // sin responsable asignado, no se genera nada — nunca automático.
+
+  const utilidad = await utilidadNetaComponente(db, requestId, componente);
+  const ids = [];
+
+  if (practicante) {
+    if (await usuarioActivo(db, requestId, responsable.usuario_email)) {
+      const id = await crearComisionSiCorresponde(db, requestId, {
+        tipo: 'realizacion', rolRealizacion: 'responsable', contextoRealizacion: 'responsable_con_practicante',
+        ventaId, componenteId: componente.id, beneficiarioEmail: responsable.usuario_email, producto, mercado, moneda, montoBase: utilidad,
+      });
+      if (id) ids.push(id);
+    }
+    if (await usuarioActivo(db, requestId, practicante.usuario_email)) {
+      const id = await crearComisionSiCorresponde(db, requestId, {
+        tipo: 'realizacion', rolRealizacion: 'practicante', contextoRealizacion: 'practicante',
+        ventaId, componenteId: componente.id, beneficiarioEmail: practicante.usuario_email, producto, mercado, moneda, montoBase: utilidad,
+      });
+      if (id) ids.push(id);
+    }
+  } else if (await usuarioActivo(db, requestId, responsable.usuario_email)) {
+    const id = await crearComisionSiCorresponde(db, requestId, {
+      tipo: 'realizacion', rolRealizacion: 'responsable', contextoRealizacion: 'solo',
+      ventaId, componenteId: componente.id, beneficiarioEmail: responsable.usuario_email, producto, mercado, moneda, montoBase: utilidad,
+    });
+    if (id) ids.push(id);
+  }
+
+  return ids;
+}
+
+// Costo directo de un medio de pago que aplica a TODA la venta, no a un
+// componente puntual — se prorratea entre los componentes del pack con el
+// mismo criterio proporcional que la distribución del precio del pack
+// (RIO-97 v2 sección 6: redondea el primero, el segundo es el resto — la
+// suma siempre da el monto total). En un producto individual, todo el
+// monto va a su único componente.
+export async function registrarCostoMedioPago(db, requestId, { ventaId, tipo, monto, moneda, autorizadoPor, nota }) {
+  const proyectos = await query(db, requestId, 'SELECT id FROM proyectos WHERE venta_id = ?', [ventaId]);
+  const proyecto = proyectos[0];
+  if (!proyecto) throw new ComisionError('proyecto_no_encontrado', 'Proyecto no encontrado para esta venta.');
+  const componentes = await query(db, requestId, 'SELECT id, precio_atribuido FROM componentes WHERE proyecto_id = ? ORDER BY tipo', [proyecto.id]);
+  if (componentes.length === 0) throw new ComisionError('sin_componentes', 'Esta venta no tiene componentes.');
+
+  let montos;
+  if (componentes.length === 1) {
+    montos = [monto];
+  } else {
+    const totalAtribuido = componentes.reduce((sum, c) => sum + c.precio_atribuido, 0);
+    const primero = Math.round((monto * componentes[0].precio_atribuido) / totalAtribuido);
+    montos = [primero, monto - primero];
+  }
+
+  const ids = [];
+  for (let i = 0; i < componentes.length; i++) {
+    ids.push(await registrarCostoDirecto(db, requestId, {
+      componenteId: componentes[i].id, tipo, monto: montos[i], moneda, autorizadoPor, nota,
+    }));
+  }
+  return ids;
+}
+
+// Fecha programada de pago (RIO-97 v2 sección 10), calculada a partir de
+// la fecha de HABILITACIÓN. Ajusta hacia atrás, día por día, hasta caer en
+// un día hábil real del mercado de la venta — cubre fin de semana Y
+// feriados configurados en `dias_no_habiles` (varios días no hábiles
+// consecutivos incluidos), sin feriados fijos en el código.
+async function esDiaHabil(db, requestId, fechaIso, mercado) {
+  const dow = new Date(fechaIso + 'T00:00:00Z').getUTCDay();
+  if (dow === 0 || dow === 6) return false;
+  const feriados = await query(db, requestId, 'SELECT 1 AS x FROM dias_no_habiles WHERE mercado = ? AND fecha = ?', [mercado, fechaIso]);
+  return feriados.length === 0;
+}
+
+export async function calcularFechaProgramada(db, requestId, fechaHabilitacionSql, mercado) {
+  const d = new Date(fechaHabilitacionSql.replace(' ', 'T') + 'Z');
+  const dia = d.getUTCDate();
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth();
+
+  let targetDay, targetMonth;
+  if (dia >= 26) {
+    targetDay = 25; targetMonth = month + 1;
+  } else if (dia <= 10) {
+    targetDay = 25; targetMonth = month;
+  } else {
+    targetDay = 10; targetMonth = month + 1;
+  }
+
+  const candidato = new Date(Date.UTC(year, targetMonth, targetDay));
+  // Retrocede día por día hasta encontrar un día hábil real — cubre fin de
+  // semana y cualquier cantidad de feriados consecutivos configurados.
+  let guard = 0;
+  while (!(await esDiaHabil(db, requestId, candidato.toISOString().slice(0, 10), mercado))) {
+    candidato.setUTCDate(candidato.getUTCDate() - 1);
+    guard += 1;
+    if (guard > 30) break; // defensivo — nunca debería hacer falta retroceder más de un mes.
+  }
+  return candidato.toISOString().slice(0, 10);
+}
+
+// Evalúa las 3 condiciones independientes que habilitan una comisión
+// (plazo de resguardo cumplido, pago total acreditado, venta sin disputa
+// abierta — RIO-97 v2 sección 8). Mismo patrón que el gate de 3
+// condiciones de Landing en RIO-113: siempre informa qué falta, nunca
+// asume un orden. Funciona tanto para una comisión recién calculada como
+// para una RETENIDA (una disputa se resolvió y hay que reevaluar si ya
+// puede volver a habilitarse) — en ambos casos, si las tres se cumplen,
+// habilita y programa en el mismo paso.
+// RIO-122 (hallazgo 15, 15/09/2026 — "fecha prevista" informativa en Mis
+// comisiones): extraído de evaluateComisionGate() para que la misma
+// verificación de condiciones (nunca una segunda implementación) también
+// pueda usarse en modo SOLO LECTURA, sin escribir nada — necesario para
+// mostrarle al vendedor una fecha prevista antes de que la comisión se
+// habilite de verdad. Devuelve además `fechaCumplimientoPlazo`: la fecha
+// real en que se cumplió el resguardo (columna ya guardada) o, si todavía
+// no se cumplió, la fecha en que SE CUMPLIRÍA (calculada, no guardada) —
+// es lo único que un preview necesita para poder calcular una fecha
+// programada hipotética con calcularFechaProgramada(), sin inventar
+// ninguna regla nueva.
+async function calcularFaltantesHabilitacion(db, requestId, comision) {
+  if (comision.distribucion_id) {
+    // RIO-119 (cuarto bloque, 03/09/2026): una comisión de proyecto
+    // personalizado nunca avanza automáticamente por este gate — ver
+    // comentario completo en evaluateComisionGate().
+    return { faltantes: ['politica_liberacion_pendiente_confirmacion'], fechaCumplimientoPlazo: null };
+  }
+
+  const faltantes = [];
+  let fechaCumplimientoPlazo = comision.fecha_cumplimiento_plazo || null;
+
+  if (!comision.fecha_inicio_plazo) {
+    faltantes.push('plazo_resguardo_iniciado');
+  } else {
+    const inicio = new Date(comision.fecha_inicio_plazo.replace(' ', 'T') + 'Z');
+    const limite = new Date(inicio.getTime() + PLAZO_RESGUARDO_DIAS * 24 * 60 * 60 * 1000);
+    const limiteSql = limite.toISOString().replace('T', ' ').slice(0, 19);
+    const cumplido = Date.now() >= limite.getTime();
+    if (!cumplido) {
+      faltantes.push('plazo_resguardo_cumplido');
+      fechaCumplimientoPlazo = limiteSql; // hipotética — todavía no llegó, nunca se persiste acá.
+    } else if (!fechaCumplimientoPlazo) {
+      fechaCumplimientoPlazo = limiteSql;
+    }
+  }
+
+  if (!comision.fecha_pago_total_acreditado) faltantes.push('pago_total_acreditado');
+
+  const disputasAbiertas = await query(db, requestId, "SELECT id FROM incidencias WHERE venta_id = ? AND estado = 'abierta'", [comision.venta_id]);
+  if (disputasAbiertas.length > 0) faltantes.push('venta_sin_disputa');
+
+  if (await costoDominioPendienteParaComision(db, requestId, comision)) faltantes.push('costo_dominio_confirmado');
+
+  return { faltantes, fechaCumplimientoPlazo };
+}
+
+// RIO-122 (hallazgo 15, 15/09/2026): fecha prevista de pago, exclusivamente
+// informativa — NUNCA escribe nada, nunca habilita ni programa la
+// comisión antes de tiempo. Solo tiene sentido cuando la ÚNICA condición
+// que falta es el paso del tiempo (el resguardo todavía no se cumplió,
+// pero todo lo demás ya está listo) — si falta cualquier otra condición
+// real (pago sin acreditar, disputa abierta, costo de dominio sin
+// confirmar), no hay ninguna fecha que se pueda prever todavía, y se
+// devuelve null (el frontend muestra "Pendiente de habilitación", nunca
+// una fecha inventada). Reutiliza exactamente la misma verificación de
+// condiciones y el mismo calcularFechaProgramada() que ya usa el gate
+// real — nunca una segunda regla de calendario.
+export async function calcularFechaPrevistaComision(db, requestId, comisionId) {
+  const rows = await query(db, requestId, 'SELECT * FROM comisiones WHERE id = ?', [comisionId]);
+  const comision = rows[0];
+  if (!comision) return null;
+  if (comision.estado !== 'calculada_provisional' && comision.estado !== 'retenida') return null; // ya tiene fecha real, o es terminal.
+
+  const { faltantes, fechaCumplimientoPlazo } = await calcularFaltantesHabilitacion(db, requestId, comision);
+  const soloFaltaElTiempo = faltantes.length === 0 || (faltantes.length === 1 && faltantes[0] === 'plazo_resguardo_cumplido');
+  if (!soloFaltaElTiempo || !fechaCumplimientoPlazo) return null;
+
+  const ventaRows = await query(db, requestId, 'SELECT mercado FROM ventas WHERE id = ?', [comision.venta_id]);
+  const mercado = ventaRows[0]?.mercado;
+  return calcularFechaProgramada(db, requestId, fechaCumplimientoPlazo, mercado);
+}
+
+export async function evaluateComisionGate(db, requestId, comisionId, actorEmail) {
+  const rows = await query(db, requestId, 'SELECT * FROM comisiones WHERE id = ?', [comisionId]);
+  const comision = rows[0];
+  if (!comision) throw new ComisionError('comision_no_encontrada', 'Comisión no encontrada.');
+  if (comision.estado !== 'calculada_provisional' && comision.estado !== 'retenida') {
+    return { habilitada: true, faltantes: [] }; // 'habilitada'/'programada'/'pagada' — nada que reevaluar acá.
+  }
+
+  // RIO-119 (cuarto bloque, 03/09/2026): una comisión de proyecto
+  // personalizado (distribucion_id no nulo) NUNCA avanza automáticamente
+  // por este gate — Brenda: "hasta que confirme la política de liberación
+  // y el plazo de resguardo, ninguna comisión ficticia de prueba debe
+  // avanzar automáticamente a pagable". El cálculo fijo de abajo
+  // (PLAZO_RESGUARDO_DIAS, "pago total acreditado") es específico del
+  // catálogo (Ficha/Landing/Pack) — no se reutiliza a ciegas acá aunque
+  // `venta_distribuciones` ya tenga columnas de configuración propia
+  // (`plazo_resguardo_*`, `politica_liberacion`): esas quedan preparadas
+  // para cuando la regla esté confirmada, pero todavía no se usan para
+  // habilitar nada automáticamente.
+  if (comision.distribucion_id) {
+    return { habilitada: false, faltantes: ['politica_liberacion_pendiente_confirmacion'] };
+  }
+
+  const { faltantes, fechaCumplimientoPlazo } = await calcularFaltantesHabilitacion(db, requestId, comision);
+
+  // El único efecto secundario de una lectura "solo faltó el tiempo" real
+  // (ya cumplido, todavía sin persistir): dejar constancia de cuándo se
+  // cumplió — mismo comportamiento que existía antes de extraer esta
+  // verificación, solo movido acá.
+  if (
+    comision.fecha_inicio_plazo && !comision.fecha_cumplimiento_plazo &&
+    fechaCumplimientoPlazo && !faltantes.includes('plazo_resguardo_cumplido')
+  ) {
+    await execute(db, requestId, 'UPDATE comisiones SET fecha_cumplimiento_plazo = ? WHERE id = ?', [fechaCumplimientoPlazo, comisionId]);
+  }
+
+  if (faltantes.length > 0) {
+    return { habilitada: false, faltantes };
+  }
+
+  const veniaRetenida = comision.estado === 'retenida';
+  const fechaHabilitacion = nowSql();
+  await execute(db, requestId, "UPDATE comisiones SET estado = 'habilitada', fecha_habilitacion = ? WHERE id = ?", [fechaHabilitacion, comisionId]);
+  await logEvento(db, requestId, {
+    ventaId: comision.venta_id, entidad: 'comision', entidadId: comisionId,
+    estadoAnterior: comision.estado, estadoNuevo: 'habilitada', usuarioEmail: actorEmail || 'sistema',
+    motivoNota: veniaRetenida
+      ? 'La disputa que la retenía se resolvió — vuelve a habilitarse.'
+      : 'Las 3 condiciones (plazo de resguardo, pago total acreditado, sin disputa) se cumplieron a la vez.',
+  });
+
+  const ventaRows = await query(db, requestId, 'SELECT mercado FROM ventas WHERE id = ?', [comision.venta_id]);
+  const mercado = ventaRows[0]?.mercado;
+  const fechaProgramada = await calcularFechaProgramada(db, requestId, fechaHabilitacion, mercado);
+
+  if (veniaRetenida && comision.fecha_programada_original) {
+    // No se sobrescribe la fecha original — solo la efectiva, con motivo.
+    await execute(
+      db, requestId,
+      "UPDATE comisiones SET estado = 'programada', fecha_programada_efectiva = ?, motivo_retencion_o_reprogramacion = ? WHERE id = ?",
+      [fechaProgramada, 'Reprogramada tras resolverse la disputa que la retuvo.', comisionId]
+    );
+  } else {
+    await execute(
+      db, requestId,
+      "UPDATE comisiones SET estado = 'programada', fecha_programada_original = ?, fecha_programada_efectiva = ? WHERE id = ?",
+      [fechaProgramada, fechaProgramada, comisionId]
+    );
+  }
+  await logEvento(db, requestId, {
+    ventaId: comision.venta_id, entidad: 'comision', entidadId: comisionId,
+    estadoAnterior: 'habilitada', estadoNuevo: 'programada', usuarioEmail: actorEmail || 'sistema',
+    motivoNota: `Fecha programada calculada automáticamente: ${fechaProgramada}.`,
+  });
+
+  return { habilitada: true, faltantes: [] };
+}
+
+// Retiene (nunca elimina) las comisiones ya habilitadas/programadas de una
+// venta cuando se abre una disputa — Brenda, sección 6: "si una condición
+// deja de cumplirse antes del pago, la comisión debe retenerse... nunca
+// desaparecer". Una comisión ya PAGADA no se toca — es terminal.
+export async function retenerComisionesPorDisputa(db, requestId, { ventaId, actorEmail, motivo }) {
+  const comisiones = await query(db, requestId, "SELECT id, estado FROM comisiones WHERE venta_id = ? AND estado IN ('habilitada', 'programada')", [ventaId]);
+  for (const c of comisiones) {
+    await execute(db, requestId, "UPDATE comisiones SET estado = 'retenida', motivo_retencion_o_reprogramacion = ? WHERE id = ?", [motivo, c.id]);
+    await logEvento(db, requestId, {
+      ventaId, entidad: 'comision', entidadId: c.id,
+      estadoAnterior: c.estado, estadoNuevo: 'retenida', usuarioEmail: actorEmail, motivoNota: motivo,
+    });
+  }
+}
+
+// Reevalúa todas las comisiones de una venta — se llama después de
+// cualquier evento que pueda cambiar una de las 3 condiciones (un pago se
+// acredita, una incidencia se resuelve).
+export async function reevaluarComisionesDeVenta(db, requestId, ventaId, actorEmail) {
+  const comisiones = await query(db, requestId, 'SELECT id FROM comisiones WHERE venta_id = ?', [ventaId]);
+  for (const c of comisiones) {
+    await evaluateComisionGate(db, requestId, c.id, actorEmail);
+  }
+}
+
+// RIO-122 (hallazgo de arquitectura, 15/09/2026 — reevaluación automática
+// por vencimiento del plazo de resguardo): antes, `evaluateComisionGate()`
+// solo se volvía a ejecutar cuando ocurría un evento sobre LA VENTA (un
+// pago se acredita, una disputa se resuelve) — si el plazo de resguardo se
+// cumplía y después no pasaba nada más, la comisión podía quedar en
+// 'calculada_provisional' indefinidamente, aunque las 3 condiciones ya
+// estuvieran cumplidas. Esta función barre TODAS las comisiones del
+// sistema que todavía podrían habilitarse ('calculada_provisional' o
+// 'retenida') y reevalúa cada una con la MISMA función de siempre — nunca
+// una segunda implementación del gate, ni un cálculo de fecha propio.
+// Pensada para invocarse periódicamente (ver workers/comisiones-cron/),
+// nunca desde un endpoint de lectura del Panel.
+//
+// Idempotente por construcción: `evaluateComisionGate()` ya sale
+// temprano (`habilitada: true, faltantes: []`, sin tocar nada) para
+// cualquier comisión que no esté en 'calculada_provisional'/'retenida' —
+// ejecutar este barrido muchas veces seguidas nunca duplica un evento de
+// historial ni reprograma una fecha ya establecida (solo se escribe
+// cuando el estado efectivamente cambia).
+export async function reevaluarComisionesVencidasDelSistema(db, requestId) {
+  const pendientes = await query(
+    db, requestId,
+    "SELECT id FROM comisiones WHERE estado IN ('calculada_provisional', 'retenida')",
+    []
+  );
+  let evaluadas = 0;
+  let habilitadas = 0;
+  for (const c of pendientes) {
+    // Sin actorEmail: evaluateComisionGate() ya registra 'sistema' como
+    // usuario del evento cuando no se pasa ninguno — mismo criterio que
+    // ya usa el resto del código para acciones no disparadas por una
+    // persona autenticada. Como el filtro de arriba ya excluye cualquier
+    // comisión que no esté en 'calculada_provisional'/'retenida',
+    // `habilitada: true` acá significa siempre una transición real recién
+    // ocurrida — nunca el "ya estaba" del retorno temprano de la función.
+    const resultado = await evaluateComisionGate(db, requestId, c.id);
+    evaluadas += 1;
+    if (resultado.habilitada) habilitadas += 1;
+  }
+  return { evaluadas, habilitadas };
+}
+
+// Se llama desde proyectos.js justo después de que un pago quedó
+// 'acreditado' — registra las dos fechas que dependen de pagos (inicio del
+// plazo de resguardo, pago total acreditado) y reevalúa el gate de cada
+// comisión de la venta.
+export async function procesarPagoAcreditadoParaComisiones(db, requestId, { ventaId, pagoTipo, actorEmail }) {
+  const pagos = await query(db, requestId, 'SELECT * FROM pagos_esperados WHERE venta_id = ?', [ventaId]);
+  const esPrimerPago = pagos.length === 1 ? pagoTipo === 'total' : pagoTipo === 'inicial';
+  const todosAcreditados = pagos.length > 0 && pagos.every((p) => p.estado === 'acreditado');
+
+  if (esPrimerPago || todosAcreditados) {
+    const comisiones = await query(db, requestId, 'SELECT id, fecha_inicio_plazo, fecha_pago_total_acreditado FROM comisiones WHERE venta_id = ?', [ventaId]);
+    for (const c of comisiones) {
+      if (esPrimerPago && !c.fecha_inicio_plazo) {
+        await execute(db, requestId, 'UPDATE comisiones SET fecha_inicio_plazo = ? WHERE id = ?', [nowSql(), c.id]);
+      }
+      if (todosAcreditados && !c.fecha_pago_total_acreditado) {
+        await execute(db, requestId, 'UPDATE comisiones SET fecha_pago_total_acreditado = ? WHERE id = ?', [nowSql(), c.id]);
+      }
+    }
+  }
+
+  await reevaluarComisionesDeVenta(db, requestId, ventaId, actorEmail);
+}
+
+// Marca una comisión como pagada — exclusivo de administración (se valida
+// en el endpoint). Solo desde 'programada': "habilitación separada de
+// programación y pago" — no se puede pagar algo que nunca llegó a
+// programarse, ni algo retenido por una disputa sin resolver.
+export async function marcarComisionPagada(db, requestId, { comisionId, actorEmail, fechaPagoReal }) {
+  const rows = await query(db, requestId, 'SELECT * FROM comisiones WHERE id = ?', [comisionId]);
+  const comision = rows[0];
+  if (!comision) throw new ComisionError('comision_no_encontrada', 'Comisión no encontrada.');
+  if (comision.estado !== 'programada') {
+    throw new ComisionError('transicion_invalida', `No se puede marcar como pagada desde el estado ${comision.estado}.`);
+  }
+  const fecha = fechaPagoReal || nowSql();
+  await execute(db, requestId, "UPDATE comisiones SET estado = 'pagada', fecha_pago_real = ? WHERE id = ?", [fecha, comisionId]);
+  await logEvento(db, requestId, {
+    ventaId: comision.venta_id, entidad: 'comision', entidadId: comisionId,
+    estadoAnterior: 'programada', estadoNuevo: 'pagada', usuarioEmail: actorEmail,
+  });
+}
+
+// Validación de la distribución económica EFECTIVA — RIO-119 (tercer
+// bloque, item 4, 02/09/2026). Se aplica siempre sobre la distribución YA
+// RESUELTA (cada participación con su beneficiario concreto, después de
+// resolver equipo/supervisor/plan — nunca sobre porcentajes teóricos de un
+// plan aislado). El empresa NUNCA se modela como fila (ver principio
+// central arriba) — acá se calcula como el remanente 100 - suma, nunca
+// pedido como input.
+//
+// `participaciones`: [{ concepto: string (ej. 'comercial', 'supervision',
+// 'realizacion_responsable'), beneficiarioEmail: string|null, porcentaje:
+// number }]. `beneficiarioEmail: null` representa una participación
+// esperada pero SIN resolver (ej. una venta directa de administración sin
+// supervisor asignado) — nunca se omite la fila, para que quede visible
+// qué falta (Brenda: "una asignación faltante debe mostrar el porcentaje
+// sin asignar y bloquear el registro definitivo").
+export function validarDistribucion(participaciones) {
+  const errores = [];
+  const vistos = new Set();
+  let suma = 0;
+
+  for (const p of participaciones) {
+    if (!Number.isFinite(p.porcentaje) || p.porcentaje < 0) {
+      errores.push(`El porcentaje de "${p.concepto}" no puede ser negativo.`);
+      continue;
+    }
+    suma += p.porcentaje;
+    if (!p.beneficiarioEmail) {
+      errores.push(`Falta asignar beneficiario para "${p.concepto}" (${p.porcentaje}% sin resolver).`);
+      continue;
+    }
+    const clave = `${p.concepto}:${p.beneficiarioEmail}`;
+    if (vistos.has(clave)) errores.push(`Participación duplicada: "${p.concepto}" para ${p.beneficiarioEmail}.`);
+    vistos.add(clave);
+  }
+
+  if (suma > 100) errores.push(`La distribución suma ${suma}%, no puede exceder 100%.`);
+  const empresaPorcentaje = Math.max(100 - suma, 0);
+
+  return {
+    valida: errores.length === 0 && suma <= 100,
+    completa: errores.length === 0 && suma === 100,
+    suma,
+    empresaPorcentaje,
+    errores,
+    participaciones: participaciones.map((p) => ({ concepto: p.concepto, beneficiarioEmail: p.beneficiarioEmail || null, porcentaje: p.porcentaje })),
+  };
+}
+
+// Valida la distribución de un PROYECTO PERSONALIZADO antes de activarlo —
+// RIO-119 (tercer bloque, item 5, 03/09/2026). A diferencia de
+// validarDistribucion() (donde "empresa" es el remanente de TODA la
+// distribución), acá cada concepto tiene su propio POOL fijo, reservado
+// por la plantilla elegida (o definido a mano) — "empresa" es siempre un
+// pool más, nunca completado con participaciones. Por eso "completo" acá
+// significa que cada pool (comercial/supervisión/desarrollo) está
+// enteramente asignado a beneficiarios reales, nunca que la suma de filas
+// llegue a 100.
+//
+// `pools`: { comercial, supervision, desarrollo } (los % reservados de
+// ESTE proyecto). `participaciones`: [{ concepto, beneficiarioEmail,
+// porcentaje, faseId }] — las filas ya cargadas (borrador o confirmada).
+// Una fila sin beneficiarioEmail es "Pendiente de asignación": cuenta para
+// el pool (no se puede superar) pero bloquea la activación, igual que
+// cualquier porción del pool que nadie cargó todavía (Brenda: "una
+// participación pendiente no genera una comisión personal ni puede
+// habilitarse para pago").
+export function validarActivacionProyecto(pools, participaciones) {
+  const CONCEPTOS = ['comercial', 'supervision', 'desarrollo'];
+  const errores = [];
+  const resumen = {};
+  const vistos = new Set();
+
+  for (const concepto of CONCEPTOS) {
+    const poolMax = Number.isFinite(pools[concepto]) ? pools[concepto] : 0;
+    const filas = participaciones.filter((p) => p.concepto === concepto);
+    let asignado = 0;
+    let pendienteEnFilas = 0;
+
+    for (const p of filas) {
+      if (!Number.isFinite(p.porcentaje) || p.porcentaje <= 0) {
+        errores.push(`Una participación de "${concepto}" tiene un porcentaje inválido.`);
+        continue;
+      }
+      asignado += p.porcentaje;
+      if (!p.beneficiarioEmail) {
+        pendienteEnFilas += p.porcentaje;
+      } else {
+        // Misma persona en la misma fase/concepto dos veces es un
+        // duplicado real — la misma persona en DOS fases distintas del
+        // mismo concepto (ej. desarrollo en dos componentes) no lo es.
+        const clave = `${concepto}:${p.beneficiarioEmail}:${p.faseId || ''}`;
+        if (vistos.has(clave)) errores.push(`Participación duplicada de "${concepto}" para ${p.beneficiarioEmail}.`);
+        vistos.add(clave);
+      }
+    }
+
+    if (asignado > poolMax) {
+      errores.push(`"${concepto}" suma ${asignado}%, supera el ${poolMax}% reservado por la plantilla/pool de este proyecto.`);
+    }
+    const remanenteSinAsignar = Math.max(poolMax - asignado, 0);
+    const pendienteTotal = pendienteEnFilas + remanenteSinAsignar;
+    if (pendienteTotal > 0) {
+      errores.push(`"${concepto}" tiene ${pendienteTotal}% pendiente de asignación.`);
+    }
+    resumen[concepto] = { pool: poolMax, asignado, pendiente: pendienteTotal };
+  }
+
+  const empresaPorcentaje = Math.max(100 - (pools.comercial || 0) - (pools.supervision || 0) - (pools.desarrollo || 0), 0);
+  return { puedeActivarse: errores.length === 0, errores, resumen, empresaPorcentaje };
+}
+
+// Convierte la distribución CONFIRMADA de un proyecto personalizado en
+// comisiones reales — RIO-119 (cuarto bloque, 03/09/2026). Una fila
+// independiente por cada participación con beneficiario resuelto (nunca
+// una combinada: si la misma persona vende y desarrolla, son dos filas).
+// Nunca genera una fila para "empresa" (nunca se modela como fila, ver
+// registrarFinanzasEmpresa) ni para una participación "Pendiente de
+// asignación" (beneficiario_email null).
+//
+// Idempotente por diseño: antes de generar nada, busca si YA existen
+// comisiones con este distribucion_id — si las hay, no crea nada más y
+// devuelve los ids existentes (repetir la solicitud de activación nunca
+// duplica). `es_estimacion` refleja si la distribución todavía no declaró
+// sus costos cerrados (venta_distribuciones.costos_cerrados) — mientras no
+// lo estén, todo monto calculado es una estimación, nunca definitivo.
+export async function generarComisionesDesdeDistribucion(db, requestId, { ventaId, distribucionId, actorEmail }) {
+  const existentes = await query(db, requestId, 'SELECT id FROM comisiones WHERE distribucion_id = ?', [distribucionId]);
+  if (existentes.length > 0) return existentes.map((c) => c.id);
+
+  const ventaRows = await query(db, requestId, 'SELECT moneda FROM ventas WHERE id = ?', [ventaId]);
+  const moneda = ventaRows[0]?.moneda;
+  const distribucionRows = await query(db, requestId, 'SELECT costos_cerrados FROM venta_distribuciones WHERE id = ?', [distribucionId]);
+  const esEstimacion = distribucionRows[0]?.costos_cerrados ? 0 : 1;
+
+  const componentes = await query(
+    db, requestId,
+    `SELECT c.* FROM componentes c JOIN proyectos p ON p.id = c.proyecto_id WHERE p.venta_id = ?`,
+    [ventaId]
+  );
+  let utilidadNetaProyecto = 0;
+  for (const c of componentes) utilidadNetaProyecto += await utilidadNetaComponente(db, requestId, c);
+
+  const participaciones = await query(db, requestId, 'SELECT * FROM venta_participaciones WHERE distribucion_id = ?', [distribucionId]);
+
+  // RIO-119 (quinto bloque, 04/09/2026): cada comisión se libera CUOTA POR
+  // CUOTA, nunca todo o nada — una fila en `comision_liberaciones` por cada
+  // (comisión, cuota), con su propio plazo de resguardo de 10 días desde la
+  // ACREDITACIÓN administrativa (nunca desde informado/comprobante/
+  // promesa). `precio_pactado` es la base de la proporción — la misma cuota
+  // representa la misma proporción del proyecto sin importar a qué
+  // comisión pertenece.
+  const ventaCompletaRows = await query(db, requestId, 'SELECT precio_pactado FROM ventas WHERE id = ?', [ventaId]);
+  const precioPactado = ventaCompletaRows[0]?.precio_pactado || 0;
+  const cuotas = await query(db, requestId, 'SELECT id, monto FROM pagos_esperados WHERE venta_id = ?', [ventaId]);
+
+  const ids = [];
+  for (const p of participaciones) {
+    if (!p.beneficiario_email) continue; // "Pendiente de asignación" — nunca genera comisión.
+
+    let montoBase, baseSnapshot;
+    if (p.fase_id) {
+      const componente = componentes.find((c) => c.id === p.fase_id);
+      montoBase = componente ? await utilidadNetaComponente(db, requestId, componente) : 0;
+      baseSnapshot = 'utilidad_neta_componente';
+    } else {
+      montoBase = utilidadNetaProyecto;
+      baseSnapshot = 'utilidad_neta_venta';
+    }
+    const montoComision = Math.round((montoBase * p.porcentaje) / 100);
+
+    const id = crypto.randomUUID();
+    await execute(
+      db, requestId,
+      `INSERT INTO comisiones (
+         id, tipo, venta_id, componente_id, beneficiario_email, porcentaje_snapshot, base_snapshot,
+         monto_base, moneda, monto_comision, distribucion_id, participacion_id, es_estimacion
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, p.concepto, ventaId, p.fase_id || null, p.beneficiario_email, p.porcentaje, baseSnapshot, montoBase, moneda, montoComision, distribucionId, p.id, esEstimacion]
+    );
+    await logEvento(db, requestId, {
+      ventaId, entidad: 'comision', entidadId: id, estadoNuevo: 'calculada_provisional', usuarioEmail: actorEmail || 'sistema',
+      motivoNota: `Generada al activar la distribución del proyecto (${p.concepto}, ${p.porcentaje}%)${esEstimacion ? ' — estimación, costos todavía no cerrados' : ''}.`,
+    });
+
+    for (const cuota of cuotas) {
+      const montoLiberable = precioPactado > 0 ? Math.round((montoComision * cuota.monto) / precioPactado) : 0;
+      await execute(
+        db, requestId,
+        'INSERT INTO comision_liberaciones (id, comision_id, pago_id, monto_liberable, moneda) VALUES (?, ?, ?, ?, ?)',
+        [crypto.randomUUID(), id, cuota.id, montoLiberable, moneda]
+      );
+    }
+    ids.push(id);
+  }
+
+  // Si alguna cuota ya estaba acreditada/con hito validado ANTES de
+  // activar (proyecto que arranca a mitad de camino — ver sección Nua
+  // Bushi), esto resuelve de una vez lo que ya corresponde, sin esperar un
+  // evento nuevo de pago.
+  if (ids.length > 0) await reevaluarLiberacionesDeVenta(db, requestId, ventaId, actorEmail);
+
+  return ids;
+}
+
+async function fechaAcreditacionDeCuota(db, requestId, pagoId) {
+  const rows = await query(
+    db, requestId,
+    `SELECT a.created_at FROM acreditaciones a JOIN pagos_informados pi ON pi.id = a.pago_informado_id
+     WHERE pi.pago_esperado_id = ? ORDER BY a.created_at DESC LIMIT 1`,
+    [pagoId]
+  );
+  return rows[0]?.created_at || null;
+}
+
+// 10 días CORRIDOS completos desde la acreditación — nunca desde
+// informado/comprobante/promesa (Brenda, quinto bloque: "comienza
+// exclusivamente con la acreditación administrativa de la cuota").
+function resguardoDiezDiasCorridos(fechaAcreditacionSql) {
+  const inicio = new Date(fechaAcreditacionSql.replace(' ', 'T') + 'Z');
+  const limite = new Date(inicio.getTime() + 10 * 24 * 60 * 60 * 1000);
+  return { cumplido: Date.now() >= limite.getTime(), limite };
+}
+
+// Evalúa las 5 condiciones simultáneas de UNA liberación (cuota
+// acreditada, 10 días corridos cumplidos, hito validado, sin incidencia
+// económica activa, distribución confirmada) — RIO-119 (quinto bloque,
+// 04/09/2026). Mismo patrón que evaluateComisionGate: siempre informa qué
+// falta exactamente, habilita y programa en el mismo paso cuando las 5 se
+// cumplen a la vez.
+async function evaluarLiberacion(db, requestId, liberacion, ventaId, actorEmail) {
+  const faltantes = [];
+
+  const pagoRows = await query(db, requestId, 'SELECT * FROM pagos_esperados WHERE id = ?', [liberacion.pago_id]);
+  const pago = pagoRows[0];
+  if (!pago || pago.estado !== 'acreditado') faltantes.push('cuota_acreditada');
+
+  let fechaAcreditacion = liberacion.fecha_acreditacion;
+  if (pago?.estado === 'acreditado' && !fechaAcreditacion) {
+    fechaAcreditacion = await fechaAcreditacionDeCuota(db, requestId, liberacion.pago_id);
+    if (fechaAcreditacion) {
+      await execute(db, requestId, 'UPDATE comision_liberaciones SET fecha_acreditacion = ? WHERE id = ?', [fechaAcreditacion, liberacion.id]);
+    }
+  }
+  if (fechaAcreditacion) {
+    const { cumplido, limite } = resguardoDiezDiasCorridos(fechaAcreditacion);
+    if (!cumplido) {
+      faltantes.push('plazo_resguardo_10_dias');
+    } else if (!liberacion.fecha_cumplimiento_resguardo) {
+      await execute(db, requestId, 'UPDATE comision_liberaciones SET fecha_cumplimiento_resguardo = ? WHERE id = ?', [limite.toISOString().replace('T', ' ').slice(0, 19), liberacion.id]);
+    }
+  } else {
+    faltantes.push('plazo_resguardo_10_dias');
+  }
+
+  if (!pago || !pago.hito_validado) faltantes.push('hito_validado');
+
+  const disputas = await query(db, requestId, "SELECT id FROM incidencias WHERE venta_id = ? AND estado = 'abierta'", [ventaId]);
+  if (disputas.length > 0) faltantes.push('sin_incidencia_activa');
+
+  const comisionRows = await query(db, requestId, 'SELECT distribucion_id FROM comisiones WHERE id = ?', [liberacion.comision_id]);
+  const distribucionId = comisionRows[0]?.distribucion_id;
+  const distribucionRows = distribucionId ? await query(db, requestId, 'SELECT estado FROM venta_distribuciones WHERE id = ?', [distribucionId]) : [];
+  if (!distribucionRows[0] || distribucionRows[0].estado !== 'confirmada') faltantes.push('distribucion_confirmada');
+
+  if (faltantes.length > 0) {
+    await execute(db, requestId, "UPDATE comision_liberaciones SET estado = 'retenida', motivo_retencion = ? WHERE id = ?", [JSON.stringify(faltantes), liberacion.id]);
+    return;
+  }
+
+  const fechaHabilitacion = nowSql();
+  await execute(db, requestId, "UPDATE comision_liberaciones SET estado = 'habilitada', fecha_habilitacion = ?, motivo_retencion = NULL WHERE id = ?", [fechaHabilitacion, liberacion.id]);
+  await logEvento(db, requestId, {
+    ventaId, entidad: 'comision_liberacion', entidadId: liberacion.id, estadoAnterior: 'retenida', estadoNuevo: 'habilitada',
+    usuarioEmail: actorEmail || 'sistema',
+    motivoNota: 'Las 5 condiciones (cuota acreditada, 10 días corridos, hito validado, sin incidencia activa, distribución confirmada) se cumplieron a la vez.',
+  });
+
+  const ventaRows = await query(db, requestId, 'SELECT mercado FROM ventas WHERE id = ?', [ventaId]);
+  const mercado = ventaRows[0]?.mercado;
+  const fechaProgramada = await calcularFechaProgramada(db, requestId, fechaHabilitacion, mercado);
+  await execute(
+    db, requestId,
+    "UPDATE comision_liberaciones SET estado = 'programada', fecha_programada_original = ?, fecha_programada_efectiva = ? WHERE id = ?",
+    [fechaProgramada, fechaProgramada, liberacion.id]
+  );
+  await logEvento(db, requestId, {
+    ventaId, entidad: 'comision_liberacion', entidadId: liberacion.id, estadoAnterior: 'habilitada', estadoNuevo: 'programada',
+    usuarioEmail: actorEmail || 'sistema', motivoNota: `Fecha programada calculada automáticamente: ${fechaProgramada}. Si el día 10/25 es inhábil, ya adelantada al hábil anterior por calcularFechaProgramada.`,
+  });
+}
+
+// Reevalúa todas las liberaciones RETENIDAS de una venta — se llama
+// después de cualquier evento que pueda cambiar una de las 5 condiciones
+// (una cuota se acredita, un hito se valida, una incidencia se resuelve, o
+// al activar la distribución si alguna cuota ya estaba adelantada).
+export async function reevaluarLiberacionesDeVenta(db, requestId, ventaId, actorEmail) {
+  const liberaciones = await query(
+    db, requestId,
+    `SELECT cl.* FROM comision_liberaciones cl JOIN comisiones c ON c.id = cl.comision_id WHERE c.venta_id = ? AND cl.estado = 'retenida'`,
+    [ventaId]
+  );
+  for (const lib of liberaciones) {
+    await evaluarLiberacion(db, requestId, lib, ventaId, actorEmail);
+  }
+}
+
+// Retiene (nunca elimina) las liberaciones ya habilitadas/programadas de
+// un proyecto personalizado cuando se abre una incidencia — mismo
+// criterio que retenerComisionesPorDisputa para catálogo. Una liberación
+// ya PAGADA no se toca — es terminal.
+export async function retenerLiberacionesPorDisputa(db, requestId, { ventaId, actorEmail, motivo }) {
+  const liberaciones = await query(
+    db, requestId,
+    `SELECT cl.id, cl.estado FROM comision_liberaciones cl JOIN comisiones c ON c.id = cl.comision_id WHERE c.venta_id = ? AND cl.estado IN ('habilitada', 'programada')`,
+    [ventaId]
+  );
+  for (const lib of liberaciones) {
+    await execute(db, requestId, "UPDATE comision_liberaciones SET estado = 'retenida', motivo_retencion = ? WHERE id = ?", [JSON.stringify(['sin_incidencia_activa']), lib.id]);
+    await logEvento(db, requestId, {
+      ventaId, entidad: 'comision_liberacion', entidadId: lib.id, estadoAnterior: lib.estado, estadoNuevo: 'retenida',
+      usuarioEmail: actorEmail, motivoNota: motivo,
+    });
+  }
+}
+
+// Retiene TODAS las liberaciones no terminales (nunca toca 'pagada') de las
+// comisiones de una distribución que acaba de quedar 'reemplazada' por una
+// corrección — RIO-119 (sexto bloque, 04/09/2026). No es estrictamente
+// necesario para el gate (evaluarLiberacion ya bloquea cualquier
+// liberación cuya distribución no esté 'confirmada', reemplazada incluida
+// — ver más abajo), pero deja el estado persistido reflejando la realidad
+// de inmediato, en vez de depender de la próxima reevaluación para que se
+// note. Nunca se vuelven a evaluar con éxito: mientras su distribución
+// siga 'reemplazada', el gate las retiene una y otra vez — no hace falta
+// un estado terminal nuevo (evita ALTERar el CHECK de
+// comision_liberaciones.estado).
+export async function retenerLiberacionesPorCorreccion(db, requestId, { distribucionId, actorEmail, motivo }) {
+  const liberaciones = await query(
+    db, requestId,
+    `SELECT cl.id, cl.estado FROM comision_liberaciones cl JOIN comisiones c ON c.id = cl.comision_id
+     WHERE c.distribucion_id = ? AND cl.estado IN ('retenida', 'habilitada', 'programada')`,
+    [distribucionId]
+  );
+  for (const lib of liberaciones) {
+    await execute(db, requestId, "UPDATE comision_liberaciones SET estado = 'retenida', motivo_retencion = ? WHERE id = ?", [JSON.stringify(['distribucion_reemplazada']), lib.id]);
+    await logEvento(db, requestId, {
+      ventaId: null, entidad: 'comision_liberacion', entidadId: lib.id, estadoAnterior: lib.estado, estadoNuevo: 'retenida',
+      usuarioEmail: actorEmail, motivoNota: motivo,
+    });
+  }
+}
+
+// Verdadero si alguna comisión de esta distribución ya cobró algo real —
+// una liberación 'pagada' o cualquier adelanto registrado — RIO-119
+// (sexto bloque, 04/09/2026). Usado para BLOQUEAR una corrección
+// automática ("no la anules silenciosamente... exigí un procedimiento
+// administrativo explícito de ajuste").
+export async function distribucionTienePagosOAdelantos(db, requestId, distribucionId) {
+  const pagadas = await query(
+    db, requestId,
+    `SELECT cl.id FROM comision_liberaciones cl JOIN comisiones c ON c.id = cl.comision_id WHERE c.distribucion_id = ? AND cl.estado = 'pagada' LIMIT 1`,
+    [distribucionId]
+  );
+  if (pagadas.length > 0) return true;
+  const adelantos = await query(
+    db, requestId,
+    `SELECT a.id FROM comision_adelantos a JOIN comisiones c ON c.id = a.comision_id WHERE c.distribucion_id = ? LIMIT 1`,
+    [distribucionId]
+  );
+  return adelantos.length > 0;
+}
+
+// Adelantos de comisiones — RIO-119 (quinto bloque, 04/09/2026). Genérico,
+// nunca por nombre propio: la capacidad la habilita
+// `asignaciones_rol.can_receive_commission_advance`, verificada en el
+// endpoint. Un adelanto SOLO puede consumir fondos ya liberados de ESTA
+// comisión (habilitada/programada/pagada) — nunca empresa, nunca otra
+// comisión, nunca un monto todavía estimado, nunca una cuota sin acreditar
+// (todo eso queda excluido por construcción: solo se suman liberaciones
+// que ya pasaron las 5 condiciones). RIO-119 (sexto bloque): tampoco puede
+// consumir el saldo de una comisión cuya distribución quedó 'reemplazada'
+// por una corrección — el saldo de esas comisiones es siempre 0.
+export class AdelantoError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = 'AdelantoError';
+    this.code = code;
+  }
+}
+
+export async function saldoDisponibleComision(db, requestId, comisionId) {
+  const comisionRows = await query(db, requestId, 'SELECT distribucion_id FROM comisiones WHERE id = ?', [comisionId]);
+  const distribucionId = comisionRows[0]?.distribucion_id;
+  if (distribucionId) {
+    const distRows = await query(db, requestId, 'SELECT estado FROM venta_distribuciones WHERE id = ?', [distribucionId]);
+    if (distRows[0]?.estado !== 'confirmada') return 0; // reemplazada (o, defensivamente, cualquier estado que no sea la vigente) — nunca hay saldo.
+  }
+  const liberaciones = await query(db, requestId, "SELECT monto_liberable FROM comision_liberaciones WHERE comision_id = ? AND estado IN ('habilitada', 'programada', 'pagada')", [comisionId]);
+  const totalLiberado = liberaciones.reduce((s, l) => s + l.monto_liberable, 0);
+  const adelantos = await query(db, requestId, 'SELECT monto FROM comision_adelantos WHERE comision_id = ?', [comisionId]);
+  const totalAdelantado = adelantos.reduce((s, a) => s + a.monto, 0);
+  return Math.max(totalLiberado - totalAdelantado, 0);
+}
+
+export async function registrarAdelanto(db, requestId, { comisionId, monto, moneda, medioPago, comprobanteReferencia, motivo, actorEmail, idempotencyKey }) {
+  const existentes = await query(db, requestId, 'SELECT * FROM comision_adelantos WHERE idempotency_key = ?', [idempotencyKey]);
+  if (existentes[0]) return existentes[0]; // reintento/doble clic — nunca duplica, devuelve lo mismo.
+
+  const comisionRows = await query(db, requestId, 'SELECT * FROM comisiones WHERE id = ?', [comisionId]);
+  const comision = comisionRows[0];
+  if (!comision) throw new AdelantoError('comision_no_encontrada', 'Comisión no encontrada.');
+  if (comision.es_estimacion) {
+    throw new AdelantoError('estimacion', 'No se puede adelantar sobre un monto todavía estimado — los costos del proyecto no están cerrados.');
+  }
+  if (comision.distribucion_id) {
+    const distRows = await query(db, requestId, 'SELECT estado FROM venta_distribuciones WHERE id = ?', [comision.distribucion_id]);
+    if (distRows[0]?.estado !== 'confirmada') {
+      throw new AdelantoError('distribucion_reemplazada', 'Esta comisión pertenece a una versión de la distribución que ya fue reemplazada por una corrección — nunca puede recibir un adelanto.');
+    }
+  }
+
+  // Capacidad configurable — nunca por nombre propio (Brenda: "no lo
+  // programes por nombre propio"). Se resuelve la asignación VIGENTE del
+  // beneficiario, igual que cualquier otra capacidad de asignaciones_rol.
+  const capacidadRows = await query(
+    db, requestId,
+    `SELECT a.can_receive_commission_advance FROM usuarios u JOIN asignaciones_rol a ON a.usuario_id = u.id
+     WHERE u.email = ? AND (a.valid_until IS NULL OR a.valid_until > datetime('now')) AND a.valid_from <= datetime('now')
+     ORDER BY a.valid_from DESC LIMIT 1`,
+    [comision.beneficiario_email]
+  );
+  if (!capacidadRows[0]?.can_receive_commission_advance) {
+    throw new AdelantoError('sin_capacidad', 'Esta persona no tiene habilitada la capacidad de recibir adelantos de comisión.');
+  }
+  if (moneda !== comision.moneda) {
+    throw new AdelantoError('moneda_no_coincide', `Esta comisión es en ${comision.moneda} — no se puede adelantar en ${moneda}.`);
+  }
+
+  const saldo = await saldoDisponibleComision(db, requestId, comisionId);
+  if (monto > saldo) {
+    throw new AdelantoError('saldo_insuficiente', `El adelanto solicitado (${monto}) supera el saldo disponible (${saldo}).`);
+  }
+
+  const id = crypto.randomUUID();
+  const autoautorizado = actorEmail === comision.beneficiario_email;
+  const saldoPosterior = saldo - monto;
+  await execute(
+    db, requestId,
+    `INSERT INTO comision_adelantos (id, comision_id, beneficiario_email, monto, moneda, medio_pago, comprobante_referencia, motivo, autorizado_por, autoautorizado, saldo_anterior, saldo_posterior, idempotency_key)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, comisionId, comision.beneficiario_email, monto, moneda, medioPago || null, comprobanteReferencia || null, motivo, actorEmail, autoautorizado ? 1 : 0, saldo, saldoPosterior, idempotencyKey]
+  );
+  await logEvento(db, requestId, {
+    ventaId: comision.venta_id, entidad: 'comision_adelanto', entidadId: id, estadoAnterior: null, estadoNuevo: 'registrado',
+    usuarioEmail: actorEmail,
+    motivoNota: `${autoautorizado ? '[AUTOAUTORIZADO — administración se adelantó a sí misma] ' : ''}${motivo} — saldo ${saldo} → ${saldoPosterior}.`,
+  });
+
+  const rows = await query(db, requestId, 'SELECT * FROM comision_adelantos WHERE id = ?', [id]);
+  return rows[0];
+}
+
+// Registra (append-only, nunca se sobrescribe) la participación de EMPRESA
+// de un proyecto personalizado — RIO-119 (cuarto bloque, 03/09/2026).
+// Deliberadamente NUNCA una fila en `comisiones`: RiO no se modela como
+// una persona ficticia con comisión pagable. Cada llamada agrega una fila
+// nueva (al activar, y luego de cada corrección de costos) — el
+// historial completo de estimación → definitivo queda visible, cada una
+// con su `motivo` cuando corresponde a una corrección.
+export async function registrarFinanzasEmpresa(db, requestId, { ventaId, distribucionId, empresaPorcentaje, actorEmail, motivo }) {
+  const ventaRows = await query(db, requestId, 'SELECT precio_pactado, moneda FROM ventas WHERE id = ?', [ventaId]);
+  const venta = ventaRows[0];
+  const distribucionRows = await query(db, requestId, 'SELECT costos_cerrados FROM venta_distribuciones WHERE id = ?', [distribucionId]);
+  const esEstimacion = distribucionRows[0]?.costos_cerrados ? 0 : 1;
+
+  const componentes = await query(
+    db, requestId,
+    `SELECT c.* FROM componentes c JOIN proyectos p ON p.id = c.proyecto_id WHERE p.venta_id = ?`,
+    [ventaId]
+  );
+  let costosDirectos = 0;
+  for (const c of componentes) {
+    const costos = await query(db, requestId, 'SELECT monto FROM costos_directos WHERE componente_id = ?', [c.id]);
+    costosDirectos += costos.reduce((s, x) => s + x.monto, 0);
+  }
+  const utilidadNeta = venta.precio_pactado - costosDirectos;
+  const montoEmpresa = Math.round((utilidadNeta * empresaPorcentaje) / 100);
+
+  const pagosAcreditados = await query(db, requestId, "SELECT monto FROM pagos_esperados WHERE venta_id = ? AND estado = 'acreditado'", [ventaId]);
+  const totalAcreditado = pagosAcreditados.reduce((s, p) => s + p.monto, 0);
+  const totalPactado = venta.precio_pactado || 1;
+  // Fondos de empresa efectivamente obtenidos a la fecha — proporcional a
+  // lo acreditado del proyecto completo (informativo, no mueve estado).
+  const fondosObtenidos = Math.round((montoEmpresa * totalAcreditado) / totalPactado);
+
+  const id = crypto.randomUUID();
+  await execute(
+    db, requestId,
+    `INSERT INTO proyecto_finanzas_empresa (
+       id, venta_id, distribucion_id, monto_bruto, costos_directos, utilidad_neta,
+       porcentaje_empresa, monto_empresa, fondos_obtenidos, moneda, es_estimacion, motivo, created_by
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, ventaId, distribucionId, venta.precio_pactado, costosDirectos, utilidadNeta, empresaPorcentaje, montoEmpresa, fondosObtenidos, venta.moneda, esEstimacion, motivo || null, actorEmail]
+  );
+  await logEvento(db, requestId, {
+    ventaId, entidad: 'proyecto_finanzas_empresa', entidadId: id, estadoAnterior: null, estadoNuevo: esEstimacion ? 'estimacion' : 'definitivo',
+    usuarioEmail: actorEmail, motivoNota: motivo || 'Cálculo inicial al activar la distribución.',
+  });
+  return id;
+}
+
+// Alta de un costo directo de un componente (ej. dominio propio de una
+// Landing Premium) — exclusivo de administración (autorizado_por, validado
+// en el endpoint). Se descuenta de la utilidad neta de ESE componente,
+// pero solo afecta comisiones generadas DESPUÉS de este registro — nunca
+// recalcula hacia atrás una comisión ya generada (snapshot inmutable).
+export async function registrarCostoDirecto(db, requestId, { componenteId, tipo, monto, moneda, autorizadoPor, nota }) {
+  const id = crypto.randomUUID();
+  await execute(
+    db, requestId,
+    'INSERT INTO costos_directos (id, componente_id, tipo, monto, moneda, autorizado_por, nota) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [id, componenteId, tipo, monto, moneda, autorizadoPor, nota || null]
+  );
+  return id;
+}

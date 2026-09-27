@@ -413,6 +413,44 @@
     font-size: .9rem; color: var(--muted); line-height: 1.65;
   }
 
+  /* ── RIO-117 (segundo bloque): confirmación antes de cerrar la venta ── */
+  .venta-confirm-overlay {
+    position: fixed; inset: 0; background: rgba(13,0,19,.45);
+    z-index: 300; display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  .venta-confirm-overlay.show { display: flex; }
+  .venta-confirm-modal {
+    background: var(--white, #fff); border-radius: var(--r-m); padding: 28px 30px;
+    max-width: 440px; width: 100%; box-shadow: 0 12px 40px rgba(0,0,0,.25);
+  }
+  .venta-confirm-title {
+    font-family: var(--ff-head); font-size: 1.15rem; font-weight: 800;
+    color: var(--ink, #1a0d24); margin: 0 0 16px;
+  }
+  /* RIO-118 (corrección — ventas administrativas y comisión de
+     supervisión, 02/09/2026): selector exclusivo de administración, nunca
+     visible para un vendedor común (su equipo se resuelve solo). */
+  .venta-tipo-field { margin: 0 0 18px; display: flex; flex-direction: column; gap: 6px; }
+  .venta-tipo-field label {
+    font-family: var(--ff-mono); font-size: .62rem; font-weight: 500;
+    color: var(--sec); text-transform: uppercase; letter-spacing: .05em;
+  }
+  .venta-tipo-field select {
+    border: 2px solid var(--line); border-radius: var(--r-s, 8px); background: #fff;
+    font-family: var(--ff-body); font-size: .88rem; padding: 8px 10px; color: var(--ink);
+  }
+  .venta-tipo-field select:focus { outline: none; border-color: var(--p); }
+  .venta-confirm-summary { list-style: none; margin: 0 0 20px; padding: 0; font-size: .88rem; }
+  .venta-confirm-summary li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid rgba(0,0,0,.08); }
+  .venta-confirm-summary li span:first-child { color: var(--muted); }
+  .venta-confirm-summary li span:last-child { font-weight: 700; text-align: right; }
+  .venta-confirm-actions { display: flex; gap: 10px; }
+  .venta-confirm-actions button { flex: 1; }
+  .venta-confirm-btn-back {
+    background: none; border: 1.5px solid rgba(0,0,0,.15); border-radius: 100px;
+    padding: 10px 16px; font-size: .85rem; font-weight: 600; cursor: pointer; color: var(--muted);
+  }
+
   @media(max-width:640px) {
     .send-step { flex-direction: column; align-items: center; text-align: center; }
     .send-step .ss-info { justify-content: center; }
@@ -850,11 +888,11 @@
         <!-- Generado dinámicamente por renderPricing() desde config/markets.js -->
       </div>
 
-      <div class="domain-desired-field">
+      <div class="domain-desired-field" id="domainDesiredField">
         <label>Dominio propio deseado (si aplica)</label>
         <input type="text" id="desiredDomain" placeholder="Ej: tiendadejuanito.cl">
       </div>
-      <p class="domain-note">Recuerda: este dominio es tentativo hasta confirmar disponibilidad. Nunca prometas la dirección exacta como definitiva.</p>
+      <p class="domain-note" id="domainDesiredNote">Recuerda: este dominio es tentativo hasta confirmar disponibilidad. Nunca prometas la dirección exacta como definitiva.</p>
 
       <div class="send-sequence" id="sendSequence">
         <div class="send-step active">
@@ -877,11 +915,33 @@
       <div id="saleSuccess">
         <div class="sale-success-card">
           <p class="sale-success-title" id="saleSuccessTitle">¡Excelente trabajo!</p>
-          <p class="sale-success-msg">Venta realizada con éxito. No olvides recordarle al cliente que debe enviarnos sus fotos y logo (si tiene).</p>
+          <p class="sale-success-msg" id="saleSuccessMsg">Venta realizada con éxito. No olvides recordarle al cliente que debe enviarnos sus fotos y logo (si tiene). Ya podés verla en tu <a href="./panel-vendedor.html" target="_blank" rel="noopener">Panel del Vendedor</a>, como "En espera de pago".</p>
           <button class="seq-btn" style="margin-top:20px;" onclick="nextProspect()">Siguiente prospecto →</button>
         </div>
       </div>
     </section>
+
+    <!-- RIO-117 (segundo bloque): confirmación antes de registrar la venta en D1 -->
+    <div class="venta-confirm-overlay" id="ventaConfirmOverlay" role="dialog" aria-modal="true" aria-labelledby="ventaConfirmTitle">
+      <div class="venta-confirm-modal">
+        <p class="venta-confirm-title" id="ventaConfirmTitle">Confirmá antes de cerrar la venta</p>
+        <!-- RIO-118 (corrección — ventas administrativas y comisión de
+             supervisión, 02/09/2026): solo administración lo ve — un
+             vendedor común nunca elige equipo, el suyo se resuelve solo. -->
+        <div class="venta-tipo-field" id="ventaTipoField" style="display:none;">
+          <label for="ventaTipoVentaSelect">Tipo de venta</label>
+          <select id="ventaTipoVentaSelect">
+            <option value="">Seleccioná una opción…</option>
+            <option value="directa">Venta directa de Administración — sin supervisión</option>
+          </select>
+        </div>
+        <ul class="venta-confirm-summary" id="ventaConfirmSummary"></ul>
+        <div class="venta-confirm-actions">
+          <button type="button" class="venta-confirm-btn-back" onclick="cerrarConfirmacionVenta()">Volver a revisar</button>
+          <button type="button" class="seq-btn" id="ventaConfirmBtn" onclick="confirmarYCerrarVenta()">Confirmar y cerrar venta</button>
+        </div>
+      </div>
+    </div>
 
     <!-- FLOW RECAP -->
     <section class="block">
@@ -931,7 +991,9 @@
 </footer>
 
 <script src="./config/users.js"></script>
-<script src="./config/markets.js"></script>
+<!-- RIO-112: markets.js es modulo ES (fuente canonica de precios, compartida
+     con el backend via import) -- ver interno/config/markets.js. -->
+<script type="module" src="./config/markets.js"></script>
 <script src="../assets/js/main.js?v=20260627" defer></script>
 
 <script>
@@ -1100,21 +1162,51 @@
       card.addEventListener('click', () => {
         document.querySelectorAll('.domain-choice-card').forEach(c => c.classList.remove('active'));
         card.classList.add('active');
+        actualizarVisibilidadDominioPropio();
       });
     });
   }
 
-  const HUBSPOT_PORTAL_ID  = '51671122';
-  const HUBSPOT_FORM_GUID  = 'cb4cb2df-ca0f-42ee-bf54-a0830e8ba6a5';
-  const HUBSPOT_ENDPOINT   = `https://api.hsforms.com/submissions/v3/integration/submit/${HUBSPOT_PORTAL_ID}/${HUBSPOT_FORM_GUID}`;
+  // RIO-120 (11/09/2026): el envío a HubSpot ya no sale del navegador ni
+  // depende de campos armados acá — el backend construye el contacto y el
+  // negocio íntegramente desde lo que ya quedó guardado en D1 al crear la
+  // venta (ver construirPayloadHubSpot en functions/_shared/hubspot.js).
 
   function normalizePhone(raw){ return raw.replace(/[^\d]/g, ''); }
+
+  // RIO-122 (UAT Negocio Test 14B, 15/09/2026): único lugar que decide si un
+  // producto incluye dominio propio — Landing Premium ('personalizado') y su
+  // pack ('ficha_personalizado') únicamente. Landing Express nunca lo tiene,
+  // ni suelto ni en pack. Reutilizada por el campo "Dominio propio deseado"
+  // (visibilidad) y por getProductLabel/buildPriceCardHTML (mensaje/precio)
+  // — antes esta misma condición estaba duplicada en ambos lugares.
+  function esNivelPremium(key){
+    return key === 'personalizado' || key === 'ficha_personalizado';
+  }
+
+  // Muestra "Dominio propio deseado" únicamente para Landing Premium (suelta
+  // o en pack) — para Landing Express/Ficha lo oculta y limpia cualquier
+  // valor escrito antes de cambiar de producto, para no guardar un dato
+  // residual que no aplica (Brenda, UAT Negocio Test 14B).
+  function actualizarVisibilidadDominioPropio(){
+    const activeCard = document.querySelector('.domain-choice-card.active');
+    const productKey = activeCard ? activeCard.dataset.domain : null;
+    const mostrar = productKey ? esNivelPremium(productKey) : false;
+    const field = document.getElementById('domainDesiredField');
+    const note  = document.getElementById('domainDesiredNote');
+    if(field) field.style.display = mostrar ? '' : 'none';
+    if(note)  note.style.display  = mostrar ? '' : 'none';
+    if(!mostrar){
+      const input = document.getElementById('desiredDomain');
+      if(input) input.value = '';
+    }
+  }
 
   function getProductLabel(key, forClientMessage){
     const config = MARKETS[currentMarket];
     const p = config.products[key];
     if(!p) return key;
-    const isPremiumTier = (key === 'personalizado' || key === 'ficha_personalizado');
+    const isPremiumTier = esNivelPremium(key);
     if(!isPremiumTier){
       return forClientMessage ? p.label : `${p.label} (${config.formatPrice(getActivePrice(currentMarket, key))} ${config.currency})`;
     }
@@ -1210,6 +1302,14 @@
     return lines.join('\n');
   }
 
+  // ── RIO-120 (11/09/2026, alcance redefinido por Brenda): restaurado el
+  // mecanismo ORIGINAL que sí entregaba el correo — el formulario de
+  // HubSpot se arma y se envía desde ACÁ (el navegador), con el contexto
+  // real de la página y el tracking de HubSpot, nunca desde el Worker.
+  // portalId/formGuid quedan fijos como constantes acá (nunca
+  // configurables ni aceptados desde otro lado) — ver
+  // enviarFormularioHubSpot() más abajo, que dispara esto DESPUÉS de que
+  // la venta ya quedó guardada en D1.
   function buildContactBlock(){
     const clientName = document.getElementById('pclientname').value || '—';
     const wa         = document.getElementById('pclientwa').value   || '—';
@@ -1282,6 +1382,124 @@
     return lines.join('\n');
   }
 
+  // Campos aprobados por Brenda para HubSpot (11/09/2026) — SOLO estos,
+  // nunca precio, moneda, costos, comisiones ni datos bancarios:
+  // nombre del cliente (empresa + contacto), teléfono/WhatsApp, email,
+  // producto elegido, ejecutivo responsable, respuestas de Landing y de
+  // Ficha. "desafio" (notas de diagnóstico comercial) queda deliberadamente
+  // FUERA — no estaba en la lista aprobada.
+  function buildHubSpotFields(){
+    const activeProduct = document.querySelector('.domain-choice-card.active');
+    const productLabel  = activeProduct ? getProductLabel(activeProduct.dataset.domain, false) : '—';
+    const clientName    = (document.getElementById('pclientname').value || '').trim();
+    const nameParts     = clientName.split(' ');
+    const firstname     = nameParts[0] || '';
+    const lastname      = nameParts.slice(1).join(' ') || '';
+
+    const fields = [
+      { objectTypeId: '0-1', name: 'company',               value: document.getElementById('pname').value    || '—' },
+      { objectTypeId: '0-1', name: 'producto_elegido',      value: productLabel },
+      { objectTypeId: '0-1', name: 'ejecutivo_responsable', value: document.getElementById('execName').value || '—' },
+      { objectTypeId: '0-1', name: 'respuestas_landing',    value: buildLandingAnswersText() }
+    ];
+
+    if(firstname) fields.push({ objectTypeId: '0-1', name: 'firstname', value: firstname });
+    if(lastname)  fields.push({ objectTypeId: '0-1', name: 'lastname',  value: lastname });
+
+    const email    = (document.getElementById('pclientemail').value || '').trim();
+    const whatsapp = (document.getElementById('pclientwa').value    || '').trim();
+    if(email)    fields.push({ objectTypeId: '0-1', name: 'email',                    value: email });
+    if(whatsapp) fields.push({ objectTypeId: '0-1', name: 'hs_whatsapp_phone_number', value: whatsapp.replace(/[^\d+]/g, '') });
+
+    if(!hasFicha){
+      fields.push({ objectTypeId: '0-1', name: 'respuestas_ficha', value: buildFichaAnswersText() });
+    }
+    return fields;
+  }
+
+  // portalId/formGuid FIJOS acá — nunca aceptados desde el backend, desde
+  // un query param ni desde ningún dato configurable. Son los mismos
+  // valores públicos que el Kit ya usaba desde RIO-70 (no son secretos:
+  // siempre viajaron visibles en este mismo HTML).
+  var HUBSPOT_PORTAL_ID = '51671122';
+  var HUBSPOT_FORM_GUID = 'cb4cb2df-ca0f-42ee-bf54-a0830e8ba6a5';
+  var HUBSPOT_FORMS_ENDPOINT = 'https://api.hsforms.com/submissions/v3/integration/submit/' + HUBSPOT_PORTAL_ID + '/' + HUBSPOT_FORM_GUID;
+
+  // RIO-120 (11/09/2026): Preview (*.pages.dev) NUNCA envía el formulario
+  // real — HubSpot ya marcó como spam los 2 envíos de prueba que salieron
+  // de ese dominio temporal. La prueba real del correo se hace después
+  // desde rioimpulsodigital.com, con autorización.
+  function esDominioDePrevioNoComercial(){
+    var host = window.location.hostname;
+    return host.endsWith('.pages.dev') || host === 'localhost' || host === '127.0.0.1';
+  }
+
+  // RIO-121 (corrección de auditoría — confiabilidad de HubSpot,
+  // 12/09/2026): se llama ÚNICAMENTE tras una creación real de venta —
+  // NUNCA en un replay de idempotencia (ver el único punto de llamada,
+  // más abajo, que ahora exige `!body.data.replay`). Antes (RIO-120,
+  // 11/09/2026) se llamaba también en cada replay para poder reintentar
+  // solo un envío fallido sin acción manual — la auditoría de RIO-121
+  // confirmó que eso abría una ventana real de reenvío duplicado: si
+  // HubSpot ya había aceptado el formulario pero el reporte del resultado
+  // nunca llegó a completarse (pestaña cerrada a mitad de camino), un
+  // replay posterior podía autorizar un segundo envío real. La corrección
+  // traslada esa recuperación exclusivamente a una acción explícita de
+  // administración (Panel Administrativo, "Reintentar") — el vendedor ya
+  // nunca puede disparar un segundo intento real, ni siquiera sin
+  // saberlo. `keepalive: true` en los tres `fetch` de este flujo: mejora
+  // la probabilidad de que el intento y su resultado se completen aunque
+  // la pestaña se cierre justo después de confirmar — nunca cambia la
+  // autorización ni la lógica de reintento, que sigue resolviendo el
+  // backend (reclamarIntentoEnvio, con su lease de 2 minutos).
+  async function intentarEnviarFormularioHubSpot(ventaId){
+    var claim;
+    try {
+      var r = await fetch('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/hubspot-form', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', keepalive: true,
+        body: JSON.stringify({ action: 'reclamar-intento' }),
+      });
+      var respBody = await r.json().catch(function(){ return null; });
+      claim = respBody && respBody.data;
+    } catch(e) {
+      return; // sin red: ni reclamar ni reportar es posible — solo administración podrá reintentar después.
+    }
+    if(!claim || !claim.autorizado) return; // ya enviado, o un intento en curso en otra pestaña — nunca un segundo envío.
+
+    if(esDominioDePrevioNoComercial()){
+      reportarResultadoHubSpot(ventaId, 'error', 'preview_bloqueado');
+      return;
+    }
+    try {
+      const fields = buildHubSpotFields();
+      const context = { pageUri: window.location.href, pageName: document.title };
+      const res = await fetch(HUBSPOT_FORMS_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields, context }),
+        keepalive: true,
+      });
+      reportarResultadoHubSpot(ventaId, res.ok ? 'enviado' : 'error', res.ok ? 'ok' : ('http_' + res.status));
+    } catch(e) {
+      reportarResultadoHubSpot(ventaId, 'error', 'error_red');
+    }
+  }
+
+  // Best-effort: nunca bloquea ni afecta la experiencia del vendedor,
+  // solo deja el registro mínimo visible en el Panel Administrativo.
+  // `keepalive: true` (RIO-121): esta llamada es la que confirma que un
+  // envío real ya fue aceptado por HubSpot — sin ella, la fila queda en
+  // 'procesando' y solo administración puede destrabarla más tarde.
+  function reportarResultadoHubSpot(ventaId, estado, resumen){
+    fetch('/interno/api/ventas/' + encodeURIComponent(ventaId) + '/hubspot-form', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estado, resumen }),
+      credentials: 'same-origin',
+      keepalive: true,
+    }).catch(function(){ /* no-op — nunca interrumpe al vendedor */ });
+  }
+
   function flashStatus(msg){
     const status = document.getElementById('seqStatus');
     status.textContent = msg;
@@ -1324,86 +1542,299 @@
     }
   }
 
-  async function doCloseVenta(){
-    if(!currentExecutive || !currentMarket){
-      throw new Error('No hay mercado autorizado para registrar esta venta.');
+  // Clave de idempotencia estable — sobrevive a clics repetidos, un
+  // timeout de red o una recarga de página, siempre que sea la MISMA
+  // venta en curso. Se limpia recién cuando la venta quedó confirmada, o
+  // cuando el vendedor arranca explícitamente un prospecto nuevo
+  // (resetForm) — nunca antes.
+  const IDEMPOTENCY_STORAGE_KEY = 'rio_kit_cierre_idempotency_key';
+  function getIdempotencyKey(){
+    let key = null;
+    try { key = window.sessionStorage.getItem(IDEMPOTENCY_STORAGE_KEY); } catch(e){ key = null; }
+    if(!key){
+      key = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : ('k-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+      try { window.sessionStorage.setItem(IDEMPOTENCY_STORAGE_KEY, key); } catch(e){ /* sessionStorage no disponible — sigue funcionando en memoria durante esta carga de página */ }
     }
-    if(currentExecutive.allowedMarkets.indexOf(currentMarket) === -1){
-      throw new Error('El mercado activo no está autorizado para este usuario.');
-    }
+    return key;
+  }
+  function clearIdempotencyKey(){
+    try { window.sessionStorage.removeItem(IDEMPOTENCY_STORAGE_KEY); } catch(e){ /* no-op */ }
+  }
 
+  // Campos mínimos para poder registrar la venta — si falta alguno, se
+  // pide específicamente ESE dato (Brenda: "no obligar a repetir toda la
+  // información"), nunca un mensaje genérico de "completá el formulario".
+  function validarCamposMinimos(){
+    const negocio = (document.getElementById('pname').value || '').trim();
+    if(!negocio) return 'Falta el nombre del negocio (arriba de todo).';
     const activeProduct = document.querySelector('.domain-choice-card.active');
-    const productLabel  = activeProduct ? getProductLabel(activeProduct.dataset.domain, false) : '—';
-    const clientName    = (document.getElementById('pclientname').value || '').trim();
-    const nameParts     = clientName.split(' ');
-    const firstname     = nameParts[0] || '';
-    const lastname      = nameParts.slice(1).join(' ') || '';
+    if(!activeProduct) return 'Todavía no se seleccionó qué producto compró el cliente.';
+    return null;
+  }
 
-    // mercado_comercial NO se envía (decisión de Brenda, 22 ago 2026 — reemplaza la
-    // autorización de RIO-91): no se confirmó que la propiedad exista en HubSpot, y
-    // enviar un campo inexistente podría rechazar el registro completo. El mercado se
-    // identifica igual por país + teléfono, ya presentes en company/hs_whatsapp_phone_number.
-    const fields = [
-      { objectTypeId: '0-1', name: 'company',               value: document.getElementById('pname').value    || '—' },
-      { objectTypeId: '0-1', name: 'producto_elegido',      value: productLabel },
-      { objectTypeId: '0-1', name: 'ejecutivo_responsable', value: document.getElementById('execName').value || '—' },
-      { objectTypeId: '0-1', name: 'desafio',               value: document.getElementById('revealNotes').value || '—' },
-      { objectTypeId: '0-1', name: 'respuestas_landing',    value: buildLandingAnswersText() }
-    ];
+  // RIO-117 (corrección tras validación real, 01/09/2026): antecedentes
+  // del Kit CATEGORIZADOS para el Panel del Vendedor — separado de los
+  // textos que se arman para HubSpot (buildLandingAnswersText/
+  // buildFichaAnswersText, sin tocar). Nunca repite lo que ya vive en la
+  // cabecera de la venta (cliente/producto/mercado/precio) — por eso no
+  // hay categoría "cliente y contacto" acá, ya está ahí. La categoría
+  // "facturacion" queda redactada server-side para un supervisor
+  // (functions/interno/api/ventas/[id].js).
+  function buildAntecedentesKit(){
+    const activeType = document.querySelector('.type-card.active');
+    const diagnosticoComercial = activeType ? {
+      tipo: activeType.dataset.type,
+      tipoNombre: activeType.querySelector('.name').textContent,
+      notas: (document.getElementById('revealNotes').value || '').trim() || null,
+    } : null;
 
-    if(firstname) fields.push({ objectTypeId: '0-1', name: 'firstname', value: firstname });
-    if(lastname)  fields.push({ objectTypeId: '0-1', name: 'lastname',  value: lastname });
+    const landingFieldIds = [['q1','Qué ofrece / qué resuelve'],['q2','Público objetivo'],['q3','Diferencial'],['q4','Acción esperada de la página'],['q5','Fotos disponibles'],['q6','Puede conseguir reseñas'],['q7','Color / identidad visual'],['qCanal','Canal de contacto']];
+    const datosLanding = {};
+    landingFieldIds.forEach(([id, label]) => { const el = document.getElementById(id); if(el && el.value.trim()) datosLanding[label] = el.value.trim(); });
 
-    const email    = (document.getElementById('pclientemail').value || '').trim();
-    const whatsapp = (document.getElementById('pclientwa').value    || '').trim();
-    if(email)    fields.push({ objectTypeId: '0-1', name: 'email',                    value: email });
-    if(whatsapp) fields.push({ objectTypeId: '0-1', name: 'hs_whatsapp_phone_number', value: whatsapp.replace(/[^\d+]/g, '') });
-
+    let datosFicha = null;
     if(!hasFicha){
-      fields.push({ objectTypeId: '0-1', name: 'respuestas_ficha', value: buildFichaAnswersText() });
+      const fichaFieldIds = [['f2','Local físico o área de servicio'],['f3','Horario de atención'],['f4','Teléfono público / correo'],['f5','Métodos de pago / retiro / entrega']];
+      datosFicha = {};
+      fichaFieldIds.forEach(([id, label]) => { const el = document.getElementById(id); if(el && el.value.trim()) datosFicha[label] = el.value.trim(); });
+    }
+
+    let facturacion = null;
+    if(currentMarket === 'AR'){
+      const partes = {
+        'Nombre / razón social': document.getElementById('pclientbillingname').value.trim(),
+        'CUIT/CUIL/DNI': document.getElementById('pclientcuit').value.trim(),
+        'Domicilio': document.getElementById('pclientaddress').value.trim(),
+        'Condición fiscal': document.getElementById('pclientfiscal').value.trim(),
+      };
+      const conValor = Object.fromEntries(Object.entries(partes).filter(([, v]) => v));
+      if(Object.keys(conValor).length) facturacion = conValor;
+    }
+
+    // RIO-122 (UAT Negocio Test 14B): 'Dominio propio deseado' solo tiene
+    // sentido para Landing Premium — para Express/Ficha nunca se guarda,
+    // aunque el campo tenga un valor residual de una selección anterior
+    // (ya se limpia en actualizarVisibilidadDominioPropio(), pero esto es
+    // la garantía real: nunca depende solo de que el campo esté vacío).
+    const activeProductCard = document.querySelector('.domain-choice-card.active');
+    const activeProductKey  = activeProductCard ? activeProductCard.dataset.domain : null;
+    const desiredDomain = (activeProductKey && esNivelPremium(activeProductKey))
+      ? (document.getElementById('desiredDomain').value || '').trim()
+      : '';
+    const config = MARKETS[currentMarket];
+    const productoCondiciones = {
+      'Dominio propio deseado': desiredDomain || null,
+      'Forma de pago': config.paymentMethod === 'bank_transfer' ? 'Transferencia bancaria' : 'Mercado Pago (link)',
+    };
+
+    return { diagnosticoComercial, datosLanding, datosFicha, facturacion, productoCondiciones };
+  }
+
+  function buildVentaPayload(){
+    const activeProduct = document.querySelector('.domain-choice-card.active');
+    const productKey    = activeProduct.dataset.domain;
+    const tipoPrecio     = isPromoActive() ? 'lanzamiento' : 'regular';
+    const precioPactado  = getActivePrice(currentMarket, productKey);
+    const config         = MARKETS[currentMarket];
+    const isPack         = productKey === 'ficha_generico' || productKey === 'ficha_personalizado';
+
+    const cliente = {
+      negocio: (document.getElementById('pname').value || '').trim(),
+      contactoNombre: (document.getElementById('pclientname').value || '').trim() || null,
+      telefono: (document.getElementById('pclientwa').value || '').trim() || null,
+      email: (document.getElementById('pclientemail').value || '').trim() || null,
+    };
+    if(currentMarket === 'AR'){
+      const partes = [
+        (document.getElementById('pclientbillingname').value || '').trim(),
+        (document.getElementById('pclientcuit').value || '').trim(),
+        (document.getElementById('pclientaddress').value || '').trim(),
+        (document.getElementById('pclientfiscal').value || '').trim(),
+      ].filter(Boolean);
+      if(partes.length) cliente.datosFacturacionAr = partes.join(' | ');
     }
 
     const payload = {
-      fields,
-      context: { pageUri: window.location.href, pageName: document.title }
+      mercado: currentMarket,
+      cliente,
+      producto: productKey,
+      tipoPrecio,
+      precioPactado,
+      origen: 'kit_comercial',
+      antecedentesKit: buildAntecedentesKit(),
     };
+    if(isPack){
+      const landingKey = productKey === 'ficha_generico' ? 'generico' : 'personalizado';
+      payload.precioFichaIndividual = getActivePrice(currentMarket, 'ficha');
+      payload.precioLandingIndividual = getActivePrice(currentMarket, landingKey);
+    }
+    return { payload, resumen: { negocio: cliente.negocio, productLabel: getProductLabel(productKey, false), mercado: currentMarket, precioPactado, moneda: config.currency, formaPago: config.paymentMethod === 'bank_transfer' ? 'Transferencia bancaria' : 'Mercado Pago (link)' } };
+  }
 
-    const res = await fetch(HUBSPOT_ENDPOINT, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload)
-    });
+  let pendingVentaPayload = null;
 
-    if(!res.ok){
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || `HTTP ${res.status}`);
+  // RIO-118 (corrección — ventas administrativas y comisión de
+  // supervisión, 02/09/2026): la comisión de supervisión depende de que la
+  // venta esté vinculada a un equipo supervisado, nunca del rol ni del
+  // nombre de quien vende. Solo administración elige explícitamente entre
+  // un equipo autorizado de su mercado o "venta directa — sin
+  // supervisión" — cualquier otro rol nunca ve ni puede enviar esto (el
+  // servidor lo ignora igual si llegara, ver functions/interno/api/ventas/index.js).
+  let equiposDisponibles = [];
+  let equiposCargados = false;
+
+  function esAdministracion(){
+    return !!(currentExecutive && currentExecutive.role === 'admin');
+  }
+
+  async function cargarEquiposAdmin(){
+    if(!esAdministracion() || equiposCargados) return;
+    equiposCargados = true;
+    try {
+      const res = await fetch('/interno/api/equipos', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      const body = await res.json().catch(() => null);
+      if(res.ok && body && body.ok){
+        equiposDisponibles = body.data.equipos || [];
+      }
+    } catch(e) {
+      console.error('[Kit RiO] No se pudieron cargar los equipos:', e);
     }
   }
 
-  async function runCloseVenta(){
+  function poblarSelectorTipoVenta(){
+    const select = document.getElementById('ventaTipoVentaSelect');
+    while(select.options.length > 2){ select.remove(2); }
+    equiposDisponibles.filter(eq => eq.mercado === currentMarket).forEach(eq => {
+      const opt = document.createElement('option');
+      opt.value = 'equipo:' + eq.id;
+      opt.textContent = eq.nombre;
+      select.appendChild(opt);
+    });
+    select.value = '';
+  }
+
+  function runCloseVenta(){
+    if(!currentExecutive || !currentMarket){ alert('No hay mercado autorizado para registrar esta venta.'); return; }
+    if(currentExecutive.allowedMarkets.indexOf(currentMarket) === -1){ alert('El mercado activo no está autorizado para este usuario.'); return; }
+
+    const faltante = validarCamposMinimos();
+    if(faltante){ alert('⚠️ ' + faltante); return; }
+
+    if(esAdministracion()){
+      poblarSelectorTipoVenta();
+      document.getElementById('ventaTipoField').style.display = '';
+    } else {
+      document.getElementById('ventaTipoField').style.display = 'none';
+    }
+
+    const { payload, resumen } = buildVentaPayload();
+    pendingVentaPayload = payload;
+
+    document.getElementById('ventaConfirmSummary').innerHTML = [
+      ['Cliente', resumen.negocio],
+      ['Producto', resumen.productLabel],
+      ['Mercado', resumen.mercado],
+      ['Precio acordado', resumen.moneda + ' ' + resumen.precioPactado.toLocaleString('es-CL')],
+      ['Moneda', resumen.moneda],
+      ['Forma de pago', resumen.formaPago],
+    ].map(([k, v]) => `<li><span>${k}</span><span>${(v || '—').toString().replace(/</g,'&lt;')}</span></li>`).join('');
+    document.getElementById('ventaConfirmOverlay').classList.add('show');
+  }
+
+  function cerrarConfirmacionVenta(){
+    document.getElementById('ventaConfirmOverlay').classList.remove('show');
+    document.getElementById('ventaTipoVentaSelect').value = '';
+  }
+
+  async function confirmarYCerrarVenta(){
+    if(!pendingVentaPayload) return;
+
+    // RIO-118 (corrección — ventas administrativas y comisión de
+    // supervisión): la elección se lee acá, al confirmar — nunca se
+    // infiere, nunca hay un default silencioso para administración.
+    if(esAdministracion()){
+      const seleccion = document.getElementById('ventaTipoVentaSelect').value;
+      if(!seleccion){
+        alert('⚠️ Elegí el tipo de venta (equipo o venta directa de Administración) antes de confirmar.');
+        return;
+      }
+      if(seleccion === 'directa'){
+        pendingVentaPayload.tipoVenta = 'directa_administracion_sin_supervision';
+        delete pendingVentaPayload.equipoId;
+      } else {
+        pendingVentaPayload.tipoVenta = 'equipo';
+        pendingVentaPayload.equipoId = seleccion.slice('equipo:'.length);
+      }
+    }
+
+    const confirmBtn = document.getElementById('ventaConfirmBtn');
+    const originalText = confirmBtn.textContent;
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Registrando...';
+
     const closeStep = document.querySelectorAll('#sendSequence .send-step')[1];
     const closeBtn  = closeStep.querySelector('.seq-btn');
-    const originalText = closeBtn.textContent;
-    closeBtn.disabled = true;
-    closeBtn.textContent = 'Registrando...';
 
     try {
-      await doCloseVenta();
+      const res = await fetch('/interno/api/ventas', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': getIdempotencyKey() },
+        body: JSON.stringify(pendingVentaPayload)
+      });
+      const body = await res.json().catch(() => null);
+      if(!res.ok || !body || !body.ok){
+        throw new Error((body && body.error && body.error.message) || `HTTP ${res.status}`);
+      }
+
+      cerrarConfirmacionVenta();
+      pendingVentaPayload = null;
+      clearIdempotencyKey();
+
+      // RIO-121 (corrección de auditoría, 12/09/2026): el formulario a
+      // HubSpot se intenta SIEMPRE después de que la venta ya quedó
+      // guardada en D1 — nunca antes, nunca la bloquea — pero SOLO en una
+      // creación real, NUNCA en un replay de idempotencia (`body.data.replay
+      // === true`). Antes (RIO-120) se intentaba también en cada replay
+      // para reintentar solo un envío fallido sin acción manual — la
+      // auditoría confirmó que eso permitía un reenvío real duplicado si
+      // el resultado del primer intento nunca llegó a reportarse. Un
+      // envío fallido o interrumpido ahora solo se recupera con una
+      // acción explícita de administración (Panel Administrativo,
+      // "Reintentar"). Fire-and-forget: nunca bloquea la UI ni cambia lo
+      // que ve el vendedor.
+      if(body.data.venta && body.data.venta.id && !body.data.replay){
+        intentarEnviarFormularioHubSpot(body.data.venta.id);
+      }
 
       closeStep.classList.add('done');
+      closeBtn.disabled = true;
       closeBtn.textContent = 'Registrada';
       closeStep.querySelector('.ss-num').textContent = '✓';
-      flashStatus('✓ Venta registrada en CRM');
+
+      // RIO-120 (11/09/2026, sección 7 — experiencia simple del vendedor):
+      // el vendedor SOLO ve que su venta quedó registrada — nunca el
+      // estado técnico de la sincronización con HubSpot (eso es exclusivo
+      // del Panel Administrativo). Un error de HubSpot nunca cambia lo que
+      // el vendedor ve acá.
+      flashStatus('✓ Venta registrada');
 
       const execName = document.getElementById('execName').value || '';
       document.getElementById('saleSuccessTitle').textContent = execName ? `¡Excelente trabajo, ${execName}!` : '¡Excelente trabajo!';
+      document.getElementById('saleSuccessMsg').innerHTML = 'Venta realizada con éxito. No olvides recordarle al cliente que debe enviarnos sus fotos y logo (si tiene). Ya podés verla en tu <a href="./panel-vendedor.html" target="_blank" rel="noopener">Panel del Vendedor</a>, como "En espera de pago".';
       document.getElementById('saleSuccess').style.display = 'block';
       document.getElementById('saleSuccess').scrollIntoView({ behavior: 'smooth', block: 'center' });
     } catch(err) {
-      console.error('HubSpot CRM error:', err);
-      closeBtn.disabled = false;
-      closeBtn.textContent = originalText;
-      alert('⚠️ No se pudo registrar la venta en CRM. Revisa tu conexión e inténtalo nuevamente.');
+      console.error('Cierre de venta — error:', err);
+      // La clave de idempotencia NUNCA se limpia acá — un reintento (el
+      // vendedor pulsa de nuevo) usa la misma clave, así que si la
+      // primera solicitud en realidad sí se procesó del lado del
+      // servidor (ej. la respuesta se perdió por un timeout de red), el
+      // reintento devuelve la venta ya creada en vez de duplicarla.
+      alert('⚠️ No se pudo registrar la venta. Revisá tu conexión y volvé a intentar — no se va a duplicar.');
+    } finally {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = originalText;
     }
   }
 
@@ -1416,6 +1847,7 @@
     document.getElementById('revealBox').classList.remove('show');
     document.getElementById('revealQuestion').textContent = '';
     document.querySelectorAll('.domain-choice-card').forEach(c => c.classList.remove('active'));
+    actualizarVisibilidadDominioPropio();
     hasFicha = true;
     document.querySelectorAll('#fichaToggle .fc-btn').forEach(b => b.classList.remove('active'));
     document.querySelector('#fichaToggle .fc-btn[data-has-ficha="si"]').classList.add('active');
@@ -1435,6 +1867,14 @@
 
     document.getElementById('saleSuccess').style.display = 'none';
     document.getElementById('saleSuccessTitle').textContent = '¡Excelente trabajo!';
+
+    // RIO-117 (segundo bloque): un reset explícito significa "prospecto
+    // nuevo" — recién acá se libera la clave de idempotencia de la venta
+    // anterior (nunca antes, para que un reintento de red no duplique).
+    pendingVentaPayload = null;
+    clearIdempotencyKey();
+    document.getElementById('ventaConfirmOverlay').classList.remove('show');
+    document.getElementById('ventaTipoVentaSelect').value = '';
 
     applyFichaState();
     updateScript();
@@ -1471,7 +1911,7 @@
     const config = MARKETS[currentMarket];
     const product = config.products[key];
     const price = getActivePrice(currentMarket, key);
-    const isPremiumTier = (key === 'personalizado' || key === 'ficha_personalizado');
+    const isPremiumTier = esNivelPremium(key);
     const paymentNote = product.paymentPlan === '100' ? 'pago único' : '50% al inicio + 50% antes de publicar';
     const detail = config.currency + ' · ' + paymentNote + (isPremiumTier ? ' · dominio propio incluido el 1er año' : '');
     const showExample = (key !== 'ficha');
@@ -1526,6 +1966,7 @@
     if(previousKey){
       document.querySelectorAll('.domain-choice-card[data-domain="' + previousKey + '"]').forEach(c => c.classList.add('active'));
     }
+    actualizarVisibilidadDominioPropio();
 
     // Textos auxiliares dependientes del mercado
     const objPriceEl = document.getElementById('objPriceFrom');
@@ -1617,11 +2058,18 @@
     applyFichaState();
   }
 
-  (function initUser(){
-    currentExecutive = resolveExecutive();
+  // RIO-112: config/markets.js pasó a ser <script type="module"> (fuente
+  // canónica de precios compartida con el backend) — los módulos siempre
+  // se ejecutan diferidos, así que esperamos a DOMContentLoaded para
+  // garantizar que MARKETS/getActivePrice ya existan antes de usarlos
+  // (antes este bloque corría inline, sin esperar nada).
+  document.addEventListener('DOMContentLoaded', async function initUser(){
+    // RIO-111: resolveExecutive() consulta /interno/api/identidad/whoami
+    // (D1, verificado en el servidor) — ya no hay un USER_MAP local.
+    currentExecutive = await resolveExecutive();
     if(!currentExecutive){
       blockKitAccess();
-      console.warn('[Kit RiO] Usuario autenticado sin mercado configurado en USER_MAP — Kit bloqueado.');
+      console.warn('[Kit RiO] Identidad no resuelta por el servidor (whoami) — Kit bloqueado.');
       return;
     }
     currentMarket = resolveActiveMarket(currentExecutive);
@@ -1630,7 +2078,8 @@
     applyArgentinaBillingVisibility();
     renderPricing();
     initKitInteractivity();
-  })();
+    cargarEquiposAdmin();
+  });
 </script>
 </body>
 </html>

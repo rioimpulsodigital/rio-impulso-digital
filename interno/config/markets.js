@@ -1,27 +1,55 @@
 /*
- * Configuración comercial central por mercado — Portal Interno RiO Impulso Digital.
- * Arquitectura: RIO-91. Precios y condiciones: RIO-92 (Matriz Definitiva Aprobada por
- * Brenda, 20 ago 2026). Modalidad de pago diferenciada CL/AR: RIO-93.
+ * Configuración comercial central por mercado — fuente canónica ÚNICA de
+ * precios, consumida tanto por el navegador (Portal Interno, vía
+ * <script type="module">) como por el backend (Pages Functions, vía
+ * `import` directo — RIO-112, functions/_shared/pricing.js). Antes existía
+ * una copia manual de esta tabla en el backend; RIO-112 la eliminó a pedido
+ * de Brenda ("no aceptamos dos tablas de precios que deban mantenerse
+ * manualmente") — este archivo es ahora el único lugar donde vive el precio
+ * de cada producto.
+ *
+ * Arquitectura: RIO-91. Precios y condiciones: RIO-92 (Matriz Definitiva
+ * Aprobada por Brenda, 20 ago 2026). Modalidad de pago diferenciada CL/AR:
+ * RIO-93. Fuente canónica compartida: RIO-112 (28/08/2026).
  *
  * Vigencia de lanzamiento: hasta el 30/09/2026 inclusive.
  * Desde el 01/10/2026 rige el precio regular — sin cambiar manualmente ningún archivo.
+ *
+ * Por qué módulo ES y no un JSON estático: las páginas del Portal ya
+ * consumían este archivo como script clásico con funciones (`getActivePrice`,
+ * `getPaymentTerms`, `getPaymentLinkConflict`) — pasar a JSON habría obligado
+ * a reimplementar esa lógica (fecha de corte de promo, plan de pago) en dos
+ * lugares (frontend y backend), exactamente la duplicación que se quiere
+ * evitar. Un módulo ES exporta datos Y funciones desde un único archivo, y
+ * es importable tal cual por Pages Functions (esbuild ya empaqueta imports
+ * fuera de `functions/`, no requiere build propio nuevo).
+ *
+ * Compatibilidad con el navegador: además de los `export`, este archivo
+ * asigna cada nombre a `window` (ver el final) para que las páginas que ya
+ * lo cargaban como script clásico (usando `MARKETS`, `getActivePrice`, etc.
+ * como globales) sigan funcionando sin reescribirse — con
+ * `<script type="module">` en vez de `<script>` a secas (los módulos
+ * siempre se ejecutan diferidos: el código que los consume debe esperar a
+ * `DOMContentLoaded`, igual que ya hacían capacitacion-ficha-landing.html e
+ * interno/index.html; kit-venta-ficha-y-landing-page.html se ajustó para
+ * esperar lo mismo — ver ese archivo).
  */
 
-var PROMO_END_DATE = '2026-09-30';
+export const PROMO_END_DATE = '2026-09-30';
 
 // referenceDate es opcional — permite probar el corte de promoción sin tocar código
 // (ej. en consola: isPromoActive('2026-10-01') → false).
 // Compara fechas calendario en UTC en ambos lados (evita que el resultado dependa
 // de la zona horaria del navegador — CL y AR están a solo 3-4h de UTC, diferencia
 // despreciable para un corte de vigencia por fecha, no por instante exacto).
-function isPromoActive(referenceDate) {
-  var now = referenceDate ? new Date(referenceDate) : new Date();
-  var pad = function (n) { return String(n).padStart(2, '0'); };
-  var todayUTC = now.getUTCFullYear() + '-' + pad(now.getUTCMonth() + 1) + '-' + pad(now.getUTCDate());
+export function isPromoActive(referenceDate) {
+  const now = referenceDate ? new Date(referenceDate) : new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const todayUTC = `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}`;
   return todayUTC <= PROMO_END_DATE;
 }
 
-var MARKETS = {
+export const MARKETS = {
   CL: {
     country: 'Chile',
     currency: 'CLP',
@@ -113,19 +141,19 @@ var MARKETS = {
   }
 };
 
-function getActivePrice(market, productKey, referenceDate) {
-  var product = MARKETS[market].products[productKey];
+export function getActivePrice(market, productKey, referenceDate) {
+  const product = MARKETS[market].products[productKey];
   return isPromoActive(referenceDate) ? product.promo : product.regular;
 }
 
 // { plan, total, initial, balance } — balance es 0 cuando el plan es '100'.
-function getPaymentTerms(market, productKey, referenceDate) {
-  var product = MARKETS[market].products[productKey];
-  var total = getActivePrice(market, productKey, referenceDate);
+export function getPaymentTerms(market, productKey, referenceDate) {
+  const product = MARKETS[market].products[productKey];
+  const total = getActivePrice(market, productKey, referenceDate);
   if (product.paymentPlan === '100') {
     return { plan: '100', total: total, initial: total, balance: 0 };
   }
-  var initial = Math.round(total / 2);
+  const initial = Math.round(total / 2);
   return { plan: '50-50', total: total, initial: initial, balance: total - initial };
 }
 
@@ -134,11 +162,23 @@ function getPaymentTerms(market, productKey, referenceDate) {
 // corresponde cobrar ahora (según promo/regular vigente y el plan de pago del producto).
 // Nunca inventa ni reemplaza un enlace — solo detecta el desajuste para bloquear el envío.
 // Devuelve null si no hay conflicto, o un motivo string si lo hay.
-function getPaymentLinkConflict(productKey, referenceDate) {
-  var product = MARKETS.CL.products[productKey];
+export function getPaymentLinkConflict(productKey, referenceDate) {
+  const product = MARKETS.CL.products[productKey];
   if (!product.paymentLink) return 'sin_link';
-  var terms = getPaymentTerms('CL', productKey, referenceDate);
-  var requiredCharge = terms.plan === '100' ? terms.total : terms.initial;
+  const terms = getPaymentTerms('CL', productKey, referenceDate);
+  const requiredCharge = terms.plan === '100' ? terms.total : terms.initial;
   if (product.linkChargesAmount !== requiredCharge) return 'monto_no_coincide';
   return null;
+}
+
+// Compatibilidad con scripts clásicos existentes — ver comentario del
+// encabezado. En el runtime de Pages Functions (Workers) `window` no
+// existe, así que este bloque no hace nada ahí.
+if (typeof window !== 'undefined') {
+  window.PROMO_END_DATE = PROMO_END_DATE;
+  window.isPromoActive = isPromoActive;
+  window.MARKETS = MARKETS;
+  window.getActivePrice = getActivePrice;
+  window.getPaymentTerms = getPaymentTerms;
+  window.getPaymentLinkConflict = getPaymentLinkConflict;
 }

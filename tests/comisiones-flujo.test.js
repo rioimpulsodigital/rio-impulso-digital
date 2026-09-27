@@ -1,0 +1,356 @@
+// Pruebas de las rutas nuevas de RIO-114 — autorización: comisiones
+// (listar / marcar pagada), costos directos, y resolución de incidencias.
+// La lógica de negocio (gate, cálculo, calendario) ya se prueba a fondo en
+// tests/comisiones.test.js — acá se prueba que cada ruta exige el permiso
+// correcto.
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { onRequest as comisionesListHandler } from '../functions/interno/api/ventas/[id]/comisiones/index.js';
+import { onRequest as comisionPagarHandler } from '../functions/interno/api/ventas/[id]/comisiones/[comisionId]/index.js';
+import { onRequest as costosHandler } from '../functions/interno/api/ventas/[id]/componentes/[componenteId]/costos.js';
+import { onRequest as incidenciaResolverHandler } from '../functions/interno/api/ventas/[id]/incidencias/[incidenciaId]/index.js';
+import { PERMISSIONS } from '../functions/_shared/authz.js';
+
+const VENDEDOR = 'vendedor.a@example.com';
+
+function roleIdentity(overrides = {}) {
+  return { email: VENDEDOR, role: 'ejecutivo', allowedMarkets: ['CL'], canSell: true, permissions: PERMISSIONS.ejecutivo, ...overrides };
+}
+
+function admin(overrides = {}) {
+  return roleIdentity({ email: 'admin@example.com', role: 'admin', allowedMarkets: ['CL', 'AR'], permissions: PERMISSIONS.admin, ...overrides });
+}
+
+function fakeDb() {
+  const state = {
+    ventas: [{ id: 'venta-1', vendedor_email: VENDEDOR, mercado: 'CL', moneda: 'CLP', equipo_id: 'equipo-1' }],
+    // RIO-122 (hallazgo 9, 15/09/2026): estado_actual/materiales_estado
+    // agregados para que recomputeProyectoEstado() (llamado por el
+    // endpoint tras marcar-pagada) tenga datos reales con los que
+    // trabajar, en vez de un no-op silencioso por falta de mock.
+    componentes: [{ id: 'comp-x', proyecto_id: 'proyecto-1', tipo: 'landing', estado_actual: 'aprobada', materiales_estado: 'completos' }],
+    proyectos: [{ id: 'proyecto-1', venta_id: 'venta-1', estado_actual: 'pendiente_cierre' }],
+    pagos_esperados: [],
+    comisiones: [
+      { id: 'com-comercial', venta_id: 'venta-1', tipo: 'comercial', beneficiario_email: VENDEDOR, estado: 'programada' },
+      { id: 'com-supervision', venta_id: 'venta-1', tipo: 'supervision', beneficiario_email: 'supervisor@example.com', estado: 'programada' },
+    ],
+    equipo_supervisores: [{ equipo_id: 'equipo-1', usuario_email: 'supervisor@example.com', valid_until: null }],
+    costos_directos: [],
+    incidencias: [{ id: 'inc-1', venta_id: 'venta-1', tipo: 'disputa', estado: 'abierta', motivo: 'x' }],
+    eventos_historial: [],
+    usuarios: [{ email: VENDEDOR, nombre: 'Gabriela Alero' }, { email: 'supervisor@example.com', nombre: 'Alberto Pérez' }],
+  };
+
+  function makeStatement(sql) {
+    let p = [];
+    return {
+      bind(...params) { p = params; return this; },
+      all: async () => ({ results: runSelect(sql, p) }),
+      first: async () => runSelect(sql, p)[0] || null,
+      run: async () => { runMutation(sql, p); return { success: true }; },
+    };
+  }
+
+  function runSelect(sql, p) {
+    if (sql.includes('FROM ventas WHERE id')) {
+      return state.ventas.filter((v) => v.id === p[0]);
+    }
+    if (sql.startsWith('SELECT * FROM comisiones WHERE venta_id') && sql.includes("tipo = 'comercial' OR beneficiario_email")) {
+      return state.comisiones.filter((c) => c.venta_id === p[0] && (c.tipo === 'comercial' || c.beneficiario_email === p[1]));
+    }
+    if (sql.startsWith('SELECT * FROM comisiones WHERE venta_id') && sql.includes('beneficiario_email')) {
+      return state.comisiones.filter((c) => c.venta_id === p[0] && c.beneficiario_email === p[1]);
+    }
+    if (sql.startsWith('SELECT * FROM comisiones WHERE venta_id')) return state.comisiones.filter((c) => c.venta_id === p[0]);
+    if (sql.startsWith('SELECT * FROM comisiones WHERE id')) return state.comisiones.filter((c) => c.id === p[0]);
+    if (sql.startsWith('SELECT 1 FROM equipo_supervisores')) {
+      return state.equipo_supervisores.filter((s) => s.equipo_id === p[0] && s.usuario_email === p[1] && !s.valid_until);
+    }
+    if (sql.includes('FROM componentes WHERE id') && sql.includes('proyecto_id IN')) {
+      return state.componentes.filter((c) => c.id === p[0]).filter(() => state.proyectos.some((pr) => pr.id === state.componentes.find((x) => x.id === p[0])?.proyecto_id && pr.venta_id === p[1]));
+    }
+    if (sql.startsWith('SELECT * FROM incidencias WHERE id')) return state.incidencias.filter((i) => i.id === p[0]);
+    if (sql.startsWith('SELECT nombre FROM usuarios WHERE email')) {
+      const u = state.usuarios.find((x) => x.email === p[0]);
+      return u ? [{ nombre: u.nombre }] : [];
+    }
+    // RIO-122 (hallazgo 9): recomputeProyectoEstado() -> loadVentaFull().
+    if (sql.startsWith('SELECT * FROM proyectos WHERE venta_id')) return state.proyectos.filter((pr) => pr.venta_id === p[0]);
+    if (sql.startsWith('SELECT * FROM componentes WHERE proyecto_id')) return state.componentes.filter((c) => c.proyecto_id === p[0]);
+    if (sql.startsWith('SELECT * FROM pagos_esperados WHERE venta_id')) return state.pagos_esperados.filter((pe) => pe.venta_id === p[0]);
+    if (sql.includes('FROM comisiones WHERE venta_id')) return state.comisiones.filter((c) => c.venta_id === p[0]);
+    return [];
+  }
+
+  function runMutation(sql, p) {
+    if (sql.startsWith('INSERT INTO costos_directos')) {
+      state.costos_directos.push({ id: p[0], componente_id: p[1], tipo: p[2], monto: p[3], moneda: p[4], autorizado_por: p[5] });
+    } else if (sql.startsWith('INSERT INTO eventos_historial')) {
+      state.eventos_historial.push({ id: p[0] });
+    } else if (sql.startsWith("UPDATE comisiones SET estado = 'pagada'")) {
+      const c = state.comisiones.find((x) => x.id === p[1]);
+      if (c) { c.estado = 'pagada'; c.fecha_pago_real = p[0]; }
+    } else if (sql.startsWith("UPDATE incidencias SET estado = 'resuelta'")) {
+      const i = state.incidencias.find((x) => x.id === p[0]);
+      if (i) i.estado = 'resuelta';
+    } else if (sql.startsWith('UPDATE proyectos SET estado_actual')) {
+      const pr = state.proyectos.find((x) => x.id === p[1]);
+      if (pr) pr.estado_actual = p[0];
+    }
+  }
+
+  return { _state: state, prepare: (sql) => makeStatement(sql) };
+}
+
+function fakeContext({ method = 'GET', body, roleIdentity: ri, db, params = { id: 'venta-1' } }) {
+  const init = { method };
+  if (body !== undefined) {
+    init.body = JSON.stringify(body);
+    init.headers = { 'Content-Type': 'application/json' };
+  }
+  return {
+    request: new Request('https://rioimpulsodigital.com/interno/api/ventas/venta-1/x', init),
+    env: { DB: db },
+    params,
+    data: { requestId: 'req-com-flujo', identity: { email: ri?.email }, roleIdentity: ri },
+  };
+}
+
+// --- Comisiones: listar ---
+
+test('comisiones: el motivo de retención/reprogramación se expone al vendedor (RIO-117: necesario para "Mis comisiones")', async () => {
+  const db = fakeDb();
+  db._state.comisiones[0].estado = 'retenida';
+  db._state.comisiones[0].motivo_retencion_o_reprogramacion = 'Disputa abierta por el cliente.';
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: roleIdentity(), db }));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.data.comisiones[0].motivoRetencionOReprogramacion, 'Disputa abierta por el cliente.');
+});
+
+// RIO-122 (hallazgo 15, 15/09/2026): confirma que las fechas que
+// calcularFechaProgramada() ya calcula (sin tocar esa regla) efectivamente
+// llegan hasta la respuesta de esta ruta — el Panel del Vendedor no puede
+// mostrarlas si el endpoint no las expone.
+test('comisiones: el listado expone fechaProgramadaOriginal/Efectiva y fechaPagoReal cuando existen', async () => {
+  const db = fakeDb();
+  Object.assign(db._state.comisiones.find((c) => c.id === 'com-comercial'), {
+    estado: 'programada',
+    fecha_programada_original: '2026-10-10',
+    fecha_programada_efectiva: '2026-10-10',
+  });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: roleIdentity(), db }));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const com = body.data.comisiones.find((c) => c.id === 'com-comercial');
+  assert.equal(com.fechaProgramadaOriginal, '2026-10-10');
+  assert.equal(com.fechaProgramadaEfectiva, '2026-10-10');
+  assert.ok(!com.fechaPagoReal, 'todavía no está pagada — no debe inventar una fecha de pago real');
+});
+
+test('comisiones: el listado expone fechaPrevistaPago cuando la comisión sigue ESTIMADA pero solo falta el tiempo (RIO-122, hallazgo 15 — segunda vuelta)', async () => {
+  const db = fakeDb();
+  Object.assign(db._state.comisiones.find((c) => c.id === 'com-comercial'), {
+    estado: 'calculada_provisional',
+    fecha_inicio_plazo: '2026-08-20 06:21:15',
+    fecha_pago_total_acreditado: '2026-08-20 06:21:15',
+  });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: roleIdentity(), db }));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const com = body.data.comisiones.find((c) => c.id === 'com-comercial');
+  assert.equal(com.estado, 'calculada_provisional', 'sigue Estimada — la fecha prevista nunca la habilita antes de tiempo');
+  assert.ok(com.fechaPrevistaPago, 'debe exponer una fecha prevista aunque la comisión siga Estimada, para que el Panel del Vendedor nunca muestre "—" sin explicación');
+  assert.ok(!com.fechaProgramadaOriginal, 'la fecha prevista nunca se confunde con una fecha programada real');
+});
+
+test('comisiones: una comisión sin fecha programada todavía (solo estimación) expone los campos como null, nunca un valor inventado', async () => {
+  const db = fakeDb();
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: roleIdentity(), db }));
+  const body = await response.json();
+  const com = body.data.comisiones.find((c) => c.id === 'com-comercial');
+  assert.ok(!com.fechaProgramadaOriginal, 'sin fecha programada todavía, nunca debe aparecer un valor');
+});
+
+test('comisiones: el vendedor ve su propia comisión comercial, no la de supervisión de otro', async () => {
+  const db = fakeDb();
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: roleIdentity(), db }));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.data.comisiones.length, 1);
+  assert.equal(body.data.comisiones[0].tipo, 'comercial');
+});
+
+test('comisiones: admin de ese mercado ve TODAS las comisiones de la venta', async () => {
+  const db = fakeDb();
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: admin(), db }));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.data.comisiones.length, 2);
+});
+
+// RIO-118 (corrección — identidad visible, 01/09/2026): el nombre para
+// mostrar se resuelve server-side desde D1, nunca queda solo el email —
+// y el email SIGUE presente (es el identificador real de la fila).
+test('comisiones: cada fila incluye beneficiarioNombre resuelto desde D1, sin perder beneficiarioEmail', async () => {
+  const db = fakeDb();
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: admin(), db }));
+  const body = await response.json();
+  const comercial = body.data.comisiones.find((c) => c.tipo === 'comercial');
+  assert.equal(comercial.beneficiarioEmail, VENDEDOR);
+  assert.equal(comercial.beneficiarioNombre, 'Gabriela Alero');
+  const supervision = body.data.comisiones.find((c) => c.tipo === 'supervision');
+  assert.equal(supervision.beneficiarioNombre, 'Alberto Pérez');
+});
+
+test('comisiones: un beneficiario sin nombre configurado en D1 devuelve beneficiarioNombre null (nunca el email como reemplazo)', async () => {
+  const db = fakeDb();
+  db._state.usuarios = db._state.usuarios.filter((u) => u.email !== VENDEDOR);
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: admin(), db }));
+  const body = await response.json();
+  const comercial = body.data.comisiones.find((c) => c.tipo === 'comercial');
+  assert.equal(comercial.beneficiarioNombre, null);
+  assert.equal(comercial.beneficiarioEmail, VENDEDOR, 'el email sigue disponible como identificador estable, aunque no se use para mostrar');
+});
+
+test('comisiones: un ejecutivo totalmente ajeno (ni vendedor ni beneficiario) recibe 404', async () => {
+  const db = fakeDb();
+  const otro = roleIdentity({ email: 'ejecutivo.ajeno@example.com' });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: otro, db }));
+  assert.equal(response.status, 404);
+});
+
+test('comisiones: el supervisor VIGENTE del equipo de la venta ve la comercial de su equipo Y la propia de supervisión (RIO-115: equipo, no mercado)', async () => {
+  const db = fakeDb();
+  const supervisor = roleIdentity({ email: 'supervisor@example.com', role: 'supervisor', allowedMarkets: ['CL'], permissions: PERMISSIONS.supervisor });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: supervisor, db }));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.data.comisiones.length, 2, 've la comercial del vendedor de su equipo Y la propia de supervisión');
+});
+
+test('comisiones: un supervisor del MISMO mercado pero de OTRO equipo no ve nada de esta venta (dos supervisores del mismo mercado no acceden automáticamente al equipo del otro)', async () => {
+  const db = fakeDb();
+  const supervisorOtroEquipo = roleIdentity({ email: 'supervisor.b@example.com', role: 'supervisor', allowedMarkets: ['CL'], permissions: PERMISSIONS.supervisor });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: supervisorOtroEquipo, db }));
+  assert.equal(response.status, 404);
+});
+
+test('comisiones: el supervisor de su equipo NUNCA ve realización, desarrollo ni empresa de sus miembros — solo la comercial y lo propio', async () => {
+  const db = fakeDb();
+  db._state.comisiones.push({ id: 'com-realizacion', venta_id: 'venta-1', tipo: 'realizacion', rol_realizacion: 'responsable', beneficiario_email: 'practicante.equipo@example.com', estado: 'programada' });
+  const supervisor = roleIdentity({ email: 'supervisor@example.com', role: 'supervisor', allowedMarkets: ['CL'], permissions: PERMISSIONS.supervisor });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: supervisor, db }));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.data.comisiones.length, 2, 'comercial del equipo + su propia supervisión, nunca la realización ajena');
+  assert.ok(!body.data.comisiones.some((c) => c.tipo === 'realizacion'), 'la realización de un miembro de su equipo nunca debe filtrarse a través de la vista de supervisión');
+});
+
+test('comisiones: manipular el id de la venta en la ruta hacia una de otro equipo (mismo mercado) no otorga acceso — nunca se confía en datos del cliente para resolver el equipo', async () => {
+  const db = fakeDb();
+  // Segunda venta de OTRO equipo, en el mismo mercado que el del supervisor.
+  db._state.ventas.push({ id: 'venta-2', vendedor_email: 'vendedor.b@example.com', mercado: 'CL', moneda: 'CLP', equipo_id: 'equipo-2' });
+  db._state.comisiones.push({ id: 'com-comercial-2', venta_id: 'venta-2', tipo: 'comercial', beneficiario_email: 'vendedor.b@example.com', estado: 'programada' });
+  const supervisor = roleIdentity({ email: 'supervisor@example.com', role: 'supervisor', allowedMarkets: ['CL'], permissions: PERMISSIONS.supervisor });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: supervisor, db, params: { id: 'venta-2' } }));
+  assert.equal(response.status, 404, 'el equipo se resuelve siempre desde la venta almacenada en el servidor, nunca desde el id que llega en la URL');
+});
+
+test('comisiones: un ejecutivo cambiando el mercado no puede ver comisiones de una venta de otro mercado (aislamiento por mercado también en esta ruta)', async () => {
+  const db = fakeDb();
+  db._state.ventas.push({ id: 'venta-ar', vendedor_email: 'vendedor.ar@example.com', mercado: 'AR', moneda: 'ARS', equipo_id: 'equipo-ar' });
+  db._state.comisiones.push({ id: 'com-ar', venta_id: 'venta-ar', tipo: 'comercial', beneficiario_email: 'vendedor.ar@example.com', estado: 'programada' });
+  const ejecutivoAjeno = roleIdentity({ email: 'ejecutivo.otro@example.com', allowedMarkets: ['CL'] });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: ejecutivoAjeno, db, params: { id: 'venta-ar' } }));
+  assert.equal(response.status, 404);
+});
+
+test('comisiones: un supervisor de OTRO mercado sigue sin ver nada de esta venta', async () => {
+  const db = fakeDb();
+  const supervisorAjeno = roleIdentity({ email: 'supervisor.ar@example.com', role: 'supervisor', allowedMarkets: ['AR'], permissions: PERMISSIONS.supervisor });
+  const response = await comisionesListHandler(fakeContext({ roleIdentity: supervisorAjeno, db }));
+  assert.equal(response.status, 404);
+});
+
+// --- Comisiones: marcar pagada ---
+
+test('comisiones: el vendedor NO puede marcar su propia comisión como pagada (exclusivo de admin)', async () => {
+  const db = fakeDb();
+  const response = await comisionPagarHandler(fakeContext({ method: 'POST', body: { action: 'marcar-pagada' }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', comisionId: 'com-comercial' } }));
+  assert.equal(response.status, 403);
+});
+
+test('comisiones: admin SÍ puede marcar una comisión programada como pagada', async () => {
+  const db = fakeDb();
+  const response = await comisionPagarHandler(fakeContext({ method: 'POST', body: { action: 'marcar-pagada' }, roleIdentity: admin(), db, params: { id: 'venta-1', comisionId: 'com-comercial' } }));
+  assert.equal(response.status, 200);
+  assert.equal(db._state.comisiones.find((c) => c.id === 'com-comercial').estado, 'pagada');
+});
+
+// RIO-122 (hallazgo 9, 15/09/2026): marcar la ÚLTIMA comisión real
+// pendiente como pagada debe recalcular el rollup del proyecto — nunca
+// queda "pendiente_cierre" una vez que ya no hay nada más que esperar.
+test('comisiones: marcar pagada la ÚLTIMA comisión real pendiente saca al proyecto de "pendiente_cierre" y lo pasa a "completado"', async () => {
+  const db = fakeDb();
+  // com-supervision ya está pagada de antemano — solo falta com-comercial.
+  db._state.comisiones.find((c) => c.id === 'com-supervision').estado = 'pagada';
+  assert.equal(db._state.proyectos[0].estado_actual, 'pendiente_cierre');
+
+  const response = await comisionPagarHandler(fakeContext({ method: 'POST', body: { action: 'marcar-pagada' }, roleIdentity: admin(), db, params: { id: 'venta-1', comisionId: 'com-comercial' } }));
+  assert.equal(response.status, 200);
+  assert.equal(db._state.proyectos[0].estado_actual, 'completado', 'con las dos comisiones reales ya pagadas, el proyecto debe quedar completado');
+});
+
+test('comisiones: marcar pagada UNA de DOS comisiones reales pendientes NO alcanza — el proyecto sigue "pendiente_cierre"', async () => {
+  const db = fakeDb();
+  // com-supervision sigue "programada" — falta pagarla también.
+  const response = await comisionPagarHandler(fakeContext({ method: 'POST', body: { action: 'marcar-pagada' }, roleIdentity: admin(), db, params: { id: 'venta-1', comisionId: 'com-comercial' } }));
+  assert.equal(response.status, 200);
+  assert.equal(db._state.proyectos[0].estado_actual, 'pendiente_cierre', 'todavía queda com-supervision sin pagar');
+});
+
+// --- Costos directos ---
+
+test('costos: el vendedor NO puede registrar un costo directo (exclusivo de admin)', async () => {
+  const db = fakeDb();
+  const response = await costosHandler(fakeContext({ method: 'POST', body: { tipo: 'dominio_propio', monto: 15000 }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  assert.equal(response.status, 403);
+});
+
+test('costos: admin SÍ puede registrar un costo directo', async () => {
+  const db = fakeDb();
+  const response = await costosHandler(fakeContext({ method: 'POST', body: { tipo: 'dominio_propio', monto: 15000 }, roleIdentity: admin(), db, params: { id: 'venta-1', componenteId: 'comp-x' } }));
+  assert.equal(response.status, 201);
+  assert.equal(db._state.costos_directos.length, 1);
+  assert.equal(db._state.costos_directos[0].autorizado_por, admin().email);
+});
+
+// --- Incidencias: resolver ---
+
+test('incidencias: un ejecutivo NO puede resolver una incidencia (exclusivo de admin)', async () => {
+  const db = fakeDb();
+  const response = await incidenciaResolverHandler(fakeContext({ method: 'POST', body: { action: 'resolver' }, roleIdentity: roleIdentity(), db, params: { id: 'venta-1', incidenciaId: 'inc-1' } }));
+  assert.equal(response.status, 403);
+});
+
+test('incidencias: admin SÍ puede resolver una incidencia', async () => {
+  const db = fakeDb();
+  const response = await incidenciaResolverHandler(fakeContext({ method: 'POST', body: { action: 'resolver' }, roleIdentity: admin(), db, params: { id: 'venta-1', incidenciaId: 'inc-1' } }));
+  assert.equal(response.status, 200);
+  assert.equal(db._state.incidencias.find((i) => i.id === 'inc-1').estado, 'resuelta');
+});
+
+test('incidencias: action inválida se rechaza incluso para admin', async () => {
+  const db = fakeDb();
+  const response = await incidenciaResolverHandler(fakeContext({ method: 'POST', body: { action: 'volar' }, roleIdentity: admin(), db, params: { id: 'venta-1', incidenciaId: 'inc-1' } }));
+  assert.equal(response.status, 400);
+});
+
+test('incidencias: incidencia inexistente devuelve 404', async () => {
+  const db = fakeDb();
+  const response = await incidenciaResolverHandler(fakeContext({ method: 'POST', body: { action: 'resolver' }, roleIdentity: admin(), db, params: { id: 'venta-1', incidenciaId: 'no-existe' } }));
+  assert.equal(response.status, 404);
+});

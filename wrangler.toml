@@ -1,0 +1,74 @@
+name = "rio-impulso-digital"
+compatibility_date = "2026-07-14"
+pages_build_output_dir = "."
+
+# ─────────────────────────────────────────────────────────────────────────
+# RIO-123 (26/09/2026) — Preview y Producción SEPARADOS.
+#
+# Con `pages_build_output_dir`, este archivo es la fuente de verdad de los
+# bindings de Pages (Cloudflare: "no se pueden editar en el dashboard los
+# mismos campos"). Los bindings son claves NO heredables: lo que estuviera a
+# nivel superior lo heredarían Preview Y Producción. Antes de este cambio el
+# D1/R2 de Preview estaban a nivel superior — al fusionar a `main`,
+# Producción habría quedado conectada a `rio-ventas-preview` y a
+# `rio-comprobantes-preview`. Por eso ahora NO hay ningún binding a nivel
+# superior: cada entorno declara los suyos, completos, y solo los suyos.
+# tests/wrangler-config.test.js protege esta separación.
+#
+# Secretos (`CF_ACCESS_AUD`, `DATOS_SENSIBLES_KEY_V1`): NO viven acá — solo
+# nombres, nunca valores. Se cargan por entorno en Cloudflare Pages (Settings
+# → Variables and Secrets) y, para desarrollo local, en `.dev.vars` (ignorado
+# por git — ver `.dev.vars.example`). Producción usa valores PROPIOS: el AUD
+# de la aplicación de Access de Producción y una clave AES nueva; nunca los
+# de Preview.
+# ─────────────────────────────────────────────────────────────────────────
+
+# ── Preview (toda rama que no sea `main`) ────────────────────────────────
+# D1 — RIO-110 sección 5/6. Base de desarrollo/preview creada el 28/08/2026
+# (`wrangler d1 create rio-ventas-preview`, región ENAM). NO es la base de
+# producción.
+#
+# R2 — RIO-116 sección "archivos y comprobantes seguros". Bucket privado
+# (creado el 31/08/2026) — sin dominio personalizado ni r2.dev habilitado, así
+# que no existe ninguna URL pública: todo archivo se sirve exclusivamente por
+# una ruta autenticada de este Worker (nunca un link directo al bucket).
+#
+# Variable pública — no es secreto (confirmado en la auditoría RIO-108: el
+# dominio de equipo de Access es un dato público, no un identificador de
+# validación de tokens).
+[env.preview.vars]
+CF_ACCESS_TEAM_DOMAIN = "rio-impulsodigital-team.cloudflareaccess.com"
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "rio-ventas-preview"
+database_id = "1aed8e43-6e47-40c9-9770-1c50f6586d20"
+migrations_dir = "migrations"
+
+[[env.preview.r2_buckets]]
+binding = "COMPROBANTES"
+bucket_name = "rio-comprobantes-preview"
+
+# ── Producción (rama `main`) ─────────────────────────────────────────────
+# Recursos exclusivos de Producción (RIO-123, 26/09/2026), creados con
+# autorización expresa de Brenda en la cuenta real, región ENAM:
+#   - D1 `rio-ventas-prod` — vacía al crearse; las migraciones se aplican
+#     por separado, con backup previo (no las aplica el deploy de Pages).
+#   - R2 `rio-comprobantes-prod` — privado: sin dominio personalizado y con
+#     r2.dev deshabilitado; los archivos solo se sirven por la ruta
+#     autenticada de este proyecto.
+# Nunca reutilizan nada de Preview. Los secretos de Producción
+# (`CF_ACCESS_AUD`, `DATOS_SENSIBLES_KEY_V1`) tienen valores PROPIOS y se
+# cargan en Cloudflare Pages, nunca en este archivo.
+[env.production.vars]
+CF_ACCESS_TEAM_DOMAIN = "rio-impulsodigital-team.cloudflareaccess.com"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "rio-ventas-prod"
+database_id = "11132d3b-4016-482f-a7b5-24c026d89ffa"
+migrations_dir = "migrations"
+
+[[env.production.r2_buckets]]
+binding = "COMPROBANTES"
+bucket_name = "rio-comprobantes-prod"
