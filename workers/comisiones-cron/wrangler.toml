@@ -1,12 +1,18 @@
-# Worker independiente — RIO-122 (15/09/2026). Ver README.md de esta
-# carpeta para el procedimiento completo de activación (pensado para
-# RIO-123 — NO desplegado como parte de esta corrección).
+# Worker independiente — RIO-122 (15/09/2026, creación) / RIO-123 (activación
+# en Production, ver README.md de esta carpeta para el procedimiento
+# completo).
 #
 # Reevalúa periódicamente las comisiones que todavía pueden habilitarse
 # (plazo de resguardo cumplido + demás condiciones) sin depender de que
-# ocurra otro evento sobre la venta. Se conecta a la MISMA base D1 que el
-# proyecto Pages (mismo database_id que wrangler.toml de la raíz) — nunca
-# una copia ni una segunda fuente de datos.
+# ocurra otro evento sobre la venta. Se conecta DIRECTO al binding D1 de
+# cada entorno — nunca una copia ni una segunda fuente de datos.
+#
+# RIO-123: Preview y Production están SEPARADOS con entornos con nombre
+# (`[env.production]`), mismo patrón ya usado en el wrangler.toml raíz — los
+# bindings NO son heredables entre entornos en Wrangler, así que Production
+# necesita su PROPIA sección completa (nombre de Worker + D1), nunca
+# reapuntar el Worker de Preview. tests/worker-comisiones-cron-config.test.js
+# protege esta separación.
 
 name = "rio-comisiones-cron-preview"
 main = "index.js"
@@ -23,7 +29,24 @@ binding = "DB"
 database_name = "rio-ventas-preview"
 database_id = "1aed8e43-6e47-40c9-9770-1c50f6586d20"
 
+# ── Production (RIO-123, 28/09/2026) ─────────────────────────────────────
+# Worker propio (nunca el mismo Worker de Preview reapuntado), apuntando
+# exclusivamente a la base de Production creada y migrada en RIO-123.
+[env.production]
+name = "rio-comisiones-cron"
+
+[env.production.triggers]
+crons = ["0 12 * * *"]
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "rio-ventas-prod"
+database_id = "11132d3b-4016-482f-a7b5-24c026d89ffa"
+
 # Secretos requeridos (nombres únicamente — nunca el valor acá):
-#   MANUAL_TRIGGER_SECRET → wrangler secret put MANUAL_TRIGGER_SECRET
-#     (solo protege el POST manual de verificación — el disparo
-#     programado por cron no lo necesita).
+#   MANUAL_TRIGGER_SECRET → wrangler secret put MANUAL_TRIGGER_SECRET --config workers/comisiones-cron/wrangler.toml [--env production]
+#     (solo protege el POST manual de verificación de este archivo — el
+#     disparo programado por cron no lo necesita). Preview y Production
+#     deben tener CADA UNO su propio valor — nunca el mismo secreto
+#     reutilizado entre entornos (mismo criterio que CF_ACCESS_AUD y
+#     DATOS_SENSIBLES_KEY_V1 del proyecto Pages).
