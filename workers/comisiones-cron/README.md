@@ -1,10 +1,11 @@
 # Worker: reevaluación automática de comisiones vencidas
 
-**Estado: código listo, sin desplegar.** Creado en RIO-122 (15/09/2026) para
-resolver que una comisión podía quedar en `calculada_provisional` para
-siempre si, después de cumplirse el plazo de resguardo, no ocurría ningún
-otro evento sobre la venta (un pago acreditándose, una disputa
-resolviéndose) que volviera a disparar `evaluateComisionGate()`.
+**Estado: Preview desplegado desde RIO-122; Production, RIO-123 (28/09/2026).**
+Creado en RIO-122 (15/09/2026) para resolver que una comisión podía quedar en
+`calculada_provisional` para siempre si, después de cumplirse el plazo de
+resguardo, no ocurría ningún otro evento sobre la venta (un pago
+acreditándose, una disputa resolviéndose) que volviera a disparar
+`evaluateComisionGate()`.
 
 ## Qué hace
 
@@ -40,17 +41,14 @@ Zero Trust — algo que Anthy no tiene permisos para configurar (ver
 `ANTHY.md`). Conectar este Worker directo al mismo binding D1 evita ese
 problema por completo: nunca hay una ruta pública nueva que proteger.
 
-## Qué falta para activarlo (RIO-123 o cuando Brenda lo autorice)
+## Activación — Preview (ya hecha en RIO-122/123)
 
-1. **Revisar el secreto**: `wrangler secret put MANUAL_TRIGGER_SECRET
-   --config workers/comisiones-cron/wrangler.toml` (protege únicamente el
-   `POST` manual de verificación de abajo — el cron programado no lo
-   necesita).
-2. **Desplegar**: `npx wrangler deploy --config
-   workers/comisiones-cron/wrangler.toml` (usa el mismo
-   `CLOUDFLARE_API_TOKEN` ya configurado para este proyecto). Esto crea el
-   Worker y activa el Cron Trigger en la cuenta de Cloudflare — recién en
-   ese momento empieza a ejecutarse solo.
+1. **Secreto**: `wrangler secret put MANUAL_TRIGGER_SECRET --config workers/comisiones-cron/wrangler.toml`
+   (protege únicamente el `POST` manual de verificación de abajo — el cron
+   programado no lo necesita).
+2. **Desplegar**: `npx wrangler deploy --config workers/comisiones-cron/wrangler.toml`
+   (sin `--env`: usa la sección de nivel superior — `rio-comisiones-cron-preview`,
+   apuntando a `rio-ventas-preview`).
 3. **Verificar manualmente una vez** (opcional, recomendado antes de
    confiar en el cron):
    ```
@@ -63,10 +61,28 @@ problema por completo: nunca hay una ruta pública nueva que proteger.
    --config workers/comisiones-cron/wrangler.toml` durante una ejecución
    real del cron.
 
-## Nombre en Producción
+## Activación — Production (RIO-123)
 
-Este `wrangler.toml` usa `rio-comisiones-cron-preview` y el `database_id`
-de `rio-ventas-preview`. Cuando exista D1 de Producción (fuera del
-alcance de RIO-122/123 según `ANTHY.md`), va a hacer falta una segunda
-copia de este Worker apuntando a esa base — nunca reapuntar este mismo
-Worker de Preview a Producción.
+**Nunca reapuntar el Worker de Preview** — Production es un Worker propio
+(`rio-comisiones-cron`), declarado en `[env.production]` de este mismo
+`wrangler.toml`, apuntando exclusivamente a `rio-ventas-prod`
+(`tests/worker-comisiones-cron-config.test.js` protege que no se mezclen).
+
+1. **Secreto propio de Production** (nunca reutilizar el valor de Preview):
+   `wrangler secret put MANUAL_TRIGGER_SECRET --config workers/comisiones-cron/wrangler.toml --env production`
+2. **Desplegar**: `npx wrangler deploy --config workers/comisiones-cron/wrangler.toml --env production`
+   — crea el Worker `rio-comisiones-cron` y activa su Cron Trigger.
+3. **Verificar manualmente una vez** contra el subdominio de ESE Worker
+   (`rio-comisiones-cron`, no `-preview`):
+   ```
+   curl -X POST https://rio-comisiones-cron.<tu-subdominio>.workers.dev \
+     -H "X-Manual-Trigger-Secret: <el secreto de Production>"
+   ```
+   Debe responder `{"ok":true,"requestId":"manual-...","evaluadas":N,"habilitadas":M}`,
+   con `evaluadas`/`habilitadas` coherentes contra
+   `SELECT estado, COUNT(*) FROM comisiones GROUP BY estado` en `rio-ventas-prod`
+   (consulta de solo lectura) — nunca contra Preview.
+4. **Confirmar el disparo programado**: Cloudflare Dashboard → Workers &
+   Pages → `rio-comisiones-cron` → Triggers, o
+   `wrangler tail --config workers/comisiones-cron/wrangler.toml --env production`
+   durante una ejecución real del cron.
